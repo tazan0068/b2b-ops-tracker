@@ -1676,7 +1676,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   function home() {
     var y = V.year, k = kpiRow(y) || {}; var unv = MAIN_UNVERIFIED[y];
     var L = leading("[공식] L2→L3 전환율"), Lc = leading("[공식] L3 전환 확정"), Lr = leading("검토 대상"), Ld = leading("[공식] 평균 전환 소요일"), L2 = leading("L2 건수"), In = leading("장기 무활동"), Ic = leading("핵심 협력사 중"), Na = leading("신규 협력사 활성화율");
-    var h = core6() + '<div class="card"><div class="card-h"><h2>연도별 핵심 지표</h2><span class="badge">' + esc(k["데이터구분"] || "") + "</span><span class=\"mini\">기준 " + esc(k["기준"] || "") + " · 카드 클릭 = 근거 목록</span></div>" + yearChips(y, "year");
+    var h = chartsCard() + core6() + '<div class="card"><div class="card-h"><h2>연도별 핵심 지표</h2><span class="badge">' + esc(k["데이터구분"] || "") + "</span><span class=\"mini\">기준 " + esc(k["기준"] || "") + " · 카드 클릭 = 근거 목록</span></div>" + yearChips(y, "year");
     h += '<div class="tiles">' + tile("전체 자재 순매출", val(k["전체자재순매출"], won), "판매 − 반품·회수·취소 반영 · 연도별·업체별·거래별", "hero", "salesTotal") +
       tile("메인 자재 순매출", unv ? "미확인" : val(k["메인자재순매출"], won), unv ? "2022~2023 품목명 검증 전" : "메인 비중 " + (pc(k["메인비중"]) || esc(k["메인비중"])) + " · 업체·품목·거래", "", "mainSales") +
       tile("POUR 낙찰 건수", val(k["POUR낙찰_건수"], num), "낙찰 시공사 " + (num(k["낙찰시공사수"]) || esc(k["낙찰시공사수"])) + "곳 · 금액 " + (won(k["POUR낙찰금액_VAT미확인"]) || "확인 불가") + "(VAT 미확인)", "", "awards") +
@@ -1691,7 +1691,6 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
       tile("신규 협력사 활성화율", Na ? pc(Na["값"]) : null, Na ? esc(Na["비고"]) : "", "", "activation") + "</div>";
     var cols = [{ k: "연도" }, { k: "데이터구분" }, { k: "전체자재순매출", l: "전체 순매출", r: 1, fmt: won }, { k: "메인자재순매출", l: "메인 순매출", r: 1, fmt: won }, { k: "메인비중", r: 1, fmt: pc }, { k: "POUR낙찰_건수", l: "POUR 낙찰", r: 1, fmt: num }, { k: "낙찰시공사수", l: "낙찰 시공사", r: 1, fmt: num }, { k: "POUR반영공고_건수", l: "POUR 공고", r: 1, fmt: num }, { k: "타사공법낙찰_건수", l: "타사공법 낙찰", r: 1, fmt: num }, { k: "기술자문문의_건수", l: "기술자문", r: 1, fmt: num }, { k: "컨설팅요청_건수", l: "컨설팅", r: 1, fmt: num }, { k: "L3전환_확정_공식", l: "L3 확정", r: 1 }, { k: "L2L3전환율_공식", l: "전환율(공식)", r: 1, fmt: pc }, { k: "L3전환_검토대상", l: "검토", r: 1 }];
     h += '<div class="card-h" style="margin-top:4px"><h2>연도별 비교 (1.통합KPI 탭)</h2></div>' + table("kpiy", cols, objs("1.통합KPI"), { per: 10 }) + "</div>";
-    h += chartsCard();
     h += reviewCard();
     return h;
   }
