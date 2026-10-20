@@ -1,0 +1,7 @@
+# 회사 데이터 파일은 저장소에 올리지 않는다
+*.xlsx
+*.csv
+*.json
+!package.json
+store/
+node_modules/
