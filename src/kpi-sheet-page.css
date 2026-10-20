@@ -92,3 +92,6 @@
 .ks .ks-note,.ks .ks-warn,.ks .src{overflow-wrap:anywhere}
 
 .ks-src.none{color:#92400E;background:#FFF4E5;border-color:#F5D9A8}
+
+.ks .form .row .btn{min-height:40px}
+@media (max-width:640px){ .ks-bar .btn,.ks .form .row .btn{min-height:40px} }

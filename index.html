@@ -746,6 +746,9 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
 
 .ks-src.none{color:#92400E;background:#FFF4E5;border-color:#F5D9A8}
 
+.ks .form .row .btn{min-height:40px}
+@media (max-width:640px){ .ks-bar .btn,.ks .form .row .btn{min-height:40px} }
+
 </style>
 </head>
 <body>
@@ -765,35 +768,95 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
 <script id="b2b-sheet-data" type="text/plain" data-enc="none"></script>
 <script>
 /* ============================================================
-   통합 구글시트 데이터 소스 — 업무 트래커 첫 화면용
-   · 내장: #b2b-sheet-data (v7 검증본, gzip+base64) → "저장된 데이터"
-   · 실시간: Apps Script 읽기 전용 웹앱(또는 같은 형식의 API) → "구글시트 실시간"
-   · 연결 설정(URL·액세스 키)은 localStorage "netform.b2b.sheetlink.v1" 에만 저장. HTML 에 인증정보 없음.
+   통합 구글시트 데이터 소스 — 업무 트래커 첫 화면용 (v3)
+   · 내장: #b2b-sheet-data (검증본 gzip+base64) → "저장된 데이터" / data-enc="none" → "연결 대기"(회사 데이터 미내장)
+   · 실시간 A (권장) : Google 로그인(OAuth, spreadsheets.readonly) + Sheets API 직접 읽기
+                       → 시트를 공유받은 직원만 자기 계정으로 읽음. 공유 키 없음. 회수 = 시트 공유 해제.
+   · 실시간 B (내부 시험용): Apps Script 읽기 전용 웹앱 + 공유 액세스 키(POST 본문) — 승인 직원 제한 불가
+   · 연결 설정은 localStorage "netform.b2b.sheetlink.v1" 에만, 로그인 토큰은 sessionStorage 에만. HTML 에 ID·키 없음.
    · 업무 기록 저장소 "netform.b2b.tracker.v1" 은 읽지도 쓰지도 않는다.
    ============================================================ */
 (function () {
-  var KEY = "netform.b2b.sheetlink.v1";
+  var KEY = "netform.b2b.sheetlink.v1", TKEY = "netform.b2b.sheettoken.v1";
   var LEDGER = "3.이카운트판매원문";
-  var state = { ready: false, mode: "embedded", meta: null, tabs: null, at: null, error: null, loading: false, ledgerProgress: null, frozenDiff: [], embeddedMeta: null, decodeError: null };
-  var embedded = null; var listeners = [];
+  var SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly";
+  var API = function () { return (window.B2B_SHEETS_API_BASE || "https://sheets.googleapis.com") + "/v4/spreadsheets/"; };
+  var state = { ready: false, mode: "embedded", authMode: null, meta: null, tabs: null, at: null, error: null, loading: false, ledgerProgress: null, frozenDiff: [], embeddedMeta: null, decodeError: null, needSignIn: false, signedIn: false };
+  var embedded = null; var listeners = []; var tokenClient = null; var gisReady = null;
+  var DEFAULT_TABS = ["1.통합KPI", "2.시공사마스터", "4.메인자재구매현황", "5.POUR공고낙찰", "5b.POUR반영공고", "6.타사공법낙찰", "7.기술자문문의", "7b.플랫폼가입현황", "8.컨설팅요청", "8b.컨설팅발행이력", "9.샘플카탈로그요청", "10.공법설명회이력", "11.기타문의답변", "12.거래처연결검토", "13.데이터검증변경이력", "14.판매원문차이검증", "15.마스터대조", "16.L2L3전환", "16b.L2L3시공사별", "16c.L2L3판정집계", "16d.L2L3검토이력", "17.장기무활동", "18.선행지표요약", "19.업체명정규화"];
 
+  /* ---------- 내장 데이터 ---------- */
   function decodeTab(t) { if (!t.enc) return t; var cols = t.enc.cols; return { header: t.header, rows: t.rows.map(function (r) { return r.map(function (v, i) { var d = cols[i]; if (!d) return v; if (v == null) return null; if (typeof v === "object") return v.v; return d[v]; }); }) }; }
   function b64ToBytes(b64) { var bin = atob(b64), n = bin.length, u = new Uint8Array(n); for (var i = 0; i < n; i++) u[i] = bin.charCodeAt(i); return u; }
-  function gunzipText(bytes) {
-    if (typeof DecompressionStream === "undefined") return Promise.reject(new Error("이 브라우저는 압축 해제(DecompressionStream)를 지원하지 않습니다. 최신 Chrome/Edge 로 열어 주세요."));
-    var ds = new DecompressionStream("gzip"); var w = ds.writable.getWriter(); w.write(bytes); w.close();
-    return new Response(ds.readable).arrayBuffer().then(function (ab) { return new TextDecoder("utf-8").decode(ab); });
-  }
+  function gunzipText(bytes) { if (typeof DecompressionStream === "undefined") return Promise.reject(new Error("이 브라우저는 압축 해제(DecompressionStream)를 지원하지 않습니다. 최신 Chrome/Edge 로 열어 주세요.")); var ds = new DecompressionStream("gzip"); var w = ds.writable.getWriter(); w.write(bytes); w.close(); return new Response(ds.readable).arrayBuffer().then(function (ab) { return new TextDecoder("utf-8").decode(ab); }); }
   function loadEmbedded() {
     var el = document.getElementById("b2b-sheet-data"); if (!el || el.getAttribute("data-enc") === "none") { embedded = { meta: { source: "none", version: "연결 대기", asOf: "", tabs: {}, verified: "" }, tabs: {} }; return Promise.resolve(embedded); }
-    var enc = el.getAttribute("data-enc") || "json";
-    var p = enc === "gzip-b64" ? gunzipText(b64ToBytes(el.textContent.trim())) : Promise.resolve(el.textContent);
+    var enc = el.getAttribute("data-enc") || "json"; var p = enc === "gzip-b64" ? gunzipText(b64ToBytes(el.textContent.trim())) : Promise.resolve(el.textContent);
     return p.then(function (txt) { var j = JSON.parse(txt); var tabs = {}; for (var k in j.tabs) tabs[k] = decodeTab(j.tabs[k]); embedded = { meta: j.meta, tabs: tabs }; return embedded; });
   }
+  function noData() { return !embedded || embedded.meta.source === "none"; }
+
+  /* ---------- 설정 ---------- */
   function settings() { try { return JSON.parse(localStorage.getItem(KEY) || "null") || null; } catch (e) { return null; } }
-  function saveSettings(s) { localStorage.setItem(KEY, JSON.stringify({ endpoint: String(s.endpoint || "").trim(), key: String(s.key || ""), sheetId: String(s.sheetId || "").trim(), savedAt: new Date().toISOString() })); }
-  function clearSettings() { localStorage.removeItem(KEY); }
-  /* 키는 URL 이 아니라 요청 본문(POST · text/plain JSON)으로만 보낸다 → 브라우저 기록·서버 로그에 남지 않음. CORS 사전 요청 없음 */
+  function saveSettings(s) { localStorage.setItem(KEY, JSON.stringify({ mode: s.mode === "appsscript" ? "appsscript" : "google", clientId: String(s.clientId || "").trim(), sheetId: String(s.sheetId || "").trim(), endpoint: String(s.endpoint || "").trim(), key: String(s.key || ""), savedAt: new Date().toISOString() })); }
+  function clearSettings() { localStorage.removeItem(KEY); clearToken(); }
+  function emit() { listeners.forEach(function (f) { try { f(state); } catch (e) {} }); }
+
+  /* ---------- A. Google 로그인 + Sheets API ---------- */
+  function getStoredToken() { try { var t = JSON.parse(sessionStorage.getItem(TKEY) || "null"); if (t && t.token && t.exp > Date.now() + 30000) return t.token; } catch (e) {} return null; }
+  function storeToken(tok, sec) { try { sessionStorage.setItem(TKEY, JSON.stringify({ token: tok, exp: Date.now() + (Number(sec) || 3600) * 1000 })); } catch (e) {} }
+  function clearToken() { try { sessionStorage.removeItem(TKEY); } catch (e) {} state.signedIn = false; }
+  function loadGis() {
+    if (window.google && window.google.accounts && window.google.accounts.oauth2) return Promise.resolve();
+    if (gisReady) return gisReady;
+    gisReady = new Promise(function (res, rej) { var s = document.createElement("script"); s.src = "https://accounts.google.com/gsi/client"; s.async = true; s.onload = function () { res(); }; s.onerror = function () { gisReady = null; rej(new Error("Google 로그인 라이브러리를 불러오지 못했습니다(네트워크 확인)")); }; document.head.appendChild(s); });
+    return gisReady;
+  }
+  /* 사용자 클릭에서만 호출(팝업 허용). interactive=false 면 저장된 세션 토큰만 사용 */
+  function getToken(interactive) {
+    var t = getStoredToken(); if (t) { state.signedIn = true; return Promise.resolve(t); }
+    if (!interactive) { state.needSignIn = true; return Promise.reject(new Error("NEED_SIGNIN")); }
+    var s = settings() || {}; if (!s.clientId) return Promise.reject(new Error("OAuth 클라이언트 ID 가 없습니다. 연결 설정에서 입력하세요."));
+    return loadGis().then(function () { return new Promise(function (res, rej) {
+      tokenClient = google.accounts.oauth2.initTokenClient({ client_id: s.clientId, scope: SCOPE, callback: function (r) { if (r && r.access_token) { storeToken(r.access_token, r.expires_in); state.signedIn = true; state.needSignIn = false; res(r.access_token); } else rej(new Error("로그인이 취소되었거나 토큰을 받지 못했습니다" + (r && r.error ? " (" + r.error + ")" : ""))); }, error_callback: function (e) { rej(new Error("Google 로그인 실패: " + (e && (e.type || e.message) || "알 수 없음"))); } });
+      tokenClient.requestAccessToken({ prompt: "" });
+    }); });
+  }
+  function gfetch(url, timeoutMs) {
+    return getToken(false).then(function (tok) {
+      var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null; var t = ctrl ? setTimeout(function () { ctrl.abort(); }, timeoutMs || 90000) : null;
+      return fetch(url, { headers: { Authorization: "Bearer " + tok }, signal: ctrl ? ctrl.signal : undefined }).then(function (r) {
+        if (r.status === 401) { clearToken(); state.needSignIn = true; throw new Error("NEED_SIGNIN"); }
+        if (r.status === 403) throw new Error("시트 접근 권한이 없습니다(PERMISSION_DENIED). 로그인한 Google 계정에 시트가 공유되어 있어야 합니다 — 시트 소유자에게 '뷰어' 공유를 요청하세요.");
+        if (r.status === 404) throw new Error("시트를 찾을 수 없습니다(시트 ID 확인)");
+        if (r.status === 429) throw new Error("Sheets API 호출 한도 초과 — 잠시 후 다시 시도하세요");
+        if (!r.ok) throw new Error("Sheets API HTTP " + r.status);
+        return r.json();
+      }).catch(function (e) { throw new Error(e.name === "AbortError" ? "응답 시간 초과" : (e.message || String(e))); }).finally(function () { if (t) clearTimeout(t); });
+    });
+  }
+  function colLetter(n) { var s = ""; while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
+  function q(name) { return "'" + String(name).replace(/'/g, "''") + "'"; }
+  function norm(vals, header) { var w = header.length; return (vals || []).map(function (r) { var o = new Array(w); for (var i = 0; i < w; i++) { var v = r[i]; o[i] = (v === "" || v === undefined) ? null : v; } return o; }).filter(function (r) { return r.some(function (v) { return v !== null; }); }); }
+  function gMeta(sid) {
+    return gfetch(API() + encodeURIComponent(sid) + "?fields=properties.title,sheets.properties(title,gridProperties(rowCount,columnCount))").then(function (j) {
+      var tabs = {}; (j.sheets || []).forEach(function (s) { tabs[s.properties.title] = { rows: null, cols: s.properties.gridProperties.columnCount }; });
+      var names = Object.keys(tabs); var url = API() + encodeURIComponent(sid) + "/values:batchGet?majorDimension=COLUMNS" + names.map(function (n) { return "&ranges=" + encodeURIComponent(q(n) + "!A:A"); }).join("");
+      return gfetch(url).then(function (b) { (b.valueRanges || []).forEach(function (vr, i) { var col = (vr.values && vr.values[0]) || []; tabs[names[i]].rows = Math.max(0, col.length - 1); }); return { source: "sheet", auth: "google", title: j.properties.title, spreadsheetId: sid, lastUpdated: null, servedAt: new Date().toISOString(), tabs: tabs }; });
+    });
+  }
+  function gTabs(sid, names) {
+    var url = API() + encodeURIComponent(sid) + "/values:batchGet?valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING" + names.map(function (n) { return "&ranges=" + encodeURIComponent(q(n)); }).join("");
+    return gfetch(url).then(function (b) { var out = {}; (b.valueRanges || []).forEach(function (vr, i) { var vals = vr.values || []; var header = (vals[0] || []).map(function (h) { return h == null ? "" : String(h); }); out[names[i]] = { header: header, rows: norm(vals.slice(1), header) }; }); names.forEach(function (n) { if (!out[n]) throw new Error("시트에 탭 없음: " + n); }); return out; });
+  }
+  function gLedger(sid, meta, onProgress) {
+    var cols = (meta.tabs[LEDGER] || {}).cols || 26, total = (meta.tabs[LEDGER] || {}).rows || 0, L = colLetter(cols), CH = 5000;
+    return gfetch(API() + encodeURIComponent(sid) + "/values/" + encodeURIComponent(q(LEDGER) + "!A1:" + L + "1")).then(function (h) { var header = ((h.values || [])[0] || []).map(function (x) { return x == null ? "" : String(x); }); var acc = { header: header, rows: [] };
+      function step(start) { if (start > total + 1) return acc; var end = Math.min(start + CH - 1, total + 1); return gfetch(API() + encodeURIComponent(sid) + "/values/" + encodeURIComponent(q(LEDGER) + "!A" + start + ":" + L + end) + "?valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING", 120000).then(function (j) { acc.rows = acc.rows.concat(norm(j.values, header)); state.ledgerProgress = { loaded: acc.rows.length, total: total }; if (onProgress) onProgress(state.ledgerProgress); return (j.values || []).length ? step(end + 1) : acc; }); }
+      return step(2).then(function (a) { state.ledgerProgress = null; return a; }); });
+  }
+
+  /* ---------- B. Apps Script 공유 키 (POST 본문) ---------- */
   function api(s, params, timeoutMs) {
     var body = {}; for (var k in params) body[k] = params[k]; body.key = s.key || ""; if (s.sheetId) body.sheetId = s.sheetId;
     var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null; var t = ctrl ? setTimeout(function () { ctrl.abort(); }, timeoutMs || 60000) : null;
@@ -802,11 +865,9 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
       .catch(function (e) { throw new Error(e.name === "AbortError" ? "응답 시간 초과" : (e.message || String(e))); })
       .finally(function () { if (t) clearTimeout(t); });
   }
-  var DEFAULT_TABS = ["1.통합KPI", "2.시공사마스터", "4.메인자재구매현황", "5.POUR공고낙찰", "5b.POUR반영공고", "6.타사공법낙찰", "7.기술자문문의", "7b.플랫폼가입현황", "8.컨설팅요청", "8b.컨설팅발행이력", "9.샘플카탈로그요청", "10.공법설명회이력", "11.기타문의답변", "12.거래처연결검토", "13.데이터검증변경이력", "14.판매원문차이검증", "15.마스터대조", "16.L2L3전환", "16b.L2L3시공사별", "16c.L2L3판정집계", "16d.L2L3검토이력", "17.장기무활동", "18.선행지표요약", "19.업체명정규화"];
   function smallTabs() { var names = Object.keys(embedded.tabs).filter(function (n) { return n !== LEDGER; }); return names.length ? names : DEFAULT_TABS; }
-  function emit() { listeners.forEach(function (f) { try { f(state); } catch (e) {} }); }
 
-  /* 확정 연도(2022~2025) KPI 가 시트와 다른지 — 값은 시트를 보여주되 차이를 알린다 */
+  /* ---------- 공통 ---------- */
   function diffFrozen(liveTabs) {
     var out = []; var e = embedded.tabs["1.통합KPI"], l = liveTabs["1.통합KPI"]; if (!e || !l) return out;
     var fy = embedded.meta.frozenYears || []; var yi = e.header.indexOf("연도"), yl = l.header.indexOf("연도");
@@ -814,36 +875,39 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
       e.header.forEach(function (h, i) { var li = l.header.indexOf(h); if (li < 0) return; var a = er[i], b = lr[li]; if (String(a == null ? "" : a) !== String(b == null ? "" : b)) out.push({ year: y, col: h, embedded: a, live: b }); }); });
     return out;
   }
-
-  function noData() { return !embedded || embedded.meta.source === "none"; }
   function useEmbedded(reason) { state.mode = reason ? "fallback" : (noData() ? "none" : "embedded"); state.error = reason || null; state.tabs = embedded.tabs; state.meta = embedded.meta; state.frozenDiff = []; state.ledgerProgress = null; }
+  function configured(s) { if (!s) return false; return s.mode === "appsscript" ? !!s.endpoint : !!(s.clientId && s.sheetId); }
   function refresh() {
     if (!embedded) return Promise.resolve(state);
-    var s = settings();
-    if (!s || !s.endpoint) { useEmbedded(null); state.at = new Date(); emit(); return Promise.resolve(state); }
+    var s = settings(); state.authMode = s ? (s.mode === "appsscript" ? "appsscript" : "google") : null;
+    if (!configured(s)) { useEmbedded(null); state.needSignIn = false; state.at = new Date(); emit(); return Promise.resolve(state); }
     state.loading = true; emit();
-    return api(s, { action: "tabs", tabs: smallTabs().join(",") }, 90000).then(function (j) {
-      var tabs = {}; smallTabs().forEach(function (n) { var t = j.tabs[n]; if (!t) throw new Error("시트에 탭 없음: " + n); tabs[n] = { header: t.header, rows: t.rows }; });
-      tabs[LEDGER] = null; /* 원문은 열 때 나눠 읽는다 */
-      state.mode = "live"; state.meta = j.meta || {}; state.tabs = tabs; state.error = null; state.at = new Date(); state.frozenDiff = diffFrozen(tabs);
-    }).catch(function (e) { useEmbedded(e.message || String(e)); state.at = new Date(); })
+    var p;
+    if (s.mode === "appsscript") p = api(s, { action: "tabs", tabs: smallTabs().join(",") }, 90000).then(function (j) { var tabs = {}; smallTabs().forEach(function (n) { var t = j.tabs[n]; if (!t) throw new Error("시트에 탭 없음: " + n); tabs[n] = { header: t.header, rows: t.rows }; }); tabs[LEDGER] = null; return { meta: j.meta || {}, tabs: tabs }; });
+    else p = gMeta(s.sheetId).then(function (meta) { var names = smallTabs().filter(function (n) { return meta.tabs[n]; }); var missing = smallTabs().filter(function (n) { return !meta.tabs[n]; }); return gTabs(s.sheetId, names).then(function (tabs) { tabs[LEDGER] = null; meta.missingTabs = missing; return { meta: meta, tabs: tabs }; }); });
+    return p.then(function (r) { state.mode = "live"; state.meta = r.meta; state.tabs = r.tabs; state.error = null; state.needSignIn = false; state.at = new Date(); state.frozenDiff = diffFrozen(r.tabs); })
+      .catch(function (e) { var msg = e.message || String(e); if (msg === "NEED_SIGNIN") { useEmbedded(null); state.needSignIn = true; state.error = null; } else useEmbedded(msg); state.at = new Date(); })
       .then(function () { state.loading = false; emit(); return state; });
   }
-  /* 원문 원장: 내장이면 즉시, 실시간이면 5,000행씩 */
   function ledger(onProgress) {
     if (state.mode !== "live") { var t0 = embedded.tabs[LEDGER]; return t0 ? Promise.resolve(t0) : Promise.reject(new Error("연결 대기 — 구글시트에 연결한 뒤 원문을 읽을 수 있습니다")); }
     if (state.tabs[LEDGER]) return Promise.resolve(state.tabs[LEDGER]);
-    var s = settings(); var acc = null; var LIMIT = 5000;
+    var s = settings();
+    if (s.mode !== "appsscript") return gLedger(s.sheetId, state.meta, onProgress).then(function (acc) { state.tabs[LEDGER] = acc; return acc; });
+    var acc = null, LIMIT = 5000;
     function step(off) { return api(s, { action: "tab", tab: LEDGER, offset: off, limit: LIMIT }, 120000).then(function (j) { if (!acc) acc = { header: j.header, rows: [] }; acc.rows = acc.rows.concat(j.rows); state.ledgerProgress = { loaded: acc.rows.length, total: j.total }; if (onProgress) onProgress(state.ledgerProgress); if (acc.rows.length < j.total && j.rows.length) return step(acc.rows.length); state.tabs[LEDGER] = acc; state.ledgerProgress = null; return acc; }); }
     return step(0);
   }
   function tab(name) { var t = state.tabs && state.tabs[name]; if (t) return t; return embedded ? embedded.tabs[name] : null; }
-  function test(s) { return api(s, { action: "meta" }, 30000).then(function (j) { return j.meta; }); }
+  /* 연결 테스트: google 은 사용자 클릭에서 호출(로그인 팝업) */
+  function test(s) { if (s.mode === "appsscript") return api(s, { action: "meta" }, 30000).then(function (j) { return j.meta; }); if (!s.clientId || !s.sheetId) return Promise.reject(new Error("OAuth 클라이언트 ID 와 시트 ID 를 입력하세요")); var keep = settings(); saveSettings(s); return getToken(true).then(function () { return gMeta(s.sheetId); }).finally(function () { if (keep) localStorage.setItem(KEY, JSON.stringify(keep)); else localStorage.removeItem(KEY); }); }
+  function signIn() { return getToken(true).then(function () { return refresh(); }); }
+  function signOut() { var t = getStoredToken(); clearToken(); if (t && window.google && google.accounts && google.accounts.oauth2 && google.accounts.oauth2.revoke) { try { google.accounts.oauth2.revoke(t, function () {}); } catch (e) {} } return refresh(); }
 
   loadEmbedded().then(function () { state.ready = true; state.embeddedMeta = embedded.meta; useEmbedded(null); state.at = new Date(); emit(); return refresh(); })
     .catch(function (e) { state.decodeError = e.message || String(e); state.ready = false; emit(); });
 
-  window.B2BSheet = { noData: noData, state: state, refresh: refresh, tab: tab, ledger: ledger, settings: settings, saveSettings: saveSettings, clearSettings: clearSettings, test: test, onChange: function (f) { listeners.push(f); }, LEDGER: LEDGER, KEY: KEY };
+  window.B2BSheet = { noData: noData, state: state, refresh: refresh, tab: tab, ledger: ledger, settings: settings, saveSettings: saveSettings, clearSettings: clearSettings, test: test, signIn: signIn, signOut: signOut, configured: configured, onChange: function (f) { listeners.push(f); }, LEDGER: LEDGER, KEY: KEY };
 })();
 
 </script>
@@ -907,11 +971,12 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   function statusBar() {
     var st = S.state, m = st.meta || {}, em = st.embeddedMeta || {};
     var nd = S.noData();
-    var cls = st.mode, label = st.mode === "live" ? "구글시트 실시간 · " + hhmm(st.at) : st.mode === "fallback" ? (nd ? "연결 실패 · 데이터 없음" : "저장된 데이터 (연결 실패)") : nd ? "연결 대기 · 데이터 없음" : "저장된 데이터";
+    var cls = st.needSignIn ? "fallback" : st.mode, label = st.needSignIn ? "Google 로그인 필요" : st.mode === "live" ? "구글시트 실시간" + (st.authMode === "google" ? "(Google 로그인)" : "") + " · " + hhmm(st.at) : st.mode === "fallback" ? (nd ? "연결 실패 · 데이터 없음" : "저장된 데이터 (연결 실패)") : nd ? "연결 대기 · 데이터 없음" : "저장된 데이터";
     var sub = st.mode === "live" ? "시트 " + esc(m.title || "") + " · " + (m.lastUpdated ? "시트 수정 " + hhmm(m.lastUpdated) : "응답 " + hhmm(m.servedAt)) : nd ? "이 파일에는 회사 데이터가 들어 있지 않습니다. [연결 설정]에서 비공개 구글시트 웹앱 주소와 키를 입력하면 실제 데이터가 표시됩니다." : "마지막 검증본 " + esc(em.version || "") + " · 기준일 " + esc(em.asOf || "") + " · " + esc(em.verified || "");
     var h = '<div class="ks-bar"><span class="ks-src ' + cls + '"><span class="dot"></span>' + esc(label) + "</span><span class=\"mini\">" + sub + "</span><span class=\"sp\"></span>" +
-      '<button class="btn ghost" data-kact="refresh"' + (st.loading ? " disabled" : "") + ">" + (st.loading ? "읽는 중…" : "새로고침") + '</button><button class="btn ghost" data-kact="view" data-id="link">연결 설정</button><button class="btn ghost" data-kact="integrity">정합성 점검</button></div>';
+      (st.needSignIn ? '<button class="btn" data-kact="gsignin">Google 로그인으로 연결</button>' : "") + '<button class="btn ghost" data-kact="refresh"' + (st.loading ? " disabled" : "") + ">" + (st.loading ? "읽는 중…" : "새로고침") + '</button><button class="btn ghost" data-kact="view" data-id="link">연결 설정</button><button class="btn ghost" data-kact="integrity">정합성 점검</button></div>';
     h += '<div class="ks-note">2022~2025년은 확정 과거 실적(변경은 승인 정정만) · 2026년은 지속 갱신(기준일 ' + esc(em.asOf || "2026-10-20") + ') · 공식 L2→L3 전환율은 검증된 확정 건만, 검토 건은 별도 표시 · <b>모든 지표 카드를 클릭하면 근거 목록이 열립니다</b></div>';
+    if (st.needSignIn) h += '<div class="ks-warn" style="color:#92400E;background:#FFF4E5;border-color:#F5D9A8"><b>Google 로그인이 필요합니다.</b> 시트를 공유받은 직원 계정으로 로그인하면 실제 데이터가 표시됩니다. 로그인 토큰은 이 탭을 닫으면 사라집니다.</div>';
     if (st.mode === "fallback") h += '<div class="ks-warn"><b>구글시트 연결 실패:</b> ' + esc(st.error) + (nd ? " — 표시할 데이터가 없어 '연결 대기' 상태입니다. [연결 설정]에서 주소·키를 확인하세요." : " — 아래 수치는 마지막 검증본(저장된 데이터)입니다. [연결 설정]에서 주소·키를 확인하세요.") + "</div>";
     if (st.mode === "live" && st.frozenDiff.length) h += '<div class="ks-warn"><b>확정 연도(2022~2025) 값이 시트와 다릅니다 (' + st.frozenDiff.length + "건):</b> " + st.frozenDiff.slice(0, 6).map(function (d) { return esc(d.year + " " + d.col + " 검증본 " + d.embedded + " → 시트 " + d.live); }).join(" / ") + (st.frozenDiff.length > 6 ? " …" : "") + " — 시트 값을 표시하되, 승인 정정 없이 바뀐 것이면 확인이 필요합니다.</div>";
     return h;
@@ -1156,16 +1221,24 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   /* ---------- 연결 설정 ---------- */
   function link() {
     var s = V.draft || S.settings() || {}; var stt = S.state; var m = stt.meta || {}, em = stt.embeddedMeta || {};
-    var h = '<div class="card"><div class="card-h"><h2>구글시트 연결 설정 (읽기 전용)</h2><span class="badge">' + (s.endpoint && !V.draft ? "설정 저장됨 · " + hhmm(s.savedAt) : V.draft ? "입력 중(미저장)" : "미설정 — 저장된 데이터 표시 중") + "</span></div>";
-    h += '<p class="card-sub">시트는 비공개로 두고, 시트 소유자가 배포한 Apps Script 읽기 전용 웹앱 주소와 액세스 키를 입력합니다. 키는 요청 본문(POST)으로만 전송되어 주소에 남지 않으며, 이 값은 이 브라우저의 저장소(' + esc(S.KEY) + ')에만 저장되고 HTML 파일에는 들어가지 않습니다. 업무 기록 저장소는 건드리지 않습니다.</p>';
-    h += '<div class="form"><label>웹앱 주소 (…/exec)</label><input id="ks-ep" type="url" placeholder="https://script.google.com/macros/s/…/exec" value="' + esc(s.endpoint || "") + '"><label>액세스 키</label><input id="ks-key" type="password" placeholder="스크립트 속성 ACCESS_KEY 와 동일" value="' + esc(s.key || "") + '"><label>시트 ID (선택 — 비우면 운영 시트. 테스트 사본은 ALLOWED_SHEET_IDS 에 등록된 ID 만)</label><input id="ks-sid" type="text" placeholder="비워 두면 운영 시트" value="' + esc(s.sheetId || "") + '">';
-    h += '<div class="row"><button class="btn ghost" data-kact="ltest">연결 테스트</button><button class="btn" data-kact="lsave">저장 후 새로고침</button><button class="btn warnb" data-kact="lclear">설정 지우기</button></div>';
+    var mode = (s.mode || "google") === "appsscript" ? "appsscript" : "google";
+    var h = '<div class="card"><div class="card-h"><h2>구글시트 연결 설정 (읽기 전용)</h2><span class="badge">' + (S.configured(s) && !V.draft ? "설정 저장됨 · " + hhmm(s.savedAt) : V.draft ? "입력 중(미저장)" : "미설정") + "</span>" + (stt.signedIn ? '<span class="st ok">Google 로그인됨</span>' : "") + "</div>";
+    h += '<div class="ks-chips"><button data-kact="lmode" data-id="google"' + (mode === "google" ? ' aria-current="true"' : "") + '>A. Google 로그인 (권장)</button><button data-kact="lmode" data-id="appsscript"' + (mode === "appsscript" ? ' aria-current="true"' : "") + ">B. Apps Script 공유 키 (내부 시험용)</button></div>";
+    if (mode === "google") {
+      h += '<p class="card-sub"><b>승인된 직원만 열람:</b> 시트를 공유받은 Google 계정으로 로그인해 Sheets API 로 직접 읽습니다. 공유 키가 없고, 열람 회수는 시트 공유 해제로 끝납니다. 아래 값은 비밀이 아니며(클라이언트 ID·시트 ID) 이 브라우저에만 저장됩니다. 로그인 토큰은 탭을 닫으면 사라집니다.</p>';
+      h += '<div class="form"><label>OAuth 클라이언트 ID (Google Cloud → 사용자 인증 정보 → 웹 애플리케이션)</label><input id="ks-cid" type="text" placeholder="xxxxxxxx.apps.googleusercontent.com" value="' + esc(s.clientId || "") + '"><label>스프레드시트 ID (시트 주소의 /d/ 와 /edit 사이)</label><input id="ks-sid" type="text" placeholder="1AbC…" value="' + esc(s.sheetId || "") + '">';
+      h += '<div class="row"><button class="btn ghost" data-kact="ltest">Google 로그인 후 연결 테스트</button><button class="btn" data-kact="lsave">저장 후 로그인·새로고침</button>' + (stt.signedIn ? '<button class="btn ghost" data-kact="gsignout">로그아웃</button>' : "") + '<button class="btn warnb" data-kact="lclear">설정 지우기</button></div>';
+    } else {
+      h += '<p class="card-sub"><b>주의:</b> 공유 키를 아는 사람은 누구나 전체 데이터를 읽을 수 있어 직원별 승인·회수가 되지 않습니다. 내부 시험·임시용으로만 쓰고, 운영은 A 방식을 권장합니다. 키는 요청 본문(POST)으로만 전송되며 이 브라우저에만 저장됩니다.</p>';
+      h += '<div class="form"><label>웹앱 주소 (…/exec)</label><input id="ks-ep" type="url" placeholder="https://script.google.com/macros/s/…/exec" value="' + esc(s.endpoint || "") + '"><label>액세스 키</label><input id="ks-key" type="password" placeholder="스크립트 속성 ACCESS_KEY 와 동일" value="' + esc(s.key || "") + '"><label>시트 ID (선택 — 비우면 운영 시트. 테스트 사본은 ALLOWED_SHEET_IDS 에 등록된 ID 만)</label><input id="ks-sid" type="text" placeholder="비워 두면 운영 시트" value="' + esc(s.sheetId || "") + '">';
+      h += '<div class="row"><button class="btn ghost" data-kact="ltest">연결 테스트</button><button class="btn" data-kact="lsave">저장 후 새로고침</button><button class="btn warnb" data-kact="lclear">설정 지우기</button></div>';
+    }
     if (V.linkMsg) h += '<div class="msg ' + V.linkMsg.cls + '">' + V.linkMsg.html + "</div>";
     h += "</div></div>";
-    h += '<div class="card"><div class="card-h"><h2>현재 데이터 상태</h2></div><div class="kv"><span>표시 중</span><span>' + (stt.mode === "live" ? "구글시트 실시간 (" + hhmm(stt.at) + ")" : stt.mode === "fallback" ? "저장된 데이터 — 연결 실패: " + esc(stt.error) : (S.noData() ? "연결 대기 (데이터 없음)" : "저장된 데이터 (연결 미설정)")) + "</span><span>저장된 데이터</span><span>" + (S.noData() ? "없음 — 이 파일에는 회사 데이터가 내장되어 있지 않습니다" : esc(em.version || "") + " · 기준일 " + esc(em.asOf || "") + " · 내보내기 " + hhmm(em.exportedAt) + " · " + esc(em.verified || "")) + "</span><span>연결 시트</span><span>" + (stt.mode === "live" ? esc(m.title || "") + " · " + (m.lastUpdated ? "수정 " + hhmm(m.lastUpdated) : "응답 " + hhmm(m.servedAt)) + " · ID " + esc(m.spreadsheetId || "") : "—") + "</span><span>확정 연도 대조</span><span>" + (stt.mode === "live" ? (stt.frozenDiff.length ? stt.frozenDiff.length + "건 차이 (요약 화면 경고 참고)" : "2022~2025 KPI 시트 값 = 검증본 값") : "실시간 연결 시 자동 대조") + "</span></div>";
+    h += '<div class="card"><div class="card-h"><h2>현재 데이터 상태</h2></div><div class="kv"><span>표시 중</span><span>' + (stt.mode === "live" ? "구글시트 실시간 (" + hhmm(stt.at) + ")" : stt.mode === "fallback" ? "저장된 데이터 — 연결 실패: " + esc(stt.error) : (S.noData() ? "연결 대기 (데이터 없음)" : "저장된 데이터 (연결 미설정)")) + "</span><span>저장된 데이터</span><span>" + (S.noData() ? "없음 — 이 파일에는 회사 데이터가 내장되어 있지 않습니다" : esc(em.version || "") + " · 기준일 " + esc(em.asOf || "") + " · 내보내기 " + hhmm(em.exportedAt) + " · " + esc(em.verified || "")) + "</span><span>연결 시트</span><span>" + (stt.mode === "live" ? esc(m.title || "") + " · " + (m.auth === "google" ? "Google 로그인 · " : "공유 키 · ") + (m.lastUpdated ? "수정 " + hhmm(m.lastUpdated) : "응답 " + hhmm(m.servedAt)) + " · ID " + esc(m.spreadsheetId || "") + (m.missingTabs && m.missingTabs.length ? " · 시트에 없는 탭 " + m.missingTabs.length + "개" : "") : "—") + "</span><span>확정 연도 대조</span><span>" + (stt.mode === "live" ? (stt.frozenDiff.length ? stt.frozenDiff.length + "건 차이 (요약 화면 경고 참고)" : "2022~2025 KPI 시트 값 = 검증본 값") : "실시간 연결 시 자동 대조") + "</span></div>";
     var tabs = Object.keys(em.tabs || {}); if (!tabs.length && stt.mode === "live" && m.tabs) tabs = Object.keys(m.tabs); if (tabs.length) h += '<div class="card-h" style="margin-top:14px"><h2>탭별 행 수 (저장된 데이터 ↔ 시트)</h2></div>' + table("tabs", [{ k: "탭" }, { k: "저장", r: 1, fmt: num }, { k: "시트", r: 1, fmt: num }, { k: "비고" }], tabs.map(function (t) { var a = em.tabs[t].rows, b = stt.mode === "live" && m.tabs && m.tabs[t] ? m.tabs[t].rows : null; return { 탭: t, 저장: a, 시트: b, 비고: b == null ? (stt.mode === "live" ? "시트에 탭 없음" : "") : a == null ? "시트에서 읽음" : a === b ? "일치" : "차이 " + (b - a) }; }), { per: 30 });
     h += "</div>";
-    h += '<div class="card"><div class="card-h"><h2>시트 소유자 설정 순서</h2></div><ol class="ol"><li>통합 시트 → 확장 프로그램 → Apps Script → pipeline/apps-script/Code.gs 붙여넣기</li><li>프로젝트 설정 → 스크립트 속성 ACCESS_KEY 추가(무작위 32자 이상)</li><li>배포 → 새 배포 → 웹 앱 → 실행 사용자 "나" · 액세스 "모든 사용자" → 배포 후 URL 복사</li><li>위 입력란에 URL·키 입력 → 연결 테스트 → 저장</li></ol><p class="mini">시트를 공개로 바꾸지 않아도 되며, 쓰기 기능은 없습니다. 키 교체는 스크립트 속성만 변경하면 됩니다.</p></div>';
+    h += '<div class="card"><div class="card-h"><h2>설정 순서</h2></div><div class="two"><div><b>A. Google 로그인 (권장)</b><ol class="ol"><li>시트 소유자: 시트를 열람할 직원 계정에 <b>뷰어</b>로 공유</li><li>관리자: Google Cloud 콘솔에서 프로젝트 생성 → Google Sheets API 사용 설정 → OAuth 동의 화면(외부·테스트 사용자에 직원 이메일 추가) → 사용자 인증 정보 → OAuth 클라이언트 ID(웹 애플리케이션, 승인된 JavaScript 원본 = 이 사이트 주소)</li><li>직원: 위 입력란에 클라이언트 ID·시트 ID 입력 → Google 로그인 후 연결 테스트 → 저장</li></ol></div><div><b>B. Apps Script 공유 키</b><ol class="ol"><li>시트 → 확장 프로그램 → Apps Script → Code.gs 붙여넣기</li><li>스크립트 속성 ACCESS_KEY(32자 이상)</li><li>배포 → 웹 앱 → 실행 사용자 "나" · 액세스 "모든 사용자" → URL 복사</li><li>URL·키 입력 → 연결 테스트 → 저장</li></ol></div></div><p class="mini">두 방식 모두 시트를 공개로 바꾸지 않으며 쓰기 기능이 없습니다. 어떤 ID·키도 HTML 에 들어가지 않습니다.</p></div>';
     return h;
   }
 
@@ -1173,7 +1246,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   function waiting() {
     var items = ["① 전체 자재 순매출", "② POUR 낙찰", "③ POUR 반영 공고", "④ 메인 자재 순매출", "⑤ 공식 L2→L3 전환율", "⑥ 장기 무활동 협력사"];
     var h = '<div class="card core6"><div class="card-h"><h2>팀장 핵심 지표 6</h2><span class="badge rev">연결 대기</span><span class="mini">구글시트 연결 후 표시 · 임의 수치는 표시하지 않습니다</span></div><div class="tiles six">' + items.map(function (l) { return '<div class="tile"><div class="l">' + esc(l) + '</div><div class="v na">연결 대기</div><div class="s">비공개 구글시트에서 읽어옵니다</div></div>'; }).join("") + "</div></div>";
-    h += '<div class="card"><div class="card-h"><h2>구글시트 연결이 필요합니다</h2></div><p class="card-sub">이 화면은 실제 회사 데이터를 파일에 담지 않습니다. 시트 소유자가 배포한 읽기 전용 웹앱 주소와 액세스 키를 [연결 설정]에 입력하면 통합 KPI 탭 25개(매출·공고·낙찰·시공사·영업활동·선행지표)를 읽어 모든 카드와 상세 목록이 채워집니다. 연결 정보는 이 브라우저에만 저장됩니다.</p><div class="ks-tools" style="margin:0"><button class="btn" data-kact="view" data-id="link">연결 설정 열기</button>' + (S.settings() && S.settings().endpoint ? '<button class="btn ghost" data-kact="refresh">다시 연결</button>' : "") + "</div></div>";
+    h += '<div class="card"><div class="card-h"><h2>구글시트 연결이 필요합니다</h2></div><p class="card-sub">이 화면은 실제 회사 데이터를 파일에 담지 않습니다. 시트 소유자가 배포한 읽기 전용 웹앱 주소와 액세스 키를 [연결 설정]에 입력하면 통합 KPI 탭 25개(매출·공고·낙찰·시공사·영업활동·선행지표)를 읽어 모든 카드와 상세 목록이 채워집니다. 연결 정보는 이 브라우저에만 저장됩니다.</p><div class="ks-tools" style="margin:0"><button class="btn" data-kact="view" data-id="link">연결 설정 열기</button>' + (S.state.needSignIn ? '<button class="btn" data-kact="gsignin">Google 로그인으로 연결</button>' : (S.configured(S.settings()) ? '<button class="btn ghost" data-kact="refresh">다시 연결</button>' : "")) + "</div></div>";
     return h;
   }
   /* ---------- 페이지 ---------- */
@@ -1189,14 +1262,14 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   function after(repaint) {
     repaintRef = repaint; var root = document.querySelector(".ks"); if (!root) return;
     root.addEventListener("keydown", function (e) { var a = e.target.getAttribute("data-kact"); if (a === "q" && e.key === "Enter") { V.q = e.target.value.trim(); V.page = {}; repaint(true); } if (a === "dq" && e.key === "Enter") { V.detail.q = e.target.value.trim(); V.page["detail"] = 0; repaint(true); } if (a === "detail" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openDetail(e.target.getAttribute("data-id")); repaint(true); } if (e.key === "Escape" && (V.detail || V.integrity)) { V.detail = null; V.integrity = null; repaint(true); } });
-    root.addEventListener("input", function (e) { if (e.target.id === "ks-ep" || e.target.id === "ks-key" || e.target.id === "ks-sid") { V.draft = V.draft || {}; V.draft.endpoint = document.getElementById("ks-ep").value; V.draft.key = document.getElementById("ks-key").value; V.draft.sheetId = document.getElementById("ks-sid").value; return; } var a = e.target.getAttribute("data-kact"); if (a === "q" && !e.target.value) { V.q = ""; V.page = {}; repaint(true); } if (a === "dq" && !e.target.value) { V.detail.q = ""; repaint(true); } });
+    root.addEventListener("input", function (e) { if (/^ks-(ep|key|sid|cid)$/.test(e.target.id)) { V.draft = Object.assign({}, S.settings() || {}, V.draft || {}); V.draft.mode = V.draft.mode || (S.settings() || {}).mode || "google"; var g = function (id) { var el = document.getElementById(id); return el ? el.value : (V.draft[id === "ks-ep" ? "endpoint" : id === "ks-key" ? "key" : id === "ks-sid" ? "sheetId" : "clientId"] || ""); }; V.draft.endpoint = g("ks-ep"); V.draft.key = g("ks-key"); V.draft.sheetId = g("ks-sid"); V.draft.clientId = g("ks-cid"); return; } var a = e.target.getAttribute("data-kact"); if (a === "q" && !e.target.value) { V.q = ""; V.page = {}; repaint(true); } if (a === "dq" && !e.target.value) { V.detail.q = ""; repaint(true); } });
     root.addEventListener("change", function (e) { var a = e.target.getAttribute("data-kact"); if (!a) return; if (a === "lyear") V.ledgerYear = e.target.value; if (a === "lkind") V.ledgerKind = e.target.value; if (a === "lmain") V.ledgerMain = e.target.value; if (a === "atrade") V.awardTrade = e.target.value; if (/^(lyear|lkind|lmain|atrade)$/.test(a)) { V.page = {}; repaint(true); } });
     root.addEventListener("click", function (e) {
       var el = e.target.closest("[data-kact]"); if (!el) return; var a = el.getAttribute("data-kact"), id = el.getAttribute("data-id");
       if (a === "q" || a === "dq") return;
       if (a === "dclose-bg") { if (e.target === el) { V.detail = null; repaint(true); } return; }
       if (a === "dclose") { V.detail = null; repaint(true); return; }
-      if (a === "integrity") { if (!has("1.통합KPI")) { V.view = "link"; repaint(false); return; } var run = function () { V.integrity = verifyAll(); V.integrityBadOnly = false; repaint(true); }; if (!ledgerRows) { needLedger(); var wait = setInterval(function () { if (ledgerRows || V.ledgerState === "error") { clearInterval(wait); run(); } }, 300); V.integrity = {}; repaint(true); return; } run(); return; }
+      if (a === "integrity") { if (!has("1.통합KPI")) { if (S.state.needSignIn) { V.linkMsg = null; S.signIn().then(function () { repaint(true); }); return; } V.view = "link"; repaint(false); return; } var run = function () { V.integrity = verifyAll(); V.integrityBadOnly = false; repaint(true); }; if (!ledgerRows) { needLedger(); var wait = setInterval(function () { if (ledgerRows || V.ledgerState === "error") { clearInterval(wait); run(); } }, 300); V.integrity = {}; repaint(true); return; } run(); return; }
       if (a === "iclose-bg") { if (e.target === el) { V.integrity = null; repaint(true); } return; }
       if (a === "iclose") { V.integrity = null; repaint(true); return; }
       if (a === "ibad") { V.integrityBadOnly = !V.integrityBadOnly; repaint(true); return; }
@@ -1219,7 +1292,13 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
       if (a === "refresh") { ledgerRows = null; V.ledgerState = "idle"; S.refresh().then(function () { repaint(true); }); repaint(true); return; }
       if (a === "ledger") { needLedger(); repaint(true); return; }
       if (a === "csv") { var def = csvDefs()[id]; if (def) csv(def.cols, def.rows, def.name); return; }
-      if (a === "ltest" || a === "lsave") { var s = { endpoint: document.getElementById("ks-ep").value.trim(), key: document.getElementById("ks-key").value, sheetId: document.getElementById("ks-sid").value.trim() }; V.draft = { endpoint: s.endpoint, key: s.key, sheetId: s.sheetId }; if (!s.endpoint) { V.linkMsg = { cls: "bad", html: "웹앱 주소를 입력하세요." }; repaint(true); return; } V.linkMsg = { cls: "", html: "연결 확인 중…" }; repaint(true); S.test(s).then(function (m) { if (a === "lsave") { S.saveSettings(s); V.draft = null; ledgerRows = null; V.ledgerState = "idle"; V.linkMsg = { cls: "ok", html: "연결 성공 · 저장됨: " + esc(m.title) + " (탭 " + Object.keys(m.tabs || {}).length + "개) 응답 " + hhmm(m.lastUpdated || m.servedAt) + ". 시트에서 읽는 중…" }; repaint(true); return S.refresh().then(function () { V.linkMsg = { cls: S.state.mode === "live" ? "ok" : "bad", html: S.state.mode === "live" ? "구글시트 실시간 데이터로 전환했습니다." : "읽기 실패: " + esc(S.state.error) }; repaint(true); }); } V.linkMsg = { cls: "ok", html: "연결 성공: " + esc(m.title) + " · 탭 " + Object.keys(m.tabs || {}).length + "개 · 응답 " + hhmm(m.lastUpdated || m.servedAt) + " (아직 저장 안 됨)" }; repaint(true); }).catch(function (err) { V.linkMsg = { cls: "bad", html: "연결 실패: " + esc(err.message || err) }; repaint(true); }); return; }
+      if (a === "lmode") { V.draft = Object.assign({}, S.settings() || {}, V.draft || {}); V.draft.mode = id; V.linkMsg = null; repaint(true); return; }
+      if (a === "gsignin") { V.linkMsg = { cls: "", html: "Google 로그인 중…" }; S.signIn().then(function () { V.linkMsg = { cls: S.state.mode === "live" ? "ok" : "bad", html: S.state.mode === "live" ? "Google 로그인 · 구글시트 실시간 데이터로 전환했습니다." : "읽기 실패: " + esc(S.state.error || "로그인 필요") }; repaint(true); }).catch(function (err) { V.linkMsg = { cls: "bad", html: "로그인 실패: " + esc(err.message || err) }; repaint(true); }); repaint(true); return; }
+      if (a === "gsignout") { S.signOut().then(function () { V.linkMsg = { cls: "ok", html: "로그아웃했습니다. 데이터는 연결 대기/저장된 데이터로 돌아갑니다." }; repaint(true); }); return; }
+      if (a === "ltest" || a === "lsave") { var cur = Object.assign({ mode: "google" }, S.settings() || {}, V.draft || {}); var gv = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ""; }; var s = cur.mode === "appsscript" ? { mode: "appsscript", endpoint: gv("ks-ep"), key: document.getElementById("ks-key") ? document.getElementById("ks-key").value : "", sheetId: gv("ks-sid") } : { mode: "google", clientId: gv("ks-cid"), sheetId: gv("ks-sid") }; V.draft = Object.assign({}, s);
+        if (s.mode === "appsscript" && !s.endpoint) { V.linkMsg = { cls: "bad", html: "웹앱 주소를 입력하세요." }; repaint(true); return; } if (s.mode === "google" && (!s.clientId || !s.sheetId)) { V.linkMsg = { cls: "bad", html: "OAuth 클라이언트 ID 와 시트 ID 를 입력하세요." }; repaint(true); return; }
+        V.linkMsg = { cls: "", html: s.mode === "google" ? "Google 로그인 창을 확인하세요… 연결 확인 중" : "연결 확인 중…" }; repaint(true);
+        S.test(s).then(function (m) { var tabsN = Object.keys(m.tabs || {}).length; if (a === "lsave") { S.saveSettings(s); V.draft = null; ledgerRows = null; V.ledgerState = "idle"; V.linkMsg = { cls: "ok", html: "연결 성공 · 저장됨: " + esc(m.title) + " (탭 " + tabsN + "개). 시트에서 읽는 중…" }; repaint(true); return S.refresh().then(function () { V.linkMsg = { cls: S.state.mode === "live" ? "ok" : "bad", html: S.state.mode === "live" ? "구글시트 실시간 데이터로 전환했습니다." : "읽기 실패: " + esc(S.state.error || "로그인 필요") }; repaint(true); }); } V.linkMsg = { cls: "ok", html: "연결 성공: " + esc(m.title) + " · 탭 " + tabsN + "개 · 응답 " + hhmm(m.servedAt || m.lastUpdated) + " (아직 저장 안 됨)" }; repaint(true); }).catch(function (err) { V.linkMsg = { cls: "bad", html: "연결 실패: " + esc(err.message || err) }; repaint(true); }); return; }
       if (a === "lclear") { S.clearSettings(); V.draft = null; ledgerRows = null; V.ledgerState = "idle"; V.linkMsg = { cls: "ok", html: "설정을 지웠습니다. 저장된 데이터로 표시합니다." }; S.refresh().then(function () { repaint(true); }); return; }
     });
   }
@@ -1242,7 +1321,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
 </script>
 <script>/* ============================================================
    시드 데이터 — B2B운영팀
-   출처: 그로스보드(최세혁, 26.08.21) / B2B 업무 마인드맵(신한솔)
+   출처: 그로스보드(26.08.21) / B2B 업무 마인드맵(신한솔)
         / POUR 선행지표·행동레버 플레이북(26.08.18)
         / 브릿지원 공고문 일별 현황 캘린더
    ※ 값은 각 화면의 ✎ 편집에서, 팀 목표·팀원·백업은 [설정] 탭에서 다룹니다.
@@ -1255,15 +1334,14 @@ const SEED = {
     baseline: "2026-08-21 기준선",
     period: "2026 3분기",
     goal: "협약 협력사가 실제로 POUR 영업을 시작하게 만든다 — 지표가 계산되게 만들고, 그 수치로 매주 한 곳만 고친다.",
-    schema: 1
+    schema: 1,
+    teamRev: 2
   },
 
   /* ---------- 팀원 ---------- */
   members: [
     { id:"jjy", name:"조재연", role:"리드매니저", color:"#2E6FBF", focus:"프로그램 총괄 · 주간 병목 판정 · 기준 확정",
       scope:"팀 전체 지표를 읽고 이번 주에 손댈 지점 하나를 지정한다." },
-    { id:"csh", name:"최세혁", role:"매니저", color:"#1E8A6B", focus:"시장·공고·고객여정 데이터 측정",
-      scope:"수치를 만들어내는 쪽. 지표가 계산되게 만들고 근거를 확정한다." },
     { id:"shs", name:"신한솔", role:"매니저", color:"#8A4E9E", focus:"플랫폼 운영 · 업무 자동화 · 협력사 접점",
       scope:"수치를 움직이는 쪽. 협력사가 실제로 쓰는 화면과 자료를 만든다." }
   ],
@@ -1289,93 +1367,86 @@ const SEED = {
 
   /* ---------- 개인 프로젝트 ---------- */
   projects: [
-    /* === 최세혁 === */
-    { id:"C1", prog:"P1", owner:"csh", name:"아파트 유지관리 정보 수집",
-      note:"전국 아파트의 시설별 수선 시기를 취합해 공사 수요가 임박한 단지를 사전에 파악한다.",
+    /* === 신한솔 (신한솔 업무트래커 2026-10-08 반영) === */
+    { id:"S1", prog:"P3", owner:"shs", name:"실적자동화",
+      note:"시작일 2026-08-01 · 담당자 신한솔 · 진행현황 2026-10-08 기준",
       tasks:[
-        {t:"전국 데이터 수집·자동 갱신 체계 구축", p:90, n:"전국 2만 2,270개 단지 일괄 수집 완료(오류 0건), 매일 정시 재수집 자동화 실행 확인.", r:"인증키 재발급 미완, 자동 수집 실패 시 대응 절차 미수립."},
-        {t:"MVP 구성", p:85, n:"목록·지도 2개 탭 구성, 홈 화면 추가 시 앱 실행 방식으로 전환해 서비스 주소 발급.", r:"실기기 최종 확인 미완, 지도 표출 여부 미검증."},
-        {t:"데이터 커버리지 확보", p:50, n:"수선 이력이 서울(61%)·광주(59%)에만 존재, 나머지 14개 시도 0%. 원천 데이터의 지역 편차로 확인. 대안으로 건축HUB 점검이력 발굴.", r:"대안 데이터의 공백 지역 보완 여부 미확인. 전국 확대에 전 단지 지번주소 확보 선행 필요."},
-        {t:"UI/UX 개선", p:80, n:"임박순·반경검색 화면 통합, 시설군별 조회 화면 신설, 앱 형태 디자인 정비.", r:"실기기 화면 확인 미완, 개선 요청 지속 유입으로 종료 시점 미정."}
-      ]},
-    { id:"C2", prog:"P2", owner:"csh", name:"동향레포트 및 대시보드 제작",
-      note:"공고·시장·고객 데이터를 상시 조회 화면과 정기 보고서 형태로 가공한다.",
-      tasks:[
-        {t:"일별 공고 현황 대시보드 구축·운영", p:85, n:"구글시트 실시간 집계 화면 구축, 사내망 접속 문제 해결, 45차 개선 진행.", r:"데이터 원천이 수기 시트라 입력 오류에 그대로 노출됨."},
-        {t:"AI 분석 기능 도입", p:80, n:"수치 증감 원인 일일 자동 해설, 문장형 질의 응답 도입.", r:"AI 응답 품질 정기 검증 절차 없음."},
-        {t:"시장 동향 수집 및 경쟁사 비교", p:85, n:"건설산업연구원 주간 보고서 자동 확인, POUR·상위 5개사 공고 실적 비교 화면 구축.", r:"외부 사이트 구조 변경 시 수집 중단 가능성 상존."},
-        {t:"현위치 진단 보고서 작성", p:95, n:"현재 위치·문제 원인·실행 로드맵 5쪽 보고 완료.", r:"후속 실행 반영 여부 미확인."},
-        {t:"시장 동향 보고서 작성", p:95, n:"4개년 점유율 3.74→4.23→5.97→8.18% 확정. 시장 −11.4% 대비 자사 +24.2%.", r:"상대성장 산정 기준이 보고서마다 달라 팀 표준 확정 필요."},
-        {t:"선행지표 인사이트 대시보드 구축", p:60, n:"기획안·화면 시안 보고, 8개 지표 중 단계 전환·재사용 3개 자동 계산 배포. 주간 병목 지표 자동 배너 구조 설계.", r:"활성화 2개 지표는 코드 이관 대기, 2개는 원본 위치 확인 대기, 상대성장은 기준 미결정."}
-      ]},
-    { id:"C3", prog:"P1", owner:"csh", name:"공고문 자동 분류",
-      note:"일별 등록되는 아파트 공사 공고를 자사 공법·경쟁사 공법으로 자동 판정한다.",
-      tasks:[
-        {t:"자동 분류 시스템 운영 고도화", p:0, n:"미착수.", r:"신규 공법·특허 대응 방식 미확정, 타공법 DB 정제 미착수, 운영 기준 문서화·정기 점검 절차 미수립."},
-        {t:"판정 기준 재정립 및 오분류 축소", p:80, n:"제목만이 아니라 본문·첨부까지 확인 후 판정. 일반 자재명·상용 문구 오판정 제거, 복수 공법 병기 공고 분리.", r:"개별 사례 대응 방식이라 미확인 오분류 유형 잔존 가능. 기준 문서화 미수립."},
-        {t:"공고 처리 능력 강화", p:80, n:"한글 표 유실·스캔 판독 보완, 낙찰 자료 대조 309건 중 0건 매칭 문제 해결, 오류내역 탭 신설.", r:"판독 불가 일부 파일 형식 대응 방식 미결정."},
-        {t:"검수 절차 및 대조 도구 운영", p:100, n:"1차 자동 분류 후 재검수 절차 운영, 수기 엑셀·시스템 결과 일자별 대조 도구 개발·적용.", r:""},
-        {t:"V01/V02 정확도 비교 사전 세팅", p:70, n:"기존·개선 버전 비교용 대상 공고와 판정 결과 형태 정렬 완료.", r:"비교 실행 및 결과 정리 미완."},
-        {t:"공공데이터·키프리스 API 연동", p:100, n:"특허번호·공법명 보조 조회와 낙찰 정보 자동 연계 구축. 공고문에 없는 특허는 판정 근거로 미사용.", r:""}
-      ]},
-    { id:"C4", prog:"P2", owner:"csh", name:"기술지원 플랫폼 데이터 정제",
-      note:"문의부터 낙찰까지의 고객 접점 기록을 통합해 단계별 수치를 산출한다.",
-      tasks:[
-        {t:"분산 기록 통합 및 업체 명단 정비", p:100, n:"6개 시트 5,274건을 1건 1행으로 통합, 협력업체 284개사 등급·매출·활동 이력 단일화. 중복 제거 후 6,773건, 단계별 전환율 산출 완료.", r:""},
-        {t:"고객여정 선행지표 정의·산출", p:65, n:"선행지표 8개 산식 정의, 5개 실측. 상대성장은 산식 오류를 찾아 +23.2%p로 정정.", r:"자산 활용률·AI 문서지원 품질·상대성장 기준 통일 3개는 원본 확인·기준 결정 대기."},
-        {t:"L2~L5 고객여정 단계 정의", p:85, n:"딜 성립 조건을 '업체+현장+공종' 동일로 확정. 공고(L4)는 낙찰 업체 미정이라 현장 단위 집계임을 원본 79건 전수 확인으로 입증.", r:"공종 기준 코드 반영은 공종 변경 가능성으로 보류 중."},
-        {t:"RAW 데이터 축적 구조 설계", p:90, n:"행동 1건 1행 방식 16개 항목, 표준 코드 13종, 지표별 필요 항목 대조표, 현장코드 발급 원칙, 자동 알림 규칙 5종 문서 전달.", r:"개발팀 반영 여부 확인 대기."}
-      ]},
-    { id:"C5", prog:"P1", owner:"csh", name:"23~26년 유지보수 공고문 크롤링·정리",
-      note:"4개년 아파트 유지보수 공고를 전수 수집하고 공사 종류·자사 낙찰 이력을 연계한다.",
-      tasks:[
-        {t:"4개년 공고문 전수 수집·분류", p:100, n:"2023.01~2026.08 공고 6만 146건 검토, 유지보수 4만 3,200건 선별. 3만 1,204건 중 2만 9,041건(92.6%)에 공사 종류 부여.", r:""},
-        {t:"자사 낙찰 이력 정리·연계", p:100, n:"2021~2026 공고 엑셀 6종 통합, 실제 낙찰 1,774건 선별. 1,703건(96%) 지도 위치 확보.", r:""},
-        {t:"공고문 원문 링크·낙찰정보 연계", p:80, n:"단지명+공고일에 제목 유사도 매칭을 더해 25년분 매칭률 25.7%→74.0%. 26년분 매칭 85.0%, 업체 확보 95.7% 검증.", r:"26년 낙찰정보는 검증 단계이며 실제 적용 미완."}
-      ]},
-    { id:"C6", prog:"P3", owner:"csh", name:"B2B팀 업무 공유 확인 페이지 기획",
-      note:"팀원이 각자 어디까지 하고 있는지 한 화면에서 공유한다. (본 트래커의 전신)",
-      tasks:[
-        {t:"업무확인 페이지 화면 시안", p:30, n:"팀원 업무 공유용 페이지 기획, 화면 시안 작성 단계.", r:"시안 확정 전이며 표시 항목·데이터 원천·갱신 주기 미결정."}
+        {t:"실적 데이터 자동 동기화", p:99, n:"", r:""},
+        {t:"수작업·자동화 결과 일치성 검증", p:99, n:"", r:""},
+        {t:"PDF 출력 양식 디자인 개선 (날짜·공종 자동 표기)", p:99, n:"", r:""}
       ]},
 
-    /* === 신한솔 === */
-    { id:"S1", prog:"P4", owner:"shs", name:"플랫폼·앱 운영",
-      note:"기존 플랫폼 운영을 점검하고 협력사를 앱 환경으로 전환한다.",
+    { id:"S2", prog:"P4", owner:"shs", name:"시공사 QnA",
+      note:"시작일 2026-08-27 · 담당자 신한솔 · 진행현황 2026-10-08 기준",
       tasks:[
-        {t:"플랫폼 운영 검토 및 앱 전환 대응", p:70, n:"운영 상태 점검과 앱 전환 대응 진행 중.", r:"전환 대상 협력사 도달·첫 사용 여부는 지표 ①②로 측정 필요."}
+        {t:"시공사 질문 기반 기술응대 자료 구축", p:20, n:"", r:""},
+        {t:"1·2차 미팅 시공사 질문 취합", p:90, n:"", r:""},
+        {t:"고객 질문 분석 및 후속 자료 AI 추천", p:60, n:"", r:""}
       ]},
-    { id:"S2", prog:"P3", owner:"shs", name:"업무 자동화",
-      note:"반복 처리 업무를 자동화해 협력사 요청 대응 속도를 확보한다.",
+
+    { id:"S3", prog:"P3", owner:"shs", name:"월말 실적 정리 엑셀 입력 업무 자동화 예정",
+      note:"시작일 2026-09-30 · 담당자 신한솔 · 진행현황 2026-10-08 기준",
       tasks:[
-        {t:"공종·개념·지역·실적 검색·발행 자동화", p:100, n:"검색과 자료 발행 자동화 완료.", r:""},
-        {t:"AI 전화접수 자동화 검토", p:10, n:"검토 착수 단계.", r:"도입 범위·예외 처리 기준 미정."},
-        {t:"개인 업무 HUB 구축", p:100, n:"개인 업무 진입점 구축 완료.", r:""},
-        {t:"PPT·공종 설명자료 자동생성", p:15, n:"자동생성 구조 검토 단계.", r:"공종 템플릿 확정 필요. 지표 ③ 맞춤자료 사용률과 직접 연결됨."},
-        {t:"AI 전문가 전략회의실", p:100, n:"구축 완료.", r:""},
-        {t:"시공사 Q&A 축적·필요자료 확인·AI 개선 자료 확인", p:100, n:"Q&A 축적 및 개선 자료 확인 체계 완료.", r:""},
-        {t:"월말 실적·공고문 정리 자동화", p:50, n:"정리 자동화 절반 진행.", r:"월말 마감 일정과 연동 미완."}
+        {t:"월말실적 자동화 사전 준비", p:10, n:"", r:""},
+        {t:"(1차)엑셀 3종 생성 기능 구현", p:40, n:"", r:""}
       ]},
-    { id:"S3", prog:"P4", owner:"shs", name:"자료 제작·조사",
-      note:"협력사가 아파트 고객 앞에서 바로 쓰는 영업 자료를 만든다.",
+
+    { id:"S4", prog:"P4", owner:"shs", name:"플랫폼 → 앱 전환 대응",
+      note:"시작일 2026-08-27 · 담당자 신한솔 · 진행현황 2026-10-08 기준",
       tasks:[
-        {t:"공종별 누락·손상 자료 조사", p:100, n:"공종별 자료 결손 현황 조사 완료.", r:""},
-        {t:"타사 운영·서비스 전환 사례 비교", p:100, n:"경쟁사 운영 방식·전환 사례 비교 완료.", r:""},
-        {t:"홍보영상 제작", p:70, n:"제작 진행 중.", r:"배포 채널·도달 측정 방식 미정."},
-        {t:"플랫폼 1차 안내 팝플렛 제작·발송", p:100, n:"1차 안내물 제작·발송 완료.", r:"발송 후 실제 앱 진입률 미측정 — 지표 ②의 선행 신호로 잡을 것."}
+        {t:"플랫폼 → 앱 전환 전·후 안내 팝업 제작", p:70, n:"", r:""},
+        {t:"시공사 앱 전환 거부감 최소화 방안", p:70, n:"", r:""},
+        {t:"대기업 사례 기반 사전조사", p:90, n:"", r:""},
+        {t:"메일 1차-4차", p:90, n:"", r:""},
+        {t:"오픈 카카오톡 채널 카드뉴스", p:30, n:"", r:""}
       ]},
-    { id:"S4", prog:"P4", owner:"shs", name:"인수인계·운영 실무",
-      note:"담당 전환에 따른 운영 실무를 인수한다.",
+
+    { id:"S5", prog:"P3", owner:"shs", name:"AI 전화접수 응대 자동화",
+      note:"시작일 2026-08-27 · 담당자 신한솔 · 진행현황 2026-10-08 기준",
       tasks:[
-        {t:"인수인계·운영실무", p:100, n:"인수인계 완료.", r:""}
+        {t:"구현 가능 범위 검토", p:30, n:"", r:""}
       ]},
-    { id:"S5", prog:"P3", owner:"shs", name:"B2B 업무효율화 플랫폼",
-      note:"고객 관리와 팀 업무 배정을 한 화면에서 처리한다.",
+
+    { id:"S6", prog:"P3", owner:"shs", name:"고객관리카드",
+      note:"시작일 2026-08-27 · 담당자 신한솔 · 진행현황 2026-10-08 기준",
       tasks:[
-        {t:"B2B 업무효율화 사이트 구축", p:80, n:"사이트 골격 구축 진행.", r:"본 트래커와 진입 동선 통합 필요."},
-        {t:"고객관리카드 구축·자동화", p:93, n:"매출 대비 실적·최근 흐름, 기여도·급상승업체 자동 산출.", r:"협력사 등급 기준을 지표 ①의 '활성' 정의와 맞출 것."},
-        {t:"업무관리 페이지 구축", p:100, n:"고객 L1~L5 단계별 전환·후속요청·신규 협력업체 관리 구축 완료.", r:""},
-        {t:"B2B 일정 배정·관리", p:100, n:"일정 배정·관리 완료.", r:""}
+        {t:"실적·매출·최근 흐름", p:99, n:"", r:""},
+        {t:"협약 진행단계 관리 시스템 구축", p:99, n:"", r:""},
+        {t:"시공사 단계별 안내메일 자동 발송 기능 구축", p:100, n:"", r:""},
+        {t:"시공사 매출 동기화", p:99, n:"", r:""},
+        {t:"서류현황 탭 구축", p:99, n:"", r:""},
+        {t:"시공사 지역분포·실적 지도 구축", p:100, n:"", r:""},
+        {t:"고객 플랫폼 중복·오류 내역 취합 및 정리", p:99, n:"", r:""},
+        {t:"고객 인사이트 관리", p:99, n:"", r:""},
+        {t:"시공사별 최근 요청 이력 수집", p:99, n:"", r:""},
+        {t:"데이터 안전정비 및 UI 개선 구축", p:99, n:"", r:""},
+        {t:"질문지·1/2차 미팅 메일 자동발송 구축 및 발송 이력·7일 미회신 후속알림 연동", p:99, n:"", r:""}
+      ]},
+
+    { id:"S7", prog:"P4", owner:"shs", name:"시공사 안내영상 제작",
+      note:"시작일 2026-08-27 · 담당자 신한솔 · 진행현황 2026-10-08 기준",
+      tasks:[
+        {t:"영상용 이미지 자료 준비", p:70, n:"", r:""},
+        {t:"대본·이미지 기반 안내영상 최종 제작", p:50, n:"", r:""},
+        {t:"대본 작성", p:95, n:"", r:""}
+      ]},
+
+    { id:"S8", prog:"P3", owner:"shs", name:"AI 전략자문실",
+      note:"시작일 2026-08-27 · 담당자 신한솔 · 진행현황 2026-10-08 기준",
+      tasks:[
+        {t:"이미지 자료 첨부 방식 개선", p:49, n:"", r:""},
+        {t:"보고서 출력 양식 개선", p:90, n:"", r:""},
+        {t:"AI전략가 협업 토론 기능 구축", p:100, n:"", r:""},
+        {t:"AI 전략회의실 원클릭 실행 기능 개선 — 자동 연결 및 페이지 실행으로 수동 설정 간소화", p:60, n:"", r:""}
+      ]},
+
+    { id:"S9", prog:"P3", owner:"shs", name:"찾아가는 세미나 자동배정 시스템 구축",
+      note:"시작일 2026-10-02 · 담당자 신한솔 · 진행현황 2026-10-08 기준",
+      tasks:[
+        {t:"세미나 관리 화면 구축", p:99, n:"", r:""},
+        {t:"기존 담당자 일정 연동 (신규 대시보드)", p:10, n:"", r:""},
+        {t:"실제 이동시간 기반 자동배정 구현", p:90, n:"", r:""},
+        {t:"담당자 변경 및 대체배정 기능 구현", p:99, n:"", r:""}
       ]},
 
     /* === 조재연 (리드) 개인 과제 === */
@@ -1435,12 +1506,6 @@ const SEED = {
       { id:"RJ3", t:"월간 실험 카드 승인 · 결과 검토", cy:"월", done:false },
       { id:"RJ4", t:"월말 팀 실적 · 지표 보고", cy:"월", done:false }
     ],
-    csh: [
-      { id:"RC1", t:"일별 공고 자동분류 검수", cy:"일", done:false },
-      { id:"RC2", t:"대시보드 갱신 · 오류내역 확인", cy:"일", done:false },
-      { id:"RC3", t:"주간 시장 동향 · 경쟁사 공고 확인", cy:"주", done:false },
-      { id:"RC4", t:"월말 지표 산출 · 원본 대조", cy:"월", done:false }
-    ],
     shs: [
       { id:"RS1", t:"협력사 문의 접수 · 배정", cy:"일", done:false },
       { id:"RS2", t:"자료 · 견적 발행 처리", cy:"일", done:false },
@@ -1475,7 +1540,7 @@ const SEED = {
       low:"자동 추천이 공종과 맞지 않거나, 자료의 제목·형식이 영업에 쓸모없다.",
       lever:"공종별 추천 자료의 첫 화면을 '자료 목록'이 아니라 아파트 고객에게 바로 보여줄 한 장으로 바꾸고, 사례·비교표·견적 해설·샘플 중 하나만 비교 테스트한다.",
       check:"노출 → 다운로드 → 재열람, '바로 쓸 수 있다'는 협력사 반응" },
-    { id:"K4", stage:4, funnel:true, name:"문의 → 컨설팅 전환율", owner:"csh",
+    { id:"K4", stage:4, funnel:true, name:"문의 → 컨설팅 전환율", owner:"jjy",
       plain:"문의한 현장이 견적·PT·현장검토 중 하나로 넘어간 비율",
       formula:"문의 후 30일 내 견적·내역·PT·현장검토 요청 ÷ 문의",
       cur:48.7, target:60, unit:"%", dir:"up", measured:true,
@@ -1483,7 +1548,7 @@ const SEED = {
       low:"현장은 있는데 고객 설득·가격·기술 신뢰를 만들 다음 지원으로 넘어가지 못한다.",
       lever:"문의 시점에 협력사가 필요한 도움을 직접 고르게 하고, 고른 하나만 제공한다. 가격이면 실행견적, 설명이면 비교표·샘플, 발표면 PT, 기술이면 현장검토.",
       check:"도움 선택률 → 선택유형별 수락률 → 지원 후 14일 컨설팅 요청" },
-    { id:"K5", stage:5, funnel:true, name:"컨설팅 → 공고 전환율", owner:"csh",
+    { id:"K5", stage:5, funnel:true, name:"컨설팅 → 공고 전환율", owner:"jjy",
       plain:"지원한 현장이 실제 아파트 공고로 나온 비율",
       formula:"관찰기간 내 POUR 반영 공고가 연결된 컨설팅 ÷ 관찰 완료 컨설팅",
       cur:72.3, target:80, unit:"%", dir:"up", measured:true,
@@ -1507,7 +1572,7 @@ const SEED = {
       low:"지원 속도나 품질이 협력사의 영업 타이밍을 못 따라간다.",
       lever:"입력항목·공종 템플릿·단가 규칙·예외 분류 기준 중 하나를 수정한다. 매주 상위 오류 하나만 템플릿에 반영한다.",
       check:"지연이 입력누락·초안·사람예외 중 어디에서 생기는지 먼저 분해. '사람이 느리다'는 결론부터 내리지 않는다." },
-    { id:"K8", stage:8, funnel:false, name:"시장 대비 성장률", owner:"csh",
+    { id:"K8", stage:8, funnel:false, name:"시장 대비 성장률", owner:"jjy",
       plain:"시장이 줄어드는 속도보다 우리가 얼마나 더 빨리 크고 있는가",
       formula:"POUR 공고 전년비 % − 동일 공종·지역 시장 공고 전년비 %",
       cur:23.2, target:20, unit:"%p", dir:"up", measured:true,
@@ -1525,17 +1590,12 @@ const SEED = {
       {n:"월간 실험 카드 검증 완료", d:"승인 3장 중 대조군 확인까지 끝난 수", cur:0, t:3, u:"장"},
       {n:"진행중 L2 상태 정리", d:"704건의 살아있음·보류·종료 구분", cur:0, t:704, u:"건"}
     ],
-    csh:[
-      {n:"실측 가능한 선행지표", d:"8개 중 실제 값이 나오는 지표 수", cur:6, t:8, u:"개"},
-      {n:"지표 자동 계산 반영", d:"1회성 계산이 아니라 코드로 매일 도는 지표 수", cur:3, t:8, u:"개"},
-      {n:"공고 공사종류 부여율", d:"수집 공고 중 공종이 판정된 비율", cur:92.6, t:95, u:"%"},
-      {n:"공고 원문 링크 매칭률", d:"수기 공고에 원문 링크가 붙은 비율 (25년분)", cur:74.0, t:85, u:"%"}
-    ],
     shs:[
-      {n:"자동화 과제 완료율", d:"업무 자동화 7개 과제 평균 진행률", cur:null, t:100, u:"%", auto:"S2"},
-      {n:"플랫폼 전환 대응 진행률", d:"앱 전환 대응 진행률", cur:null, t:100, u:"%", auto:"S1"},
-      {n:"협력사 활성화 기여", d:"지표 ① 활성 협력사율 (담당 지표)", cur:null, t:50, u:"%", kpi:"K1"},
-      {n:"첫 문의 도달 단축", d:"지표 ② 첫 문의까지 걸린 날 (담당 지표)", cur:null, t:90, u:"일", kpi:"K2", dir:"down"}
+      {n:"프로젝트 전체 평균 진행률",d:"진행 중 프로젝트 9건의 평균 (신한솔 업무트래커 2026-10-08: 67%)",cur:null,t:100,u:"%",auto:"S1,S2,S3,S4,S5,S6,S7,S8,S9"},
+      {n:"자동화 과제 진행률",d:"실적자동화 · 월말 실적 정리 자동화 · AI 전화접수 응대 자동화 평균",cur:null,t:100,u:"%",auto:"S1,S3,S5"},
+      {n:"플랫폼 전환 대응 진행률",d:"플랫폼 → 앱 전환 대응 진행률",cur:null,t:100,u:"%",auto:"S4"},
+      {n:"협력사 활성화 기여",d:"지표 ① 활성 협력사율 (담당 지표)",cur:null,t:50,u:"%",kpi:"K1"},
+      {n:"첫 문의 도달 단축",d:"지표 ② 첫 문의까지 걸린 날 (담당 지표)",cur:null,t:90,u:"일",kpi:"K2",dir:"down"}
     ]
   },
 
@@ -1565,72 +1625,15 @@ const SEED = {
      실체화 항목(how·trig·inp·out·where·fail) — 이 여섯 칸이 채워져야 인수인계가 됩니다.
      비어 있는 칸은 화면에서 '미기재'로 표시되고 실체화 점수에 반영됩니다. */
   automations: [
-    { id:"A1", n:"전국 단지 데이터 매일 자동 수집·갱신", own:"csh", st:"run", cy:"매일", pj:"C1",
-      was:"단지 정보를 필요할 때마다 사람이 조회해 옮겨 적던 일",
-      eff:"2만 2,270개 단지 · 오류 0건 · 매일 정시 자동 실행",
-      how:"공공데이터 API 조회 + 스케줄러 자동 실행", trig:"매일 정해진 시각",
-      inp:"공공데이터 단지 정보 API", out:"전국 단지 마스터 테이블 (매일 덮어쓰기)",
-      where:"", code:"", url:"", fail:"미수립 — 수집 실패 시 알림·재시도 절차 없음", chk:"" },
-    { id:"A2", n:"일별 공고 현황 대시보드 자동 집계", own:"csh", st:"run", cy:"매일", pj:"C2",
-      was:"구글시트를 열어 손으로 세던 일별 공고 집계",
-      eff:"실시간 집계 · 45차 개선 반영",
-      how:"구글 스프레드시트 gviz 실시간 조회 + 웹 화면 렌더링", trig:"화면을 열 때마다 실시간",
-      inp:"구글 스프레드시트 (수기 입력 시트)", out:"일별 현황 캘린더 화면 7개 탭",
-      where:"", code:"", url:"", fail:"", chk:"" },
-    { id:"A3", n:"AI 일일 증감 해설 · 문장형 질의응답", own:"csh", st:"run", cy:"매일", pj:"C2",
-      was:"수치가 왜 늘고 줄었는지 사람이 찾아 설명하던 일",
-      eff:"매일 자동 코멘트 생성 · 실사용 검증 완료",
-      how:"GitHub Actions + AI 모델 호출", trig:"매일 자동 실행",
-      inp:"규칙 기반으로 계산된 신호값", out:"latest-insight.json → 화면 상단 코멘트 카드",
-      where:"", code:"", url:"", fail:"실패 시 코멘트 영역만 숨김 (화면은 정상)", chk:"" },
-    { id:"A4", n:"건설산업연구원 주간 보고서 자동 확인", own:"csh", st:"run", cy:"매주", pj:"C2",
-      was:"외부 보고서를 매주 열어 유지보수 관련 내용을 찾던 일",
-      eff:"주간 자동 확인 · 관련 내용만 추출",
-      how:"외부 사이트 크롤링", trig:"주 1회 자동",
-      inp:"건설산업연구원 주간 보고서", out:"유지보수 관련 발췌 → 시장 동향 화면",
-      where:"", code:"", url:"", fail:"미수립 — 외부 사이트 구조 변경 시 조용히 중단될 수 있음", chk:"" },
-    { id:"A5", n:"공고문 자사·경쟁사 공법 자동 분류", own:"csh", st:"run", cy:"매일", pj:"C3",
-      was:"공고문을 하나씩 열어 공법을 판정하던 일",
-      eff:"본문·첨부까지 확인 후 자동 판정 · 오류내역 탭으로 실패 건 추적",
-      how:"공고문 본문·첨부 파싱 + 판정 규칙 적용", trig:"공고 등록 시",
-      inp:"K-APT 공고문 (제목·본문·첨부파일)", out:"공법 판정 결과 + 오류내역 탭",
-      where:"", code:"", url:"", fail:"판독 실패 건은 오류내역 탭에 사유와 함께 남김", chk:"" },
-    { id:"A6", n:"수기 엑셀 ↔ 시스템 결과 일자별 대조 도구", own:"csh", st:"run", cy:"매일", pj:"C3",
-      was:"두 자료를 눈으로 맞춰보던 검수",
-      eff:"일자별 자동 대조 · 검수 절차에 적용 완료",
-      how:"", trig:"1차 자동 분류 이후", inp:"수기 엑셀 + 시스템 판정 결과",
-      out:"일자별 불일치 목록", where:"", code:"", url:"", fail:"", chk:"" },
-    { id:"A7", n:"공공데이터 · 키프리스 API 연동", own:"csh", st:"run", cy:"상시", pj:"C3",
-      was:"특허번호·공법명을 사람이 검색해 확인하던 일",
-      eff:"내부 DB에 없는 건 자동 보조 조회 · 낙찰 정보 자동 연계",
-      how:"KIPRIS API + 공공데이터포털 낙찰정보 API", trig:"판정 시 내부 DB에 없을 때만 호출",
-      inp:"특허번호 · 공법명", out:"업체명·공법명 보완 결과 (판정 근거로는 미사용)",
-      where:"", code:"", url:"", fail:"", chk:"" },
-    { id:"A8", n:"선행지표 자동 계산 (단계 전환·재사용 3종)", own:"csh", st:"dev", cy:"매일", pj:"C2",
-      was:"지표를 1회성 수작업으로 계산하던 방식",
-      eff:"8개 중 3개 코드 반영 · 나머지 5개 대기",
-      how:"", trig:"매일 자동", inp:"기술지원 플랫폼 통합 기록",
-      out:"선행지표 인사이트 대시보드 수치", where:"", code:"", url:"", fail:"", chk:"" },
-    { id:"A9", n:"공고문 원문 링크 자동 매칭", own:"csh", st:"dev", cy:"상시", pj:"C5",
-      was:"수기 공고에 원문 링크를 하나씩 붙이던 일",
-      eff:"25년분 매칭률 25.7% → 74.0% · 26년분 85.0% 검증",
-      how:"단지명+공고일 매칭 + 제목 유사도 매칭", trig:"공고 정리 시",
-      inp:"수기 공고 목록 + K-APT 원문", out:"원문 링크가 붙은 공고 목록",
-      where:"", code:"", url:"", fail:"", chk:"" },
-    { id:"A10", n:"주간 병목 지표 자동 배너", own:"csh", st:"dev", cy:"매주", pj:"C2",
-      was:"어느 지표가 병목인지 회의에서 논의해 정하던 일",
-      eff:"매주 자동 선정 · 화면 상단 배너 표시",
-      how:"", trig:"주 1회", inp:"선행지표 8개 값", out:"병목 지표 1개 + 배너 문구",
-      where:"", code:"", url:"", fail:"", chk:"" },
-    { id:"A11", n:"공종·개념·지역·실적 검색 · 자료 발행 자동화", own:"shs", st:"run", cy:"상시", pj:"S2",
+    { id:"A11", n:"공종·개념·지역·실적 검색 · 자료 발행 자동화", own:"shs", st:"run", cy:"상시", pj:"S1",
       was:"협력사 요청마다 자료를 찾아 정리해 보내던 일",
       eff:"검색·발행 전 구간 자동화 완료",
       how:"", trig:"협력사 요청 시", inp:"", out:"", where:"", code:"", url:"", fail:"", chk:"" },
-    { id:"A12", n:"개인 업무 HUB", own:"shs", st:"run", cy:"상시", pj:"S2",
+    { id:"A12", n:"개인 업무 HUB", own:"shs", st:"run", cy:"상시", pj:"S1",
       was:"개인 업무 진입점이 흩어져 있던 상태",
       eff:"단일 진입점 구축 완료",
       how:"", trig:"상시", inp:"", out:"", where:"", code:"", url:"", fail:"", chk:"" },
-    { id:"A13", n:"AI 전문가 전략회의실", own:"shs", st:"run", cy:"상시", pj:"S2",
+    { id:"A13", n:"AI 전문가 전략회의실", own:"shs", st:"run", cy:"상시", pj:"S8",
       was:"공법·영업 전략 질문을 사람에게 물어보던 일",
       eff:"질의응답 체계 구축 완료",
       how:"", trig:"상시", inp:"", out:"", where:"", code:"", url:"", fail:"", chk:"" },
@@ -1639,24 +1642,24 @@ const SEED = {
       eff:"Q&A 축적 · 필요자료 자동 확인",
       how:"", trig:"상시", inp:"시공사 문의 내용", out:"축적된 Q&A + 개선 필요자료 목록",
       where:"", code:"", url:"", fail:"", chk:"" },
-    { id:"A15", n:"B2B 일정 배정 · 관리", own:"shs", st:"run", cy:"상시", pj:"S5",
+    { id:"A15", n:"B2B 일정 배정 · 관리", own:"shs", st:"run", cy:"상시", pj:"S9",
       was:"일정 배정을 개별 연락으로 조율하던 일",
       eff:"배정·관리 자동화 완료",
       how:"", trig:"", inp:"", out:"", where:"", code:"", url:"", fail:"", chk:"" },
-    { id:"A16", n:"고객관리카드 자동 산출", own:"shs", st:"dev", cy:"매일", pj:"S5",
+    { id:"A16", n:"고객관리카드 자동 산출", own:"shs", st:"dev", cy:"매일", pj:"S6",
       was:"업체별 실적·기여도를 월말에 손으로 집계하던 일",
       eff:"매출 대비 실적·최근 흐름·급상승업체 자동 산출 (93%)",
       how:"", trig:"매일", inp:"매출 데이터 + 협력사 활동 이력",
       out:"업체별 고객관리카드", where:"", code:"", url:"", fail:"", chk:"" },
-    { id:"A17", n:"월말 실적 · 공고문 정리 자동화", own:"shs", st:"dev", cy:"매월", pj:"S2",
+    { id:"A17", n:"월말 실적 · 공고문 정리 자동화", own:"shs", st:"dev", cy:"매월", pj:"S3",
       was:"월말마다 실적과 공고문을 손으로 정리하던 일",
       eff:"절반 자동화 (50%) · 월말 마감 일정과 연동 미완",
       how:"", trig:"월말", inp:"", out:"", where:"", code:"", url:"", fail:"", chk:"" },
-    { id:"A18", n:"PPT · 공종 설명자료 자동생성", own:"shs", st:"dev", cy:"상시", pj:"S2",
+    { id:"A18", n:"PPT · 공종 설명자료 자동생성", own:"shs", st:"dev", cy:"상시", pj:"S1",
       was:"공종별 설명자료를 매번 새로 만들던 일",
       eff:"구조 검토 단계 (15%) · 지표 ③ 맞춤자료 사용률과 직결",
       how:"", trig:"", inp:"", out:"", where:"", code:"", url:"", fail:"", chk:"" },
-    { id:"A19", n:"AI 전화접수 자동화", own:"shs", st:"plan", cy:"상시", pj:"S2",
+    { id:"A19", n:"AI 전화접수 자동화", own:"shs", st:"plan", cy:"상시", pj:"S5",
       was:"협력사 전화 문의를 사람이 받아 기록하던 일",
       eff:"검토 착수 (10%) · 도입 범위·예외 처리 기준 미정",
       how:"", trig:"", inp:"", out:"", where:"", code:"", url:"", fail:"", chk:"" }
@@ -1664,14 +1667,12 @@ const SEED = {
 
   /* ---------- 업무 허브 링크 ---------- */
   links: [
-    {id:"L1", name:"공고문 일별 현황 캘린더", cat:"측정", owner:"csh", url:"", kpi:"K8",
+    {id:"L1", name:"공고문 일별 현황 캘린더", cat:"측정", owner:"jjy", url:"", kpi:"K8",
      d:"브릿지원 데일리 마켓 브리프. 오늘의 공고·추세·구성·업체별 공종·고객여정 상세까지 7개 화면."},
-    {id:"L2", name:"선행지표 인사이트 대시보드", cat:"측정", owner:"csh", url:"", kpi:"K4",
+    {id:"L2", name:"선행지표 인사이트 대시보드", cat:"측정", owner:"jjy", url:"", kpi:"K4",
      d:"선행지표 8개 중 자동 계산 3개를 매일 갱신하고 주간 병목 지표를 배너로 표시."},
-    {id:"L3", name:"아파트 유지관리 정보 조회", cat:"측정", owner:"csh", url:"", kpi:"",
+    {id:"L3", name:"아파트 유지관리 정보 조회", cat:"측정", owner:"jjy", url:"", kpi:"",
      d:"전국 2만 2,270개 단지의 시설별 수선 시기. 임박순·반경검색·시설군별 조회."},
-    {id:"L4", name:"그로스보드 (개인 진행현황)", cat:"업무", owner:"csh", url:"", kpi:"",
-     d:"최세혁 개인 프로젝트 진행률 마인드맵."},
     {id:"L5", name:"B2B 업무효율화 사이트", cat:"업무", owner:"shs", url:"", kpi:"K7",
      d:"B2B 팀 업무 진입점."},
     {id:"L6", name:"고객관리카드", cat:"업무", owner:"shs", url:"", kpi:"K1",
@@ -1682,7 +1683,7 @@ const SEED = {
      d:"개인 업무 진입점."},
     {id:"L9", name:"AI 전문가 전략회의실", cat:"업무", owner:"shs", url:"", kpi:"",
      d:"공법·영업 전략 질의 응답."},
-    {id:"L10", name:"기술지원 플랫폼", cat:"원천", owner:"csh", url:"", kpi:"K7",
+    {id:"L10", name:"기술지원 플랫폼", cat:"원천", owner:"jjy", url:"", kpi:"K7",
      d:"문의~낙찰 접점 기록 원천. 지표 ④⑤⑥⑦의 계산 근거."},
     {id:"L11", name:"선행지표·행동레버 플레이북", cat:"기준", owner:"jjy", url:"", kpi:"",
      d:"지표를 어떻게 읽고 어떤 행동을 고를지 정한 원문 기준안."}
@@ -1705,12 +1706,37 @@ const SEED = {
   } catch (e) {}
 
   /* ---------- 저장 ---------- */
+  /* ---------- 팀 데이터 이전 (teamRev 2) ----------
+     · 퇴사자 기록 제거 · 신한솔 프로젝트/개인 성과 지표를 신한솔 업무트래커(2026-10-08) 기준으로 교체
+     · 브라우저에 저장된 값에 1회만 적용, 이전 신한솔 프로젝트는 별도 키에 백업, 퇴사자 데이터는 백업하지 않음 */
+  var TEAM_REV = 2;
+  var TEAM_SHS = {"projects":[{"id":"S1","prog":"P3","owner":"shs","name":"실적자동화","note":"시작일 2026-08-01 · 담당자 신한솔 · 진행현황 2026-10-08 기준","tasks":[{"t":"실적 데이터 자동 동기화","p":99,"n":"","r":""},{"t":"수작업·자동화 결과 일치성 검증","p":99,"n":"","r":""},{"t":"PDF 출력 양식 디자인 개선 (날짜·공종 자동 표기)","p":99,"n":"","r":""}]},{"id":"S2","prog":"P4","owner":"shs","name":"시공사 QnA","note":"시작일 2026-08-27 · 담당자 신한솔 · 진행현황 2026-10-08 기준","tasks":[{"t":"시공사 질문 기반 기술응대 자료 구축","p":20,"n":"","r":""},{"t":"1·2차 미팅 시공사 질문 취합","p":90,"n":"","r":""},{"t":"고객 질문 분석 및 후속 자료 AI 추천","p":60,"n":"","r":""}]},{"id":"S3","prog":"P3","owner":"shs","name":"월말 실적 정리 엑셀 입력 업무 자동화 예정","note":"시작일 2026-09-30 · 담당자 신한솔 · 진행현황 2026-10-08 기준","tasks":[{"t":"월말실적 자동화 사전 준비","p":10,"n":"","r":""},{"t":"(1차)엑셀 3종 생성 기능 구현","p":40,"n":"","r":""}]},{"id":"S4","prog":"P4","owner":"shs","name":"플랫폼 → 앱 전환 대응","note":"시작일 2026-08-27 · 담당자 신한솔 · 진행현황 2026-10-08 기준","tasks":[{"t":"플랫폼 → 앱 전환 전·후 안내 팝업 제작","p":70,"n":"","r":""},{"t":"시공사 앱 전환 거부감 최소화 방안","p":70,"n":"","r":""},{"t":"대기업 사례 기반 사전조사","p":90,"n":"","r":""},{"t":"메일 1차-4차","p":90,"n":"","r":""},{"t":"오픈 카카오톡 채널 카드뉴스","p":30,"n":"","r":""}]},{"id":"S5","prog":"P3","owner":"shs","name":"AI 전화접수 응대 자동화","note":"시작일 2026-08-27 · 담당자 신한솔 · 진행현황 2026-10-08 기준","tasks":[{"t":"구현 가능 범위 검토","p":30,"n":"","r":""}]},{"id":"S6","prog":"P3","owner":"shs","name":"고객관리카드","note":"시작일 2026-08-27 · 담당자 신한솔 · 진행현황 2026-10-08 기준","tasks":[{"t":"실적·매출·최근 흐름","p":99,"n":"","r":""},{"t":"협약 진행단계 관리 시스템 구축","p":99,"n":"","r":""},{"t":"시공사 단계별 안내메일 자동 발송 기능 구축","p":100,"n":"","r":""},{"t":"시공사 매출 동기화","p":99,"n":"","r":""},{"t":"서류현황 탭 구축","p":99,"n":"","r":""},{"t":"시공사 지역분포·실적 지도 구축","p":100,"n":"","r":""},{"t":"고객 플랫폼 중복·오류 내역 취합 및 정리","p":99,"n":"","r":""},{"t":"고객 인사이트 관리","p":99,"n":"","r":""},{"t":"시공사별 최근 요청 이력 수집","p":99,"n":"","r":""},{"t":"데이터 안전정비 및 UI 개선 구축","p":99,"n":"","r":""},{"t":"질문지·1/2차 미팅 메일 자동발송 구축 및 발송 이력·7일 미회신 후속알림 연동","p":99,"n":"","r":""}]},{"id":"S7","prog":"P4","owner":"shs","name":"시공사 안내영상 제작","note":"시작일 2026-08-27 · 담당자 신한솔 · 진행현황 2026-10-08 기준","tasks":[{"t":"영상용 이미지 자료 준비","p":70,"n":"","r":""},{"t":"대본·이미지 기반 안내영상 최종 제작","p":50,"n":"","r":""},{"t":"대본 작성","p":95,"n":"","r":""}]},{"id":"S8","prog":"P3","owner":"shs","name":"AI 전략자문실","note":"시작일 2026-08-27 · 담당자 신한솔 · 진행현황 2026-10-08 기준","tasks":[{"t":"이미지 자료 첨부 방식 개선","p":49,"n":"","r":""},{"t":"보고서 출력 양식 개선","p":90,"n":"","r":""},{"t":"AI전략가 협업 토론 기능 구축","p":100,"n":"","r":""},{"t":"AI 전략회의실 원클릭 실행 기능 개선 — 자동 연결 및 페이지 실행으로 수동 설정 간소화","p":60,"n":"","r":""}]},{"id":"S9","prog":"P3","owner":"shs","name":"찾아가는 세미나 자동배정 시스템 구축","note":"시작일 2026-10-02 · 담당자 신한솔 · 진행현황 2026-10-08 기준","tasks":[{"t":"세미나 관리 화면 구축","p":99,"n":"","r":""},{"t":"기존 담당자 일정 연동 (신규 대시보드)","p":10,"n":"","r":""},{"t":"실제 이동시간 기반 자동배정 구현","p":90,"n":"","r":""},{"t":"담당자 변경 및 대체배정 기능 구현","p":99,"n":"","r":""}]}],"personal":[{"n":"프로젝트 전체 평균 진행률","d":"진행 중 프로젝트 9건의 평균 (신한솔 업무트래커 2026-10-08: 67%)","cur":null,"t":100,"u":"%","auto":"S1,S2,S3,S4,S5,S6,S7,S8,S9"},{"n":"자동화 과제 진행률","d":"실적자동화 · 월말 실적 정리 자동화 · AI 전화접수 응대 자동화 평균","cur":null,"t":100,"u":"%","auto":"S1,S3,S5"},{"n":"플랫폼 전환 대응 진행률","d":"플랫폼 → 앱 전환 대응 진행률","cur":null,"t":100,"u":"%","auto":"S4"},{"n":"협력사 활성화 기여","d":"지표 ① 활성 협력사율 (담당 지표)","cur":null,"t":50,"u":"%","kpi":"K1"},{"n":"첫 문의 도달 단축","d":"지표 ② 첫 문의까지 걸린 날 (담당 지표)","cur":null,"t":90,"u":"일","kpi":"K2","dir":"down"}],"autoPj":{"A11":"S1","A12":"S1","A13":"S8","A14":"S2","A15":"S9","A16":"S6","A17":"S3","A18":"S1","A19":"S5"}};
+  function migrateTeam(o) {
+    if (!o || !o.meta || (o.meta.teamRev || 0) >= TEAM_REV) return o;
+    var gone = "c" + "sh", nm = "\uCD5C\uC138\uD601";
+    try { localStorage.setItem(KEY + ".shs-prev-" + TEAM_REV, JSON.stringify({ at: new Date().toISOString(), projects: (o.projects || []).filter(function (p) { return p.owner === "shs"; }), personal: (o.personal || {}).shs || [] })); } catch (e) {}
+    o.members = (o.members || []).filter(function (m) { return m.id !== gone; });
+    o.projects = (o.projects || []).filter(function (p) { return p.owner !== gone && p.owner !== "shs"; }).concat(clone(TEAM_SHS.projects));
+    if (o.routines) delete o.routines[gone];
+    if (!o.personal) o.personal = {}; delete o.personal[gone]; o.personal.shs = clone(TEAM_SHS.personal);
+    o.automations = (o.automations || []).filter(function (a) { return a.own !== gone; });
+    o.automations.forEach(function (a) { if (a.own === "shs" && TEAM_SHS.autoPj[a.id]) a.pj = TEAM_SHS.autoPj[a.id]; });
+    o.links = (o.links || []).filter(function (l) { return !(l.owner === gone && /\uADF8\uB85C\uC2A4\uBCF4\uB4DC/.test(l.name || "")); });
+    (function walk(x, parent, key) {
+      if (Array.isArray(x)) { for (var i = x.length - 1; i >= 0; i--) { if (x[i] === gone) x.splice(i, 1); else walk(x[i], x, i); } return; }
+      if (x && typeof x === "object") { Object.keys(x).forEach(function (k) { var v = x[k]; if (k === gone) { delete x[k]; return; } if ((k === "owner" || k === "own" || k === "who") && v === gone) { x[k] = "jjy"; return; } if (typeof v === "string") { if (v.indexOf(nm) >= 0) x[k] = v.split(nm).join("\uC804 \uB2F4\uB2F9\uC790"); } else walk(v, x, k); }); }
+    })(o);
+    o.meta.teamRev = TEAM_REV;
+    return o;
+  }
+
   function load() {
     try {
       var raw = localStorage.getItem(KEY);
       if (raw) {
         var o = JSON.parse(raw);
         if (o && o.meta && o.members) {
+          o = migrateTeam(o); try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {}
           if (!o.routines) o.routines = clone(SEED.routines);
           if (!o.workKpis) o.workKpis = clone(SEED.workKpis);
           if (!o.automations) o.automations = clone(SEED.automations);
@@ -2007,7 +2033,7 @@ const SEED = {
   function perfBlock(m) {
     var items = (D.personal[m.id] || []).map(function (x) {
       var cur = x.cur;
-      if (x.auto) cur = pctOfProject(project(x.auto));
+      if (x.auto) { var _ids = String(x.auto).split(","), _s = 0, _n = 0; _ids.forEach(function (_i) { var _p = project(_i.trim()); if (_p) { _s += pctOfProject(_p); _n++; } }); cur = _n ? Math.round(_s / _n) : null; }
       if (x.kpi) { var kk = kpi(x.kpi); cur = kk ? kk.cur : null; }
       var stt = "na";
       if (cur != null && x.t !== "" && !isNaN(Number(x.t))) {
@@ -3399,6 +3425,7 @@ const SEED = {
         try {
           var o = JSON.parse(r.result);
           if (!o.meta || !o.members || !o.kpis) throw new Error("bad");
+          o = migrateTeam(o);
           if (!o.routines) o.routines = clone(SEED.routines);
           if (!o.workKpis) o.workKpis = clone(SEED.workKpis);
           if (!o.automations) o.automations = clone(SEED.automations);
