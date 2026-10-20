@@ -112,3 +112,7 @@
 .ks-ch .b:hover .bar{opacity:.78}
 .ks-ch .b:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 .ks-ch .b .y{font-size:10px;color:var(--text-3);font-weight:700;margin-top:4px;border-top:1px solid var(--line);padding-top:3px}
+
+.ks .ks-prog{font-variant-numeric:tabular-nums}
+.ks .ks-pbar{display:inline-block;vertical-align:middle;width:90px;height:6px;border-radius:3px;background:rgba(127,127,127,.25);margin-left:8px;overflow:hidden}
+.ks .ks-pbar i{display:block;height:100%;background:currentColor;opacity:.7;transition:width .3s}

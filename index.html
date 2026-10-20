@@ -766,6 +766,10 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
 .ks-ch .b:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 .ks-ch .b .y{font-size:10px;color:var(--text-3);font-weight:700;margin-top:4px;border-top:1px solid var(--line);padding-top:3px}
 
+.ks .ks-prog{font-variant-numeric:tabular-nums}
+.ks .ks-pbar{display:inline-block;vertical-align:middle;width:90px;height:6px;border-radius:3px;background:rgba(127,127,127,.25);margin-left:8px;overflow:hidden}
+.ks .ks-pbar i{display:block;height:100%;background:currentColor;opacity:.7;transition:width .3s}
+
 </style>
 </head>
 <body>
@@ -785,7 +789,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
 <script id="b2b-sheet-data" type="text/plain" data-enc="none"></script>
 <script>
 /* ============================================================
-   통합 구글시트 데이터 소스 — 업무 트래커 첫 화면용 (v4: 상시 자동 연동)
+   통합 구글시트 데이터 소스 — 업무 트래커 첫 화면용 (v5: 상시 자동 연동 · 멈춤 방지)
    · 내장: #b2b-sheet-data (검증본 gzip+base64) → "저장된 데이터" / data-enc="none" → "연결 대기"(회사 데이터 미내장)
    · 실시간 A (권장): Google 로그인(OAuth, spreadsheets.readonly) + Sheets API 직접 읽기
        - 시트를 공유받은 직원만 읽음. 공유 키 없음. 회수 = 시트 공유 해제
@@ -806,7 +810,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   var interval = 5 * 60 * 1000;                    /* 자동 확인 주기 */
   var API = function () { return (window.B2B_SHEETS_API_BASE || "https://sheets.googleapis.com") + "/v4/spreadsheets/"; };
   var state = { ready: false, mode: "embedded", authMode: null, meta: null, tabs: null, at: null, error: null, loading: false, ledgerProgress: null, frozenDiff: [], embeddedMeta: null, decodeError: null, needSignIn: false, signedIn: false, email: "", epoch: 0, version: 0,
-    sync: { status: "idle", lastOkAt: null, lastAttemptAt: null, nextAt: null, message: "", stale: false, changed: null, fingerprint: "", ledgerCount: null, issues: { missingTabs: [], badTabs: [] }, consistency: [], expiredSince: null, silentBlocked: false, interval: interval } };
+    sync: { status: "idle", lastOkAt: null, lastAttemptAt: null, nextAt: null, message: "", stale: false, changed: null, fingerprint: "", ledgerCount: null, issues: { missingTabs: [], badTabs: [] }, consistency: [], expiredSince: null, silentBlocked: false, interval: interval, progress: null, lastError: null, startedAt: null } };
   var embedded = null; var listeners = []; var gisReady = null; var timer = null; var syncing = null;
   var DEFAULT_TABS = ["1.통합KPI", "2.시공사마스터", "4.메인자재구매현황", "5.POUR공고낙찰", "5b.POUR반영공고", "6.타사공법낙찰", "7.기술자문문의", "7b.플랫폼가입현황", "8.컨설팅요청", "8b.컨설팅발행이력", "9.샘플카탈로그요청", "10.공법설명회이력", "11.기타문의답변", "12.거래처연결검토", "13.데이터검증변경이력", "14.판매원문차이검증", "15.마스터대조", "16.L2L3전환", "16b.L2L3시공사별", "16c.L2L3판정집계", "16d.L2L3검토이력", "17.장기무활동", "18.선행지표요약", "19.업체명정규화"];
   function expectedTabs() { return SCHEMA ? Object.keys(SCHEMA) : DEFAULT_TABS.concat([LEDGER]); }
@@ -839,7 +843,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   function loadGis() {
     if (window.google && window.google.accounts && window.google.accounts.oauth2) return Promise.resolve();
     if (gisReady) return gisReady;
-    gisReady = new Promise(function (res, rej) { var s = document.createElement("script"); s.src = "https://accounts.google.com/gsi/client"; s.async = true; s.onload = function () { res(); }; s.onerror = function () { gisReady = null; rej(err("NET", "Google 로그인 라이브러리를 불러오지 못했습니다(네트워크 확인)")); }; document.head.appendChild(s); });
+    gisReady = new Promise(function (res, rej) { var to = setTimeout(function () { gisReady = null; rej(err("NET", "Google 로그인 라이브러리 응답 없음(15초) — 네트워크 또는 차단을 확인하세요")); }, 15000); var s = document.createElement("script"); s.src = "https://accounts.google.com/gsi/client"; s.async = true; s.onload = function () { clearTimeout(to); res(); }; s.onerror = function () { clearTimeout(to); gisReady = null; rej(err("NET", "Google 로그인 라이브러리를 불러오지 못했습니다(네트워크 확인)")); }; document.head.appendChild(s); });
     return gisReady;
   }
   /* prompt: "none"=무음(화면 없이 갱신, 안 되면 실패) / ""=필요할 때만 화면 표시(첫 로그인·동의) */
@@ -853,7 +857,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   }
   function afterSignIn(tok) {
     state.sync.silentBlocked = false; state.needSignIn = false; patchSettings({ signedBefore: true });
-    return fetch((window.B2B_USERINFO_URL || "https://www.googleapis.com/oauth2/v3/userinfo"), { headers: { Authorization: "Bearer " + tok } }).then(function (r) { return r.ok ? r.json() : null; }).then(function (u) { if (u && u.email) { state.email = u.email; try { localStorage.setItem(UKEY, JSON.stringify({ email: u.email })); } catch (e) {} } }).catch(function () {});
+    return Promise.race([sleep(8000), fetch((window.B2B_USERINFO_URL || "https://www.googleapis.com/oauth2/v3/userinfo"), { headers: { Authorization: "Bearer " + tok } }).then(function (r) { return r.ok ? r.json() : null; }).then(function (u) { if (u && u.email) { state.email = u.email; try { localStorage.setItem(UKEY, JSON.stringify({ email: u.email })); } catch (e) {} } }).catch(function () {})]);
   }
   function getToken(interactive) {
     var t = getStoredToken(); if (t) { state.signedIn = true; return Promise.resolve(t); }
@@ -862,17 +866,60 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   }
   function silentSignIn() { if (state.sync.silentBlocked) return Promise.reject(err("SILENT", "무음 로그인 불가(팝업 차단 또는 추가 동의 필요)")); return requestToken("none").catch(function (e) { state.sync.silentBlocked = true; throw e; }); }
 
-  function gfetch(url, timeoutMs) {
-    return getToken(false).then(function (tok) {
-      var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null; var t = ctrl ? setTimeout(function () { ctrl.abort(); }, timeoutMs || 90000) : null;
-      return fetch(url, { headers: { Authorization: "Bearer " + tok }, signal: ctrl ? ctrl.signal : undefined }).then(function (r) {
-        if (r.status === 401) { clearToken(); throw err("AUTH", "로그인이 만료되었거나 접근이 취소되었습니다(401)"); }
-        if (r.status === 403) throw err("DENIED", "이 계정에는 시트 열람 권한이 없습니다(403). 시트 소유자에게 '뷰어' 공유를 요청하세요.");
-        if (r.status === 404) throw err("DENIED", "시트를 찾을 수 없거나 열람 권한이 없습니다(404) — 시트 ID와 공유 상태를 확인하세요.");
-        if (r.status === 429) throw err("RATE", "Sheets API 호출 한도 초과 — 잠시 후 자동으로 다시 시도합니다");
-        if (!r.ok) throw err("HTTP", "Sheets API 오류(HTTP " + r.status + ")");
-        return r.json();
-      }, function (e) { throw err(e && e.name === "AbortError" ? "TIMEOUT" : "NET", e && e.name === "AbortError" ? "응답 시간 초과" : "네트워크 연결 실패"); }).finally(function () { if (t) clearTimeout(t); });
+  /* ---- v5: 요청 단위 타임아웃·재시도·취소·진단 로그 (데이터·토큰은 기록하지 않음) ---- */
+  var REQ_TIMEOUT = 45000, SYNC_DEADLINE = 180000, GROUP_SIZE = 6, CONC = 2, LEDGER_CHUNK = 4000, LEDGER_CONC = 3;
+  var logBuf = [], inflight = [], abortGen = 0;
+  function logd(label, status, ms, kb, attempt) { logBuf.push({ t: Date.now(), label: label, status: status, ms: ms, kb: kb, attempt: attempt }); if (logBuf.length > 300) logBuf.shift(); }
+  function getLog() { return logBuf.slice(); }
+  function setProgress(label, done, total) { state.sync.progress = { label: label, done: done, total: total, at: Date.now() }; emit(); }
+  function BIG() { return Math.round(REQ_TIMEOUT * 1.5); }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function abortInflight() { abortGen++; inflight.slice().forEach(function (rec) { rec.cancelled = true; try { if (rec.ctrl) rec.ctrl.abort(); } catch (e) {} }); }
+  function httpErr(status, txt) {
+    var m = "", st = ""; try { var j = JSON.parse(txt); if (j && j.error) { m = String(j.error.message || ""); st = String(j.error.status || ""); } } catch (e) {}
+    var hay = st + " " + m;
+    if (status === 401) return err("AUTH", "로그인이 만료되었거나 접근이 취소되었습니다(401)");
+    if (status === 403) {
+      if (/SERVICE_DISABLED|has not been used|is disabled|accessNotConfigured/i.test(hay)) return err("APIOFF", "이 Google Cloud 프로젝트에서 'Google Sheets API' 가 꺼져 있습니다(403). 관리자: Cloud 콘솔 → API 및 서비스 → 라이브러리 → Google Sheets API → 사용 설정, 1~2분 뒤 다시 시도하세요.");
+      if (/RESOURCE_EXHAUSTED|rate|quota/i.test(hay)) return err("RATE", "Sheets API 호출 한도 초과(403) — 잠시 후 자동으로 다시 시도합니다");
+      if (/insufficient|scope/i.test(hay)) return err("DENIED", "이 로그인에 시트 읽기 권한 범위(spreadsheets.readonly)가 없습니다(403). 로그인 창에서 '스프레드시트 보기' 권한을 허용하세요.");
+      return err("DENIED", "이 계정에는 시트 열람 권한이 없습니다(403). 시트 소유자에게 '뷰어' 공유를 요청하세요.");
+    }
+    if (status === 404) return err("DENIED", "시트를 찾을 수 없거나 열람 권한이 없습니다(404) — 시트 ID와 공유 상태를 확인하세요.");
+    if (status === 429) return err("RATE", "Sheets API 호출 한도 초과(429) — 잠시 후 자동으로 다시 시도합니다");
+    if (status === 400) return err("BADREQ", "Sheets API 가 요청을 거절했습니다(400) — 탭 이름 또는 범위가 시트와 맞지 않습니다.");
+    return err("HTTP", "Sheets API 오류(HTTP " + status + ")");
+  }
+  /* 요청 1건: 개별 타임아웃 + 재시도(네트워크·시간초과·5xx·한도) — 세부 로그만 남긴다 */
+  function gfetch(url, o) {
+    o = o || {}; var timeout = o.timeout || REQ_TIMEOUT, retries = o.retries == null ? 2 : o.retries, label = o.label || "요청", gen = abortGen;
+    function once(n) {
+      return getToken(false).then(function (tok) {
+        var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null; var rec = { ctrl: ctrl, cancelled: false, timedOut: false }; inflight.push(rec);
+        var t0 = Date.now(); var tm = ctrl ? setTimeout(function () { rec.timedOut = true; try { ctrl.abort(); } catch (e) {} }, timeout) : null;
+        function fin() { if (tm) clearTimeout(tm); var i = inflight.indexOf(rec); if (i >= 0) inflight.splice(i, 1); }
+        return fetch(url, { headers: { Authorization: "Bearer " + tok }, signal: ctrl ? ctrl.signal : undefined })
+          .then(function (r) { return r.text().then(function (txt) { return { st: r.status, ok: r.ok, txt: txt }; }); })
+          .then(function (x) {
+            fin(); logd(label, x.st, Date.now() - t0, Math.round(x.txt.length / 1024), n);
+            if (!x.ok) { var he = httpErr(x.st, x.txt); if (he.code === "AUTH") clearToken(); throw he; }
+            try { return JSON.parse(x.txt); } catch (e) { throw err("HTTP", "Sheets API 응답을 해석하지 못했습니다 — " + label); }
+          }, function (e) {
+            fin(); var to = rec.timedOut; logd(label, rec.cancelled ? "CANCEL" : (to ? "TIMEOUT" : "NET"), Date.now() - t0, 0, n);
+            if (rec.cancelled) throw err("CANCEL", "동기화를 취소했습니다");
+            throw err(to ? "TIMEOUT" : "NET", to ? "응답 시간 초과(" + Math.round(timeout / 1000) + "초) — " + label : "네트워크 연결 실패 — " + label);
+          });
+      });
+    }
+    function run(n) { return once(n).catch(function (e) { var again = (e.code === "NET" || e.code === "TIMEOUT" || e.code === "HTTP" || e.code === "RATE") && n <= retries && gen === abortGen; if (!again) throw e; return sleep((e.code === "RATE" ? 3000 : 700) * n + Math.round(Math.random() * 300)).then(function () { return run(n + 1); }); }); }
+    return run(1);
+  }
+  function pool(items, conc, fn) {
+    return new Promise(function (resolve, reject) {
+      var res = new Array(items.length), i = 0, active = 0, failed = false; if (!items.length) return resolve(res);
+      function next() { if (failed) return; if (i >= items.length) { if (active === 0) resolve(res); return; } var k = i++; active++;
+        Promise.resolve().then(function () { return fn(items[k], k); }).then(function (v) { res[k] = v; active--; next(); }, function (e) { if (!failed) { failed = true; reject(e); } }); }
+      for (var c = 0; c < Math.min(conc, items.length); c++) next();
     });
   }
   function colLetter(n) { var s = ""; while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
@@ -880,24 +927,42 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   function norm(vals, header) { var w = header.length; return (vals || []).map(function (r) { var o = new Array(w); for (var i = 0; i < w; i++) { var v = r[i]; o[i] = (v === "" || v === undefined) ? null : v; } return o; }).filter(function (r) { return r.some(function (v) { return v !== null; }); }); }
   /* 탭 목록 + 행 수(A열 길이). 원문 탭은 필요할 때만 센다(큰 탭) */
   function gMeta(sid, countLedger) {
-    return gfetch(API() + encodeURIComponent(sid) + "?fields=properties.title,sheets.properties(title,gridProperties(rowCount,columnCount))").then(function (j) {
-      var tabs = {}; (j.sheets || []).forEach(function (s) { tabs[s.properties.title] = { rows: null, cols: s.properties.gridProperties.columnCount }; });
+    return gfetch(API() + encodeURIComponent(sid) + "?fields=properties.title,sheets.properties(title,gridProperties(rowCount,columnCount))", { label: "시트 정보" }).then(function (j) {
+      var tabs = {}; (j.sheets || []).forEach(function (s) { var g = s.properties.gridProperties || {}; tabs[s.properties.title] = { rows: null, cols: g.columnCount || 26, grid: g.rowCount || 0 }; });
       var names = Object.keys(tabs).filter(function (n) { return n !== LEDGER || countLedger; });
       var url = API() + encodeURIComponent(sid) + "/values:batchGet?majorDimension=COLUMNS" + names.map(function (n) { return "&ranges=" + encodeURIComponent(q(n) + "!A:A"); }).join("");
-      return gfetch(url).then(function (b) { (b.valueRanges || []).forEach(function (vr, i) { var col = (vr.values && vr.values[0]) || []; tabs[names[i]].rows = Math.max(0, col.length - 1); }); return { source: "sheet", auth: "google", title: j.properties.title, spreadsheetId: sid, lastUpdated: null, servedAt: new Date().toISOString(), tabs: tabs }; });
+      return gfetch(url, { label: "행 수 확인", timeout: BIG() }).then(function (b) { (b.valueRanges || []).forEach(function (vr, i) { var col = (vr.values && vr.values[0]) || []; tabs[names[i]].rows = Math.max(0, col.length - 1); }); return { source: "sheet", auth: "google", title: (j.properties || {}).title || "", spreadsheetId: sid, lastUpdated: null, servedAt: new Date().toISOString(), tabs: tabs }; });
     });
   }
-  /* 모든 탭을 한 번의 batchGet 으로 읽는다(같은 시점의 원본) */
-  function gTabs(sid, names) {
+  function parseTabs(b, names) { var out = {}; (b.valueRanges || []).forEach(function (vr, i) { var vals = vr.values || []; var header = (vals[0] || []).map(function (h) { return h == null ? "" : String(h); }); out[names[i]] = { header: header, rows: norm(vals.slice(1), header) }; }); return out; }
+  function gTabs(sid, names, label) {
     if (!names.length) return Promise.resolve({});
     var url = API() + encodeURIComponent(sid) + "/values:batchGet?valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING" + names.map(function (n) { return "&ranges=" + encodeURIComponent(q(n)); }).join("");
-    return gfetch(url, 120000).then(function (b) { var out = {}; (b.valueRanges || []).forEach(function (vr, i) { var vals = vr.values || []; var header = (vals[0] || []).map(function (h) { return h == null ? "" : String(h); }); out[names[i]] = { header: header, rows: norm(vals.slice(1), header) }; }); return out; });
+    return gfetch(url, { label: label || "탭 읽기", timeout: BIG() }).then(function (b) { return parseTabs(b, names); });
   }
+  function tabSig(t) { if (!t) return ""; return fnv(JSON.stringify(t.header) + JSON.stringify(t.rows)).toString(16); }
+  /* 탭을 6개씩 나눠 읽는다(요청 1건이 너무 커서 멈추는 일 방지). 끝에 KPI 탭을 다시 읽어 읽는 도중 시트가 바뀌었는지 확인 */
+  function gTabsAll(sid, names, onProgress) {
+    var groups = []; for (var i = 0; i < names.length; i += GROUP_SIZE) groups.push(names.slice(i, i + GROUP_SIZE));
+    var done = 0, total = names.length; if (onProgress) onProgress("탭 읽는 중", 0, total);
+    return pool(groups, CONC, function (g, gi) { return gTabs(sid, g, "탭 읽기 " + (gi + 1) + "/" + groups.length + " (" + g[0] + (g.length > 1 ? " 외 " + (g.length - 1) : "") + ")").then(function (r) { done += g.length; if (onProgress) onProgress("탭 읽는 중", done, total); return r; }); }).then(function (parts) {
+      var out = {}; parts.forEach(function (p) { for (var k in p) out[k] = p[k]; });
+      var K = "1.통합KPI"; if (!out[K]) return out;
+      return gTabs(sid, [K], "KPI 재확인").then(function (again) { if (tabSig(again[K]) !== tabSig(out[K])) throw err("CHANGING", "읽는 도중 시트가 수정되어 이번 조회를 버렸습니다 — 곧 다시 시도합니다"); return out; });
+    });
+  }
+  /* 판매 원문: 4,000행씩 나눠 3개 동시 조회 */
   function gLedger(sid, meta, onProgress) {
-    var cols = (meta.tabs[LEDGER] || {}).cols || 26, total = (meta.tabs[LEDGER] || {}).rows || 0, L = colLetter(cols), CH = 5000;
-    return gfetch(API() + encodeURIComponent(sid) + "/values/" + encodeURIComponent(q(LEDGER) + "!A1:" + L + "1")).then(function (h) { var header = ((h.values || [])[0] || []).map(function (x) { return x == null ? "" : String(x); }); var acc = { header: header, rows: [] };
-      function step(start) { if (start > total + 1) return acc; var end = Math.min(start + CH - 1, total + 1); return gfetch(API() + encodeURIComponent(sid) + "/values/" + encodeURIComponent(q(LEDGER) + "!A" + start + ":" + L + end) + "?valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING", 120000).then(function (j) { acc.rows = acc.rows.concat(norm(j.values, header)); state.ledgerProgress = { loaded: acc.rows.length, total: total }; if (onProgress) onProgress(state.ledgerProgress); return (j.values || []).length ? step(end + 1) : acc; }); }
-      return step(2).then(function (a) { state.ledgerProgress = null; return a; }); });
+    var cols = (meta.tabs[LEDGER] || {}).cols || 26, total = (meta.tabs[LEDGER] || {}).rows || 0, L = colLetter(cols);
+    return gfetch(API() + encodeURIComponent(sid) + "/values/" + encodeURIComponent(q(LEDGER) + "!A1:" + L + "1"), { label: "원문 머리글" }).then(function (h) {
+      var header = ((h.values || [])[0] || []).map(function (x) { return x == null ? "" : String(x); });
+      var ranges = []; for (var s = 2; s <= total + 1; s += LEDGER_CHUNK) ranges.push([s, Math.min(s + LEDGER_CHUNK - 1, total + 1)]);
+      var loaded = 0; state.ledgerProgress = { loaded: 0, total: total }; if (onProgress) onProgress(state.ledgerProgress);
+      return pool(ranges, LEDGER_CONC, function (r, ri) {
+        return gfetch(API() + encodeURIComponent(sid) + "/values/" + encodeURIComponent(q(LEDGER) + "!A" + r[0] + ":" + L + r[1]) + "?valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING", { label: "원문 " + (ri + 1) + "/" + ranges.length, timeout: BIG() })
+          .then(function (j) { var rows = norm(j.values, header); loaded += rows.length; state.ledgerProgress = { loaded: loaded, total: total }; if (onProgress) onProgress(state.ledgerProgress); return rows; });
+      }).then(function (parts) { var rows = []; parts.forEach(function (p) { for (var i = 0; i < p.length; i++) rows.push(p[i]); }); state.ledgerProgress = null; return { header: header, rows: rows }; }, function (e) { state.ledgerProgress = null; throw e; });
+    });
   }
 
   /* ---------- B. Apps Script 공유 키 (POST 본문) ---------- */
@@ -947,12 +1012,13 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
       return api(s, { action: "meta" }, 30000).then(function (mj) { var meta = mj.meta || {}; meta.auth = "appsscript"; var names = expectedTabs().filter(function (n) { return n !== LEDGER && meta.tabs && meta.tabs[n]; });
         return api(s, { action: "tabs", tabs: names.join(",") }, 90000).then(function (j) { var tabs = {}; names.forEach(function (n) { var t = j.tabs[n]; if (t) tabs[n] = { header: t.header, rows: t.rows }; }); return { meta: meta, tabs: tabs, ledger: prev && prev.ledger || null, ledgerReused: true }; }); });
     }
+    setProgress("시트 정보 확인", 0, 1);
     return gMeta(s.sheetId, wantLedger).then(function (meta) {
       var names = expectedTabs().filter(function (n) { return n !== LEDGER && meta.tabs[n]; });
-      return gTabs(s.sheetId, names).then(function (tabs) {
+      return gTabsAll(s.sheetId, names, setProgress).then(function (tabs) {
         var fp = fingerprint(tabs); var lcount = wantLedger && meta.tabs[LEDGER] ? meta.tabs[LEDGER].rows : null;
         var changed = !prev || fp !== prev.fp || (wantLedger && lcount !== prev.ledgerCount);
-        if (wantLedger && changed) return gLedger(s.sheetId, meta, null).then(function (led) { return { meta: meta, tabs: tabs, ledger: led, fp: fp, ledgerCount: lcount, changed: true }; });
+        if (wantLedger && changed) return gLedger(s.sheetId, meta, function (p) { setProgress("판매 원문 읽는 중", p.loaded, p.total); }).then(function (led) { return { meta: meta, tabs: tabs, ledger: led, fp: fp, ledgerCount: lcount, changed: true }; });
         return { meta: meta, tabs: tabs, ledger: prev && prev.ledger || null, fp: fp, ledgerCount: lcount, changed: changed };
       });
     });
@@ -970,7 +1036,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     var tabs = snap.tabs; tabs[LEDGER] = ledgerNow;
     if (changed) { state.tabs = tabs; state.meta = snap.meta; state.version++; state.frozenDiff = diffFrozen(tabs); } else { state.meta = snap.meta; }
     state.mode = "live"; state.error = null; state.needSignIn = false;
-    sy.fingerprint = fp; sy.ledgerCount = snap.ledgerCount != null ? snap.ledgerCount : sy.ledgerCount; sy.issues = issues; sy.consistency = []; sy.changed = firstLive ? null : !!changed; sy.lastOkAt = Date.now(); sy.status = "ok"; sy.stale = false; sy.message = ""; sy.expiredSince = null;
+    sy.fingerprint = fp; sy.ledgerCount = snap.ledgerCount != null ? snap.ledgerCount : sy.ledgerCount; sy.issues = issues; sy.consistency = []; sy.changed = firstLive ? null : !!changed; sy.lastOkAt = Date.now(); sy.status = "ok"; sy.stale = false; sy.message = ""; sy.expiredSince = null; sy.lastError = null; sy.progress = null;
     state.at = new Date();
   }
   /* 접근 취소·로그아웃: 조회한 데이터를 메모리에서 지운다(저장 데이터로 우회 불가) */
@@ -979,13 +1045,14 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     state.epoch++; state.version++; var sy = state.sync; sy.status = status; sy.message = msg; sy.stale = false; sy.fingerprint = ""; sy.ledgerCount = null; sy.consistency = []; sy.issues = { missingTabs: [], badTabs: [] }; sy.lastOkAt = null; stopTimer();
   }
   function classify(e) {
-    var sy = state.sync; var code = (e && e.code) || "NET"; var msg = (e && e.message) || String(e);
+    var sy = state.sync; var code = (e && e.code) || "INTERNAL"; var msg = (e && e.message) || String(e); sy.lastError = { code: code, message: msg, at: Date.now() };
     if (code === "NOSESSION" || code === "AUTH" || code === "SILENT" || code === "CONFIG") {
       sy.expiredSince = sy.expiredSince || Date.now(); state.needSignIn = true;
       if (haveLive()) { if (Date.now() - sy.expiredSince > GRACE_MS) { purge("signedout", "로그인 만료 후 " + (GRACE_MS >= 60000 ? Math.round(GRACE_MS / 60000) + "분" : Math.round(GRACE_MS / 1000) + "초") + "이 지나 조회한 데이터를 화면에서 지웠습니다. 다시 로그인하세요."); return; } sy.status = "auth"; sy.stale = true; sy.message = "로그인 상태를 확인하지 못했습니다 — 재로그인이 필요합니다. 표시 중인 값은 이전 데이터입니다."; }
       else { sy.status = "auth"; sy.message = code === "CONFIG" ? msg : "Google 로그인이 필요합니다."; useEmbedded(null); state.needSignIn = true; }
       return;
     }
+    if (code === "CHANGING") { setTimeout(function () { if (!syncing && configured(settings()) && state.sync.status !== "denied" && state.sync.status !== "signedout") syncNow("retry"); }, 15000); }
     if (code === "DENIED") { clearToken(); purge("denied", msg + " 조회한 데이터는 화면에서 지웠습니다."); state.needSignIn = true; return; }
     if (haveLive()) { sy.status = "stale"; sy.stale = true; sy.message = msg + " — 표시 중인 값은 이전 데이터입니다. 다음 자동 확인 때 다시 시도합니다."; }
     else { sy.status = "error"; useEmbedded(msg); }
@@ -996,19 +1063,61 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   function stopTimer() { if (timer) { clearInterval(timer); timer = null; } state.sync.nextAt = null; }
   function startTimer() { if (timer) return; timer = setInterval(function () { if (document.hidden) return; syncNow("timer"); }, interval); }
   function scheduleNext() { var s = settings(); if (configured(s) && state.sync.status !== "denied" && state.sync.status !== "signedout") { startTimer(); state.sync.nextAt = Date.now() + interval; } }
+  var runSeq = 0, curCancel = null;
+  /* 동기화 1회: 어떤 경우에도 끝난다 — 전체 제한시간(워치독)·개별 요청 타임아웃·취소·예외 모두 finish 로 수렴 */
   function syncNow(reason) {
     if (!embedded) return Promise.resolve(state);
     if (syncing) return syncing;
     var s = settings(); state.authMode = s ? (s.mode === "appsscript" ? "appsscript" : "google") : null;
     if (!configured(s)) { useEmbedded(null); state.needSignIn = false; state.sync.status = "idle"; stopTimer(); state.at = new Date(); emit(); return Promise.resolve(state); }
-    state.loading = true; state.sync.status = "syncing"; state.sync.lastAttemptAt = Date.now(); emit();
-    var prev = haveLive() ? { fp: state.sync.fingerprint, ledger: state.tabs[LEDGER] || null, ledgerCount: state.sync.ledgerCount } : null;
+    var sy = state.sync, run = ++runSeq, token = { dead: false }, wd = null, rejWd = null;
+    state.loading = true; sy.status = "syncing"; sy.lastAttemptAt = Date.now(); sy.startedAt = Date.now(); sy.progress = null; emit();
+    var prev = haveLive() ? { fp: sy.fingerprint, ledger: state.tabs[LEDGER] || null, ledgerCount: sy.ledgerCount } : null;
     function attempt() { return fetchSnapshot(s, prev); }
-    syncing = attempt().catch(function (e) {
+    var wdp = new Promise(function (_, rej) { rejWd = rej; });
+    wd = setTimeout(function () { token.dead = true; abortInflight(); rejWd(err("DEADLINE", "동기화가 " + Math.round(SYNC_DEADLINE / 1000) + "초 안에 끝나지 않아 중단했습니다.")); }, SYNC_DEADLINE);
+    curCancel = function () { token.dead = true; abortInflight(); rejWd(err("CANCEL", "동기화를 취소했습니다.")); };
+    var work = Promise.resolve().then(attempt).catch(function (e) {
       if (s.mode !== "appsscript" && (e.code === "AUTH" || e.code === "NOSESSION") && (s.signedBefore || e.code === "AUTH")) return silentSignIn().then(attempt);
       throw e;
-    }).then(apply).catch(classify).then(function () { state.loading = false; syncing = null; scheduleNext(); emit(); return state; });
+    }).then(function (snap) { if (token.dead) throw err("CANCEL", "동기화를 취소했습니다."); apply(snap); });
+    work.catch(function () {});
+    syncing = Promise.race([work, wdp]).catch(function (e) {
+      try { classify(e); } catch (x) { sy.lastError = { code: "INTERNAL", message: String((x && x.message) || x), at: Date.now() }; sy.status = haveLive() ? "stale" : "error"; sy.stale = haveLive(); sy.message = "동기화 결과를 처리하는 중 오류가 났습니다: " + String((x && x.message) || x); }
+    }).then(function () {
+      clearTimeout(wd); if (run === runSeq) curCancel = null;
+      state.loading = false; syncing = null; sy.startedAt = null; sy.progress = null;
+      if (sy.status === "syncing") { sy.status = haveLive() ? "stale" : "error"; sy.stale = haveLive(); if (!sy.message) sy.message = "동기화가 정상적으로 끝나지 않았습니다. 다시 시도해 주세요."; }
+      try { scheduleNext(); } catch (e) {}
+      emit(); return state;
+    });
     return syncing;
+  }
+  function cancelSync() { if (curCancel) curCancel(); }
+  /* 시험·점검용: 제한값 조정(회사 데이터와 무관) */
+  function setLimits(o) { o = o || {}; if (o.reqTimeout) REQ_TIMEOUT = o.reqTimeout; if (o.deadline) SYNC_DEADLINE = o.deadline; if (o.group) GROUP_SIZE = o.group; if (o.conc) CONC = o.conc; if (o.ledgerChunk) LEDGER_CHUNK = o.ledgerChunk; if (o.ledgerConc) LEDGER_CONC = o.ledgerConc; return { reqTimeout: REQ_TIMEOUT, deadline: SYNC_DEADLINE, group: GROUP_SIZE, conc: CONC, ledgerChunk: LEDGER_CHUNK, ledgerConc: LEDGER_CONC }; }
+  /* 연결 진단: 단계별 상태·소요시간만 기록(셀 값·토큰·시트 ID 는 기록하지 않음). 사용자 클릭에서 호출 */
+  function diagnose(onStep) {
+    var rep = { startedAt: Date.now(), steps: [], ok: false, totalMs: 0 }; var s = settings();
+    function push(name) { var st = { name: name, ok: null, ms: 0, detail: "" }; rep.steps.push(st); return st; }
+    function tick() { if (onStep) { try { onStep(rep); } catch (e) {} } }
+    function step(name, fn) {
+      var st = push(name), t0 = Date.now(); tick();
+      return Promise.resolve().then(fn).then(function (d) { st.ok = true; st.ms = Date.now() - t0; st.detail = d || ""; tick(); }, function (e) { st.ok = false; st.ms = Date.now() - t0; st.detail = (e && e.code ? "[" + e.code + "] " : "") + String((e && e.message) || e); tick(); throw e; });
+    }
+    if (!configured(s) || s.mode === "appsscript") { var st0 = push("연결 설정"); st0.ok = false; st0.detail = "Google 로그인 방식(A)이 설정되어 있지 않습니다."; rep.totalMs = 0; tick(); return Promise.resolve(rep); }
+    var meta = null, names = [];
+    return step("로그인 토큰", function () { return getToken(true).then(function () { return "토큰 있음"; }); })
+      .then(function () { return step("시트 정보·행 수 (1/2 요청)", function () { return gMeta(s.sheetId, true).then(function (m) { meta = m; var have = Object.keys(m.tabs); var miss = expectedTabs().filter(function (n) { return !m.tabs[n]; }); names = expectedTabs().filter(function (n) { return n !== LEDGER && m.tabs[n]; }); return "탭 " + have.length + "개 확인" + (miss.length ? " · 누락 " + miss.length + "개: " + miss.join(", ") : "") + " · 원문 " + (m.tabs[LEDGER] ? m.tabs[LEDGER].rows : "-") + "행"; }); }); })
+      .then(function () {
+        var groups = []; for (var i = 0; i < names.length; i += GROUP_SIZE) groups.push(names.slice(i, i + GROUP_SIZE));
+        var chain = Promise.resolve();
+        groups.forEach(function (g, gi) { chain = chain.then(function () { return step("탭 읽기 " + (gi + 1) + "/" + groups.length + " (" + g.length + "개)", function () { var t0 = Date.now(); return gTabs(s.sheetId, g, "진단 탭 " + (gi + 1)).then(function (r) { var rows = 0; for (var k in r) rows += r[k].rows.length; var last = getLog()[getLog().length - 1] || {}; return g.length + "개 탭 · " + rows + "행 · " + (last.kb || 0) + "KB"; }); }); }); });
+        return chain;
+      })
+      .then(function () { var L = meta && meta.tabs[LEDGER]; if (!L) return null; return step("판매 원문 첫 1,000행", function () { return gfetch(API() + encodeURIComponent(s.sheetId) + "/values/" + encodeURIComponent(q(LEDGER) + "!A1:" + colLetter(L.cols || 26) + "1000") + "?valueRenderOption=UNFORMATTED_VALUE", { label: "진단 원문", timeout: BIG() }).then(function (j) { var last = getLog()[getLog().length - 1] || {}; return ((j.values || []).length - 1) + "행 · " + (last.kb || 0) + "KB"; }); }); })
+      .catch(function () {})
+      .then(function () { rep.ok = rep.steps.length > 0 && rep.steps.every(function (x) { return x.ok === true; }); rep.totalMs = Date.now() - rep.startedAt; tick(); return rep; });
   }
   function ledger(onProgress) {
     if (state.mode !== "live") { var t0 = embedded.tabs[LEDGER]; return t0 ? Promise.resolve(t0) : Promise.reject(new Error("연결 대기 — 구글시트에 연결한 뒤 원문을 읽을 수 있습니다")); }
@@ -1024,7 +1133,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   /* 연결 테스트: google 은 사용자 클릭에서 호출(로그인 팝업) */
   function test(s) { if (s.mode === "appsscript") return api(s, { action: "meta" }, 30000).then(function (j) { return j.meta; }); if (!s.clientId || !s.sheetId) return Promise.reject(new Error("OAuth 클라이언트 ID 와 시트 ID 를 입력하세요")); var keep = settings(); saveSettings(s); return getToken(true).then(function () { return gMeta(s.sheetId, false); }).finally(function () { if (keep) localStorage.setItem(KEY, JSON.stringify(keep)); else localStorage.removeItem(KEY); }); }
   function signIn(opts) { state.sync.silentBlocked = false; return ((opts && opts.select) ? requestToken("select_account") : getToken(true)).then(function () { state.sync.expiredSince = null; return syncNow("signin"); }); }
-  function signOut() { var t = getStoredToken(); clearToken(); try { localStorage.removeItem(UKEY); } catch (e) {} patchSettings({ signedBefore: false }); state.email = ""; if (t && window.google && google.accounts && google.accounts.oauth2 && google.accounts.oauth2.revoke) { try { google.accounts.oauth2.revoke(t, function () {}); } catch (e) {} } purge("signedout", "로그아웃했습니다. 조회한 데이터를 화면에서 지웠습니다."); state.needSignIn = configured(settings()); emit(); return Promise.resolve(state); }
+  function signOut() { abortInflight(); var t = getStoredToken(); clearToken(); try { localStorage.removeItem(UKEY); } catch (e) {} patchSettings({ signedBefore: false }); state.email = ""; if (t && window.google && google.accounts && google.accounts.oauth2 && google.accounts.oauth2.revoke) { try { google.accounts.oauth2.revoke(t, function () {}); } catch (e) {} } purge("signedout", "로그아웃했습니다. 조회한 데이터를 화면에서 지웠습니다."); state.needSignIn = configured(settings()); emit(); return Promise.resolve(state); }
   function setSyncInterval(ms, graceMs) { interval = Math.max(1000, Number(ms) || 300000); state.sync.interval = interval; if (graceMs) GRACE_MS = Math.max(1000, Number(graceMs)); stopTimer(); if (configured(settings()) && haveLive()) scheduleNext(); }
 
   document.addEventListener("visibilitychange", function () { if (!document.hidden && configured(settings()) && state.sync.lastAttemptAt && Date.now() - state.sync.lastAttemptAt >= interval && state.sync.status !== "denied" && state.sync.status !== "signedout") syncNow("resume"); });
@@ -1032,7 +1141,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   loadEmbedded().then(function () { state.ready = true; state.embeddedMeta = embedded.meta; useEmbedded(null); state.at = new Date(); state.email = getHint(); emit(); return syncNow("load"); })
     .catch(function (e) { state.decodeError = e.message || String(e); state.ready = false; emit(); });
 
-  window.B2BSheet = { noData: noData, state: state, refresh: function () { return syncNow("manual"); }, tab: tab, ledger: ledger, settings: settings, saveSettings: saveSettings, clearSettings: clearSettings, test: test, signIn: signIn, signOut: signOut, configured: configured, onChange: function (f) { listeners.push(f); }, setSyncInterval: setSyncInterval, expectedTabs: expectedTabs, schema: function () { return SCHEMA; }, LEDGER: LEDGER, KEY: KEY };
+  window.B2BSheet = { noData: noData, state: state, refresh: function () { return syncNow("manual"); }, tab: tab, ledger: ledger, settings: settings, saveSettings: saveSettings, clearSettings: clearSettings, test: test, signIn: signIn, signOut: signOut, configured: configured, onChange: function (f) { listeners.push(f); }, setSyncInterval: setSyncInterval, cancel: cancelSync, setLimits: setLimits, diagnose: diagnose, getLog: getLog, expectedTabs: expectedTabs, schema: function () { return SCHEMA; }, LEDGER: LEDGER, KEY: KEY };
 })();
 
 </script>
@@ -1099,12 +1208,35 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     var i = sy.issues || { missingTabs: [], badTabs: [] }; if (!i.missingTabs.length && !i.badTabs.length) return "";
     return '<div class="ks-warn"><b>시트 구조 경고:</b> ' + (i.missingTabs.length ? "누락된 탭 " + i.missingTabs.length + "개(" + esc(i.missingTabs.join(", ")) + ")" : "") + (i.missingTabs.length && i.badTabs.length ? " · " : "") + (i.badTabs.length ? "열 구조가 바뀐 탭 " + i.badTabs.length + "개(" + i.badTabs.map(function (b) { return esc(b.tab) + " — 누락 열: " + esc(b.missing.join(", ")); }).join(" / ") + ")" : "") + ". 해당 탭에 의존하는 카드·목록은 값을 <b>0으로 대체하지 않고</b> '표시하지 않음/확인 불가'로 둡니다. 시트 구조를 복원하거나 대시보드를 갱신해야 합니다.</div>";
   }
+  function progText() { var sy = S.state.sync; if (sy.status !== "syncing") return ""; var el = sy.startedAt ? Math.round((Date.now() - sy.startedAt) / 1000) : 0; var p = sy.progress; return (p ? p.label + " " + num(p.done) + " / " + num(p.total) + " · " : "연결 중… · ") + "경과 " + el + "초"; }
+  function progHtml() { var sy = S.state.sync, p = sy.progress; var pct = p && p.total ? Math.min(100, Math.round(p.done / p.total * 100)) : 0; return '<span class="ks-prog">' + esc(progText()) + '</span><span class="ks-pbar"><i style="width:' + pct + '%"></i></span>'; }
+  function syncProblem(sy, live) {
+    var btns = '<div class="ks-tools" style="margin:8px 0 0"><button class="btn" data-kact="refresh">다시 시도</button><button class="btn ghost" data-kact="diag">연결 진단</button></div>';
+    if (sy.status === "syncing" && sy.startedAt && Date.now() - sy.startedAt > 30000) return '<div class="ks-warn"><b>응답이 평소보다 느립니다.</b> <span class="ks-prog">' + esc(progText()) + '</span> — 계속 기다리거나 [취소] 후 다시 시도하세요. 3분이 지나면 자동으로 중단하고 오류를 표시합니다.<div class="ks-tools" style="margin:8px 0 0"><button class="btn" data-kact="cancelsync">취소</button><button class="btn ghost" data-kact="diag">연결 진단</button></div></div>';
+    if (sy.status === "error" && !live) return '<div class="ks-warn"><b>동기화가 끝나지 않았거나 실패했습니다.</b> ' + esc((sy.lastError && sy.lastError.message) || sy.message || "") + (sy.lastError ? ' <span class="mini">[' + esc(sy.lastError.code) + " · " + hms(sy.lastError.at) + "]</span>" : "") + btns + "</div>";
+    return "";
+  }
+  function logText() {
+    var out = ["연결 진단 " + new Date().toISOString(), ""]; var d = V.diag;
+    if (d) { d.steps.forEach(function (x) { out.push((x.ok === true ? "OK  " : x.ok === false ? "FAIL" : "... ") + " " + x.name + " · " + x.ms + "ms · " + x.detail); }); out.push("합계 " + (d.totalMs || 0) + "ms", ""); }
+    out.push("요청 로그(최근 " + S.getLog().length + "건: 이름 · 상태 · 시간 · 크기 · 시도)");
+    S.getLog().slice(-60).forEach(function (r) { out.push(new Date(r.t).toISOString().slice(11, 19) + " " + r.label + " · " + r.status + " · " + r.ms + "ms · " + r.kb + "KB · #" + r.attempt); });
+    var le = S.state.sync.lastError; if (le) out.push("", "마지막 오류: [" + le.code + "] " + le.message);
+    return out.join("\n");
+  }
+  function diagCard() {
+    var d = V.diag, h = '<div class="card"><div class="card-h"><h2>연결 진단</h2><span class="mini">단계별 응답 상태·시간만 기록합니다(시트 내용·토큰·시트 ID 미포함)</span></div><div class="ks-tools" style="margin:0 0 8px"><button class="btn" data-kact="diag"' + (V.diagRunning ? " disabled" : "") + ">" + (V.diagRunning ? "진단 중…" : "연결 진단 실행") + '</button><button class="btn ghost" data-kact="copylog">결과·요청 로그 복사</button></div>';
+    if (d && d.steps.length) { h += '<div class="kv">' + d.steps.map(function (x) { return "<span>" + esc(x.name) + "</span><span>" + (x.ok === true ? "✓ " : x.ok === false ? "✗ " : "… ") + (x.ok === null ? "진행 중" : x.ms + "ms") + (x.detail ? " · " + esc(x.detail) : "") + "</span>"; }).join("") + "</div>"; if (!V.diagRunning) h += '<p class="card-sub">' + (d.ok ? "모든 단계 정상 · 총 " + d.totalMs + "ms" : "실패한 단계가 있습니다. 위 ✗ 항목의 오류 코드와 안내를 확인하세요.") + "</p>"; }
+    else h += '<p class="card-sub">로그인·시트 정보·탭 읽기·판매 원문 첫 구간을 순서대로 확인해 어디서 막히는지 보여 줍니다. 읽기 전용이며 시트를 수정하지 않습니다.</p>';
+    return h + "</div>";
+  }
   function statusBar() {
     var st = S.state, sy = st.sync, m = st.meta || {}, em = st.embeddedMeta || {};
     var nd = S.noData(), live = st.mode === "live", signedBefore = !!(S.settings() || {}).signedBefore;
     var cls, label;
     if (live && sy.stale) { cls = "fallback"; label = "이전 데이터 · 마지막 정상 동기화 " + hms(sy.lastOkAt); }
     else if (live) { cls = "live"; label = "구글시트 실시간 · 마지막 정상 동기화 " + hms(sy.lastOkAt); }
+    else if (sy.status === "syncing") { cls = "embedded"; label = "구글시트 동기화 중"; }
     else if (sy.status === "denied") { cls = "fallback"; label = "접근 권한 없음 · 데이터 숨김"; }
     else if (sy.status === "signedout") { cls = "fallback"; label = "로그아웃됨 · 데이터 숨김"; }
     else if (st.needSignIn) { cls = "fallback"; label = "Google 로그인 필요"; }
@@ -1112,19 +1244,21 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     else if (nd) { cls = "none"; label = "연결 대기 · 데이터 없음"; }
     else { cls = "embedded"; label = "저장된 데이터"; }
     var sub;
-    if (live) sub = "시트 " + esc(m.title || "") + (m.auth === "google" && st.email ? " · " + esc(st.email) : "") + " · " + (sy.status === "syncing" ? "동기화 중…" : (sy.changed === false ? "변경 없음 · " : sy.changed ? "방금 갱신됨 · " : "") + "다음 확인 " + hms(sy.nextAt) + " (" + ivText(sy.interval) + "마다 자동)");
+    if (live) sub = "시트 " + esc(m.title || "") + (m.auth === "google" && st.email ? " · " + esc(st.email) : "") + " · " + (sy.status === "syncing" ? progHtml() : (sy.changed === false ? "변경 없음 · " : sy.changed ? "방금 갱신됨 · " : "") + "다음 확인 " + hms(sy.nextAt) + " (" + ivText(sy.interval) + "마다 자동)");
     else if (nd) sub = "이 파일에는 회사 데이터가 들어 있지 않습니다. 구글시트에 연결하면 실제 데이터가 표시됩니다.";
     else sub = "마지막 검증본 " + esc(em.version || "") + " · 기준일 " + esc(em.asOf || "") + " · " + esc(em.verified || "");
+    if (sy.status === "syncing" && !live) sub = progHtml();
     var needBtn = st.needSignIn || sy.status === "auth";
     var h = '<div class="ks-bar"><span class="ks-src ' + cls + '"><span class="dot"></span>' + esc(label) + '</span><span class="mini">' + sub + '</span><span class="sp"></span>' +
       (needBtn ? '<button class="btn" data-kact="gsignin">' + (signedBefore ? "로그인 상태 재확인" : "Google 로그인으로 연결") + "</button>" : "") +
-      '<button class="btn ghost" data-kact="refresh"' + (st.loading ? " disabled" : "") + ">" + (st.loading ? "동기화 중…" : "지금 동기화") + '</button><button class="btn ghost" data-kact="view" data-id="link">연결 설정</button><button class="btn ghost" data-kact="integrity">정합성 점검</button>' +
+      '<button class="btn ghost" data-kact="refresh"' + (st.loading ? " disabled" : "") + ">" + (st.loading ? "동기화 중…" : "지금 동기화") + '</button>' + (st.loading ? '<button class="btn ghost" data-kact="cancelsync">취소</button>' : "") + '<button class="btn ghost" data-kact="view" data-id="link">연결 설정</button><button class="btn ghost" data-kact="integrity">정합성 점검</button>' +
       ((st.signedIn || (live && m.auth === "google")) ? '<button class="btn ghost" data-kact="gsignout">로그아웃</button>' : "") + "</div>";
     h += '<div class="ks-note">2022~2025년은 확정 과거 실적(변경은 승인 정정만) · 2026년은 지속 갱신(기준일 ' + esc(em.asOf || "2026-10-20") + ') · 공식 L2→L3 전환율은 검증된 확정 건만, 검토 건은 별도 표시 · <b>모든 지표 카드를 클릭하면 근거 목록이 열립니다</b></div>';
-    if (live && sy.stale) h += '<div class="ks-warn stale"><b>이전 데이터입니다.</b> ' + esc(sy.message) + " 마지막 정상 동기화: " + hhmm(sy.lastOkAt) + "</div>";
+    if (live && sy.stale) h += '<div class="ks-warn stale"><b>이전 데이터입니다.</b> ' + esc(sy.message) + " 마지막 정상 동기화: " + hhmm(sy.lastOkAt) + '<div class="ks-tools" style="margin:8px 0 0"><button class="btn" data-kact="refresh">다시 시도</button><button class="btn ghost" data-kact="diag">연결 진단</button></div></div>';
     else if (st.needSignIn && !live) h += '<div class="ks-warn" style="color:#92400E;background:#FFF4E5;border-color:#F5D9A8"><b>' + (signedBefore ? "로그인 상태를 재확인해야 합니다." : "Google 로그인이 필요합니다.") + "</b> " + (signedBefore ? "[로그인 상태 재확인]을 한 번 누르면 이어서 자동으로 불러옵니다(팝업을 허용해 두면 다음부터는 열 때 자동 재확인). " : "시트를 공유받은 직원 계정으로 로그인하면 실제 데이터가 표시됩니다. ") + esc(sy.message || "") + "</div>";
     else if ((sy.status === "denied" || sy.status === "signedout") && !live) h += '<div class="ks-warn"><b>' + (sy.status === "denied" ? "접근이 거부되었습니다." : "로그아웃되었습니다.") + "</b> " + esc(sy.message) + "</div>";
     if (st.mode === "fallback" && !sy.stale) h += '<div class="ks-warn"><b>구글시트 연결 실패:</b> ' + esc(st.error) + (nd ? " — 표시할 데이터가 없어 '연결 대기' 상태입니다. [연결 설정]에서 설정을 확인하세요." : " — 아래 수치는 마지막 검증본(저장된 데이터)입니다. [연결 설정]에서 설정을 확인하세요.") + "</div>";
+    h += syncProblem(sy, live);
     h += schemaWarn(sy);
     if (sy.consistency && sy.consistency.length) h += '<div class="ks-warn"><b>원본 버전 불일치:</b> KPI 탭의 전체자재순매출과 판매 원문 합계가 다릅니다(' + sy.consistency.map(function (c) { return esc(c.year + "년 KPI " + num(c.kpi) + " ≠ 원문 " + num(c.ledger)); }).join(" / ") + "). 시트가 갱신 중일 수 있어 " + (sy.stale ? "새 값을 적용하지 않았습니다." : "확인이 필요합니다.") + "</div>";
     if (st.mode === "live" && st.frozenDiff.length) h += '<div class="ks-warn"><b>확정 연도(2022~2025) 값이 시트와 다릅니다 (' + st.frozenDiff.length + "건):</b> " + st.frozenDiff.slice(0, 6).map(function (d) { return esc(d.year + " " + d.col + " 검증본 " + d.embedded + " → 시트 " + d.live); }).join(" / ") + (st.frozenDiff.length > 6 ? " …" : "") + " — 시트 값을 표시하되, 승인 정정 없이 바뀐 것이면 확인이 필요합니다.</div>";
@@ -1137,7 +1271,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     var exp = S.expectedTabs(); h += '<div class="card-h" style="margin-top:14px"><h2>탭 구조 점검 (' + exp.length + "개 탭)</h2></div>";
     var badMap = {}; iss.badTabs.forEach(function (b) { badMap[b.tab] = b; });
     h += table("schema", [{ k: "탭" }, { k: "행수", l: "행 수", r: 1, fmt: num }, { k: "상태", raw: 1, f: function (o) { return '<span class="st ' + (o.상태 === "정상" ? "ok" : o.상태 === "원문(필요 시 조회)" ? "" : "bad") + '">' + esc(o.상태) + "</span>"; }, csv: function (o) { return o.상태; } }, { k: "비고", wrap: 1 }], exp.map(function (n) { var inMeta = live && m.tabs && m.tabs[n]; var t = live ? (st.tabs && st.tabs[n]) : null; return { 탭: n, 행수: live ? (n === S.LEDGER ? (sy.ledgerCount != null ? sy.ledgerCount : null) : (t ? t.rows.length : null)) : null, 상태: !live ? "—" : n === S.LEDGER ? (iss.missingTabs.indexOf(n) >= 0 ? "누락" : badMap[n] ? "구조 변경" : "원문(필요 시 조회)") : iss.missingTabs.indexOf(n) >= 0 ? "누락" : badMap[n] ? "구조 변경" : inMeta ? "정상" : "—", 비고: badMap[n] ? "누락 열: " + badMap[n].missing.join(", ") : iss.missingTabs.indexOf(n) >= 0 ? "시트에 탭이 없습니다 — 0으로 표시하지 않음" : "" }; }), { per: 30 });
-    return h + "</div>";
+    return h + "</div>" + diagCard();
   }
   function nav() { var items = [["home", "요약"], ["sales", "매출·원문"], ["awards", "낙찰"], ["vendors", "시공사"], ["activity", "영업활동"], ["leading", "선행지표"], ["link", "연결 설정"]]; return '<div class="ks-nav">' + items.map(function (x) { return '<button data-kact="view" data-id="' + x[0] + '"' + (V.view === x[0] ? ' aria-current="true"' : "") + ">" + x[1] + "</button>"; }).join("") + "</div>"; }
   function yearChips(cur, act) { return '<div class="ks-chips">' + years().map(function (y) { return '<button data-kact="' + act + '" data-id="' + y + '"' + (cur === y ? ' aria-current="true"' : "") + ">" + y + (y === "2026" ? " (~10/20)" : "") + "</button>"; }).join("") + "</div>"; }
@@ -1432,6 +1566,9 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   }
   /* ---------- 페이지 ---------- */
   function page() {
+    try { return pageInner(); } catch (e) { return '<div class="kp ks"><div class="card"><div class="card-h"><h2>화면을 그리는 중 오류가 났습니다</h2><span class="badge rev">표시 오류</span></div><p class="card-sub">' + esc((e && e.message) || String(e)) + ' — 구글시트 연결과 저장된 업무 기록에는 영향이 없습니다. [다시 시도]로 새로 읽어 보세요.</p><div class="ks-tools" style="margin:0"><button class="btn" data-kact="refresh">다시 시도</button><button class="btn ghost" data-kact="diag">연결 진단</button><button class="btn ghost" data-kact="view" data-id="link">연결 설정</button></div></div></div>'; }
+  }
+  function pageInner() {
     OC = {}; var st0 = S.state;
     if (V.epoch !== st0.epoch) { ledgerRows = null; V.ledgerSrc = null; V.ledgerState = "idle"; V.detail = null; V.vendor = null; V.integrity = null; V.q = ""; V.page = {}; V.epoch = st0.epoch; }   /* 로그아웃·접근 취소 시 화면 쪽 사본도 지운다 */
     if (ledgerRows) { var lt = st0.tabs && st0.tabs[S.LEDGER]; if (!lt) { ledgerRows = null; V.ledgerSrc = null; if (V.ledgerState === "ready") V.ledgerState = "idle"; } else if (V.ledgerSrc !== lt) { ledgerRows = toObjs(lt); V.ledgerSrc = lt; } }   /* 새 스냅샷이 오면 원문 사본도 같은 버전으로 교체 */
@@ -1472,6 +1609,9 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
       if (a === "inact") { V.inactFilter = id; V.page = {}; repaint(true); return; }
       if (a === "pg") { V.page[id] = pageOf(id) + Number(el.getAttribute("data-d")); repaint(true); return; }
       if (a === "vclose") { V.vendor = null; repaint(true); return; }
+      if (a === "cancelsync") { S.cancel(); return; }
+      if (a === "copylog") { var tx = logText(); var okc = function () { V.linkMsg = { cls: "ok", html: "진단 결과를 복사했습니다(시트 내용·토큰 없음)." }; repaint(true); }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(tx).then(okc, function () { window.prompt("복사하세요", tx); }); else window.prompt("복사하세요", tx); return; }
+      if (a === "diag") { if (V.diagRunning) return; V.diagRunning = true; V.diag = null; V.view = "link"; repaint(false); S.diagnose(function (rep) { V.diag = rep; repaint(true); }).then(function (rep) { V.diag = rep; V.diagRunning = false; repaint(true); }, function (er) { V.diagRunning = false; V.diag = { steps: [{ name: "진단", ok: false, ms: 0, detail: String((er && er.message) || er) }], ok: false, totalMs: 0 }; repaint(true); }); return; }
       if (a === "refresh") { S.refresh().then(function () { repaint(true); }); repaint(true); return; }
       if (a === "gswitch") { V.linkMsg = null; S.signIn({ select: true }).then(function () { repaint(true); }).catch(function (err) { V.linkMsg = { cls: "bad", html: "로그인 실패: " + esc(err.message || err) }; repaint(true); }); return; }
       if (a === "ledger") { needLedger(); repaint(true); return; }
@@ -1499,9 +1639,17 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   /* 테스트·검증용: 모든 카드의 대조 결과를 반환 (화면 변경 없음) */
   function verifyAll() { OC = {}; var out = {}; Object.keys(DETAILS).forEach(function (id) { var D = DETAILS[id]; var yrs = D.yearly ? years() : [null]; out[id] = {}; yrs.forEach(function (y) { D.subs.forEach(function (s) { var r; var mn = missingNeeds(id); if (mn.length) r = { missing: "탭 없음/구조 변경: " + mn.join(", ") }; else { try { r = D.build({ id: id, year: y || V.year, sub: s[0], q: "", inc: false }); } catch (e) { r = { error: e.message }; } } out[id][(y ? y + "/" : "") + s[0]] = r.error ? { error: r.error } : r.loading ? { loading: true } : r.missing ? { missing: r.missing } : { rows: r.rows.length, checks: (r.checks || (r.check ? [r.check] : [])).map(function (c) { return c.cls + " " + c.text; }) }; }); }); }); return out; }
   var lastSig = "";
-  function sig() { var s = S.state, y = s.sync; return [s.version, s.epoch, s.mode, s.needSignIn, s.loading, y.status, y.stale, y.lastOkAt, y.consistency.length, y.issues.missingTabs.length, y.issues.badTabs.length].join("|"); }
+  function sig() { var s = S.state, y = s.sync; return [s.version, s.epoch, s.mode, s.needSignIn, s.loading, y.status, y.stale, y.lastOkAt, y.consistency.length, y.issues.missingTabs.length, y.issues.badTabs.length, y.progress ? y.progress.label : "", y.lastError ? y.lastError.code : ""].join("|"); }
   function softRepaint(n) { var a = document.activeElement; var typing = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.closest && a.closest(".ks") && String(a.value || "").length; if (typing && n < 8) { setTimeout(function () { softRepaint(n + 1); }, 1500); return; } if (document.querySelector(".ks")) repaintRef(true); }
   S.onChange(function () { if (!repaintRef || !document.querySelector(".ks")) return; var g = sig(); if (g === lastSig) return; lastSig = g; softRepaint(0); });
+  setInterval(function () {
+    var sy = S.state.sync, el = document.querySelector(".ks-prog");
+    if (sy.status === "syncing") {
+      var txt = progText(); document.querySelectorAll(".ks-prog").forEach(function (n) { n.textContent = txt; });
+      var p = sy.progress, bar = document.querySelector(".ks-pbar i"); if (bar && p && p.total) bar.style.width = Math.min(100, Math.round(p.done / p.total * 100)) + "%";
+      if (sy.startedAt && Date.now() - sy.startedAt > 30000 && !V.slowShown && repaintRef && document.querySelector(".ks")) { V.slowShown = true; softRepaint(0); }
+    } else V.slowShown = false;
+  }, 1000);
   window.B2BKPI = { page: page, after: after, state: V, verifyAll: verifyAll, DETAILS: DETAILS };
 })();
 

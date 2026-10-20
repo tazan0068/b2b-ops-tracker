@@ -60,12 +60,35 @@
     var i = sy.issues || { missingTabs: [], badTabs: [] }; if (!i.missingTabs.length && !i.badTabs.length) return "";
     return '<div class="ks-warn"><b>시트 구조 경고:</b> ' + (i.missingTabs.length ? "누락된 탭 " + i.missingTabs.length + "개(" + esc(i.missingTabs.join(", ")) + ")" : "") + (i.missingTabs.length && i.badTabs.length ? " · " : "") + (i.badTabs.length ? "열 구조가 바뀐 탭 " + i.badTabs.length + "개(" + i.badTabs.map(function (b) { return esc(b.tab) + " — 누락 열: " + esc(b.missing.join(", ")); }).join(" / ") + ")" : "") + ". 해당 탭에 의존하는 카드·목록은 값을 <b>0으로 대체하지 않고</b> '표시하지 않음/확인 불가'로 둡니다. 시트 구조를 복원하거나 대시보드를 갱신해야 합니다.</div>";
   }
+  function progText() { var sy = S.state.sync; if (sy.status !== "syncing") return ""; var el = sy.startedAt ? Math.round((Date.now() - sy.startedAt) / 1000) : 0; var p = sy.progress; return (p ? p.label + " " + num(p.done) + " / " + num(p.total) + " · " : "연결 중… · ") + "경과 " + el + "초"; }
+  function progHtml() { var sy = S.state.sync, p = sy.progress; var pct = p && p.total ? Math.min(100, Math.round(p.done / p.total * 100)) : 0; return '<span class="ks-prog">' + esc(progText()) + '</span><span class="ks-pbar"><i style="width:' + pct + '%"></i></span>'; }
+  function syncProblem(sy, live) {
+    var btns = '<div class="ks-tools" style="margin:8px 0 0"><button class="btn" data-kact="refresh">다시 시도</button><button class="btn ghost" data-kact="diag">연결 진단</button></div>';
+    if (sy.status === "syncing" && sy.startedAt && Date.now() - sy.startedAt > 30000) return '<div class="ks-warn"><b>응답이 평소보다 느립니다.</b> <span class="ks-prog">' + esc(progText()) + '</span> — 계속 기다리거나 [취소] 후 다시 시도하세요. 3분이 지나면 자동으로 중단하고 오류를 표시합니다.<div class="ks-tools" style="margin:8px 0 0"><button class="btn" data-kact="cancelsync">취소</button><button class="btn ghost" data-kact="diag">연결 진단</button></div></div>';
+    if (sy.status === "error" && !live) return '<div class="ks-warn"><b>동기화가 끝나지 않았거나 실패했습니다.</b> ' + esc((sy.lastError && sy.lastError.message) || sy.message || "") + (sy.lastError ? ' <span class="mini">[' + esc(sy.lastError.code) + " · " + hms(sy.lastError.at) + "]</span>" : "") + btns + "</div>";
+    return "";
+  }
+  function logText() {
+    var out = ["연결 진단 " + new Date().toISOString(), ""]; var d = V.diag;
+    if (d) { d.steps.forEach(function (x) { out.push((x.ok === true ? "OK  " : x.ok === false ? "FAIL" : "... ") + " " + x.name + " · " + x.ms + "ms · " + x.detail); }); out.push("합계 " + (d.totalMs || 0) + "ms", ""); }
+    out.push("요청 로그(최근 " + S.getLog().length + "건: 이름 · 상태 · 시간 · 크기 · 시도)");
+    S.getLog().slice(-60).forEach(function (r) { out.push(new Date(r.t).toISOString().slice(11, 19) + " " + r.label + " · " + r.status + " · " + r.ms + "ms · " + r.kb + "KB · #" + r.attempt); });
+    var le = S.state.sync.lastError; if (le) out.push("", "마지막 오류: [" + le.code + "] " + le.message);
+    return out.join("\n");
+  }
+  function diagCard() {
+    var d = V.diag, h = '<div class="card"><div class="card-h"><h2>연결 진단</h2><span class="mini">단계별 응답 상태·시간만 기록합니다(시트 내용·토큰·시트 ID 미포함)</span></div><div class="ks-tools" style="margin:0 0 8px"><button class="btn" data-kact="diag"' + (V.diagRunning ? " disabled" : "") + ">" + (V.diagRunning ? "진단 중…" : "연결 진단 실행") + '</button><button class="btn ghost" data-kact="copylog">결과·요청 로그 복사</button></div>';
+    if (d && d.steps.length) { h += '<div class="kv">' + d.steps.map(function (x) { return "<span>" + esc(x.name) + "</span><span>" + (x.ok === true ? "✓ " : x.ok === false ? "✗ " : "… ") + (x.ok === null ? "진행 중" : x.ms + "ms") + (x.detail ? " · " + esc(x.detail) : "") + "</span>"; }).join("") + "</div>"; if (!V.diagRunning) h += '<p class="card-sub">' + (d.ok ? "모든 단계 정상 · 총 " + d.totalMs + "ms" : "실패한 단계가 있습니다. 위 ✗ 항목의 오류 코드와 안내를 확인하세요.") + "</p>"; }
+    else h += '<p class="card-sub">로그인·시트 정보·탭 읽기·판매 원문 첫 구간을 순서대로 확인해 어디서 막히는지 보여 줍니다. 읽기 전용이며 시트를 수정하지 않습니다.</p>';
+    return h + "</div>";
+  }
   function statusBar() {
     var st = S.state, sy = st.sync, m = st.meta || {}, em = st.embeddedMeta || {};
     var nd = S.noData(), live = st.mode === "live", signedBefore = !!(S.settings() || {}).signedBefore;
     var cls, label;
     if (live && sy.stale) { cls = "fallback"; label = "이전 데이터 · 마지막 정상 동기화 " + hms(sy.lastOkAt); }
     else if (live) { cls = "live"; label = "구글시트 실시간 · 마지막 정상 동기화 " + hms(sy.lastOkAt); }
+    else if (sy.status === "syncing") { cls = "embedded"; label = "구글시트 동기화 중"; }
     else if (sy.status === "denied") { cls = "fallback"; label = "접근 권한 없음 · 데이터 숨김"; }
     else if (sy.status === "signedout") { cls = "fallback"; label = "로그아웃됨 · 데이터 숨김"; }
     else if (st.needSignIn) { cls = "fallback"; label = "Google 로그인 필요"; }
@@ -73,19 +96,21 @@
     else if (nd) { cls = "none"; label = "연결 대기 · 데이터 없음"; }
     else { cls = "embedded"; label = "저장된 데이터"; }
     var sub;
-    if (live) sub = "시트 " + esc(m.title || "") + (m.auth === "google" && st.email ? " · " + esc(st.email) : "") + " · " + (sy.status === "syncing" ? "동기화 중…" : (sy.changed === false ? "변경 없음 · " : sy.changed ? "방금 갱신됨 · " : "") + "다음 확인 " + hms(sy.nextAt) + " (" + ivText(sy.interval) + "마다 자동)");
+    if (live) sub = "시트 " + esc(m.title || "") + (m.auth === "google" && st.email ? " · " + esc(st.email) : "") + " · " + (sy.status === "syncing" ? progHtml() : (sy.changed === false ? "변경 없음 · " : sy.changed ? "방금 갱신됨 · " : "") + "다음 확인 " + hms(sy.nextAt) + " (" + ivText(sy.interval) + "마다 자동)");
     else if (nd) sub = "이 파일에는 회사 데이터가 들어 있지 않습니다. 구글시트에 연결하면 실제 데이터가 표시됩니다.";
     else sub = "마지막 검증본 " + esc(em.version || "") + " · 기준일 " + esc(em.asOf || "") + " · " + esc(em.verified || "");
+    if (sy.status === "syncing" && !live) sub = progHtml();
     var needBtn = st.needSignIn || sy.status === "auth";
     var h = '<div class="ks-bar"><span class="ks-src ' + cls + '"><span class="dot"></span>' + esc(label) + '</span><span class="mini">' + sub + '</span><span class="sp"></span>' +
       (needBtn ? '<button class="btn" data-kact="gsignin">' + (signedBefore ? "로그인 상태 재확인" : "Google 로그인으로 연결") + "</button>" : "") +
-      '<button class="btn ghost" data-kact="refresh"' + (st.loading ? " disabled" : "") + ">" + (st.loading ? "동기화 중…" : "지금 동기화") + '</button><button class="btn ghost" data-kact="view" data-id="link">연결 설정</button><button class="btn ghost" data-kact="integrity">정합성 점검</button>' +
+      '<button class="btn ghost" data-kact="refresh"' + (st.loading ? " disabled" : "") + ">" + (st.loading ? "동기화 중…" : "지금 동기화") + '</button>' + (st.loading ? '<button class="btn ghost" data-kact="cancelsync">취소</button>' : "") + '<button class="btn ghost" data-kact="view" data-id="link">연결 설정</button><button class="btn ghost" data-kact="integrity">정합성 점검</button>' +
       ((st.signedIn || (live && m.auth === "google")) ? '<button class="btn ghost" data-kact="gsignout">로그아웃</button>' : "") + "</div>";
     h += '<div class="ks-note">2022~2025년은 확정 과거 실적(변경은 승인 정정만) · 2026년은 지속 갱신(기준일 ' + esc(em.asOf || "2026-10-20") + ') · 공식 L2→L3 전환율은 검증된 확정 건만, 검토 건은 별도 표시 · <b>모든 지표 카드를 클릭하면 근거 목록이 열립니다</b></div>';
-    if (live && sy.stale) h += '<div class="ks-warn stale"><b>이전 데이터입니다.</b> ' + esc(sy.message) + " 마지막 정상 동기화: " + hhmm(sy.lastOkAt) + "</div>";
+    if (live && sy.stale) h += '<div class="ks-warn stale"><b>이전 데이터입니다.</b> ' + esc(sy.message) + " 마지막 정상 동기화: " + hhmm(sy.lastOkAt) + '<div class="ks-tools" style="margin:8px 0 0"><button class="btn" data-kact="refresh">다시 시도</button><button class="btn ghost" data-kact="diag">연결 진단</button></div></div>';
     else if (st.needSignIn && !live) h += '<div class="ks-warn" style="color:#92400E;background:#FFF4E5;border-color:#F5D9A8"><b>' + (signedBefore ? "로그인 상태를 재확인해야 합니다." : "Google 로그인이 필요합니다.") + "</b> " + (signedBefore ? "[로그인 상태 재확인]을 한 번 누르면 이어서 자동으로 불러옵니다(팝업을 허용해 두면 다음부터는 열 때 자동 재확인). " : "시트를 공유받은 직원 계정으로 로그인하면 실제 데이터가 표시됩니다. ") + esc(sy.message || "") + "</div>";
     else if ((sy.status === "denied" || sy.status === "signedout") && !live) h += '<div class="ks-warn"><b>' + (sy.status === "denied" ? "접근이 거부되었습니다." : "로그아웃되었습니다.") + "</b> " + esc(sy.message) + "</div>";
     if (st.mode === "fallback" && !sy.stale) h += '<div class="ks-warn"><b>구글시트 연결 실패:</b> ' + esc(st.error) + (nd ? " — 표시할 데이터가 없어 '연결 대기' 상태입니다. [연결 설정]에서 설정을 확인하세요." : " — 아래 수치는 마지막 검증본(저장된 데이터)입니다. [연결 설정]에서 설정을 확인하세요.") + "</div>";
+    h += syncProblem(sy, live);
     h += schemaWarn(sy);
     if (sy.consistency && sy.consistency.length) h += '<div class="ks-warn"><b>원본 버전 불일치:</b> KPI 탭의 전체자재순매출과 판매 원문 합계가 다릅니다(' + sy.consistency.map(function (c) { return esc(c.year + "년 KPI " + num(c.kpi) + " ≠ 원문 " + num(c.ledger)); }).join(" / ") + "). 시트가 갱신 중일 수 있어 " + (sy.stale ? "새 값을 적용하지 않았습니다." : "확인이 필요합니다.") + "</div>";
     if (st.mode === "live" && st.frozenDiff.length) h += '<div class="ks-warn"><b>확정 연도(2022~2025) 값이 시트와 다릅니다 (' + st.frozenDiff.length + "건):</b> " + st.frozenDiff.slice(0, 6).map(function (d) { return esc(d.year + " " + d.col + " 검증본 " + d.embedded + " → 시트 " + d.live); }).join(" / ") + (st.frozenDiff.length > 6 ? " …" : "") + " — 시트 값을 표시하되, 승인 정정 없이 바뀐 것이면 확인이 필요합니다.</div>";
@@ -98,7 +123,7 @@
     var exp = S.expectedTabs(); h += '<div class="card-h" style="margin-top:14px"><h2>탭 구조 점검 (' + exp.length + "개 탭)</h2></div>";
     var badMap = {}; iss.badTabs.forEach(function (b) { badMap[b.tab] = b; });
     h += table("schema", [{ k: "탭" }, { k: "행수", l: "행 수", r: 1, fmt: num }, { k: "상태", raw: 1, f: function (o) { return '<span class="st ' + (o.상태 === "정상" ? "ok" : o.상태 === "원문(필요 시 조회)" ? "" : "bad") + '">' + esc(o.상태) + "</span>"; }, csv: function (o) { return o.상태; } }, { k: "비고", wrap: 1 }], exp.map(function (n) { var inMeta = live && m.tabs && m.tabs[n]; var t = live ? (st.tabs && st.tabs[n]) : null; return { 탭: n, 행수: live ? (n === S.LEDGER ? (sy.ledgerCount != null ? sy.ledgerCount : null) : (t ? t.rows.length : null)) : null, 상태: !live ? "—" : n === S.LEDGER ? (iss.missingTabs.indexOf(n) >= 0 ? "누락" : badMap[n] ? "구조 변경" : "원문(필요 시 조회)") : iss.missingTabs.indexOf(n) >= 0 ? "누락" : badMap[n] ? "구조 변경" : inMeta ? "정상" : "—", 비고: badMap[n] ? "누락 열: " + badMap[n].missing.join(", ") : iss.missingTabs.indexOf(n) >= 0 ? "시트에 탭이 없습니다 — 0으로 표시하지 않음" : "" }; }), { per: 30 });
-    return h + "</div>";
+    return h + "</div>" + diagCard();
   }
   function nav() { var items = [["home", "요약"], ["sales", "매출·원문"], ["awards", "낙찰"], ["vendors", "시공사"], ["activity", "영업활동"], ["leading", "선행지표"], ["link", "연결 설정"]]; return '<div class="ks-nav">' + items.map(function (x) { return '<button data-kact="view" data-id="' + x[0] + '"' + (V.view === x[0] ? ' aria-current="true"' : "") + ">" + x[1] + "</button>"; }).join("") + "</div>"; }
   function yearChips(cur, act) { return '<div class="ks-chips">' + years().map(function (y) { return '<button data-kact="' + act + '" data-id="' + y + '"' + (cur === y ? ' aria-current="true"' : "") + ">" + y + (y === "2026" ? " (~10/20)" : "") + "</button>"; }).join("") + "</div>"; }
@@ -393,6 +418,9 @@
   }
   /* ---------- 페이지 ---------- */
   function page() {
+    try { return pageInner(); } catch (e) { return '<div class="kp ks"><div class="card"><div class="card-h"><h2>화면을 그리는 중 오류가 났습니다</h2><span class="badge rev">표시 오류</span></div><p class="card-sub">' + esc((e && e.message) || String(e)) + ' — 구글시트 연결과 저장된 업무 기록에는 영향이 없습니다. [다시 시도]로 새로 읽어 보세요.</p><div class="ks-tools" style="margin:0"><button class="btn" data-kact="refresh">다시 시도</button><button class="btn ghost" data-kact="diag">연결 진단</button><button class="btn ghost" data-kact="view" data-id="link">연결 설정</button></div></div></div>'; }
+  }
+  function pageInner() {
     OC = {}; var st0 = S.state;
     if (V.epoch !== st0.epoch) { ledgerRows = null; V.ledgerSrc = null; V.ledgerState = "idle"; V.detail = null; V.vendor = null; V.integrity = null; V.q = ""; V.page = {}; V.epoch = st0.epoch; }   /* 로그아웃·접근 취소 시 화면 쪽 사본도 지운다 */
     if (ledgerRows) { var lt = st0.tabs && st0.tabs[S.LEDGER]; if (!lt) { ledgerRows = null; V.ledgerSrc = null; if (V.ledgerState === "ready") V.ledgerState = "idle"; } else if (V.ledgerSrc !== lt) { ledgerRows = toObjs(lt); V.ledgerSrc = lt; } }   /* 새 스냅샷이 오면 원문 사본도 같은 버전으로 교체 */
@@ -433,6 +461,9 @@
       if (a === "inact") { V.inactFilter = id; V.page = {}; repaint(true); return; }
       if (a === "pg") { V.page[id] = pageOf(id) + Number(el.getAttribute("data-d")); repaint(true); return; }
       if (a === "vclose") { V.vendor = null; repaint(true); return; }
+      if (a === "cancelsync") { S.cancel(); return; }
+      if (a === "copylog") { var tx = logText(); var okc = function () { V.linkMsg = { cls: "ok", html: "진단 결과를 복사했습니다(시트 내용·토큰 없음)." }; repaint(true); }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(tx).then(okc, function () { window.prompt("복사하세요", tx); }); else window.prompt("복사하세요", tx); return; }
+      if (a === "diag") { if (V.diagRunning) return; V.diagRunning = true; V.diag = null; V.view = "link"; repaint(false); S.diagnose(function (rep) { V.diag = rep; repaint(true); }).then(function (rep) { V.diag = rep; V.diagRunning = false; repaint(true); }, function (er) { V.diagRunning = false; V.diag = { steps: [{ name: "진단", ok: false, ms: 0, detail: String((er && er.message) || er) }], ok: false, totalMs: 0 }; repaint(true); }); return; }
       if (a === "refresh") { S.refresh().then(function () { repaint(true); }); repaint(true); return; }
       if (a === "gswitch") { V.linkMsg = null; S.signIn({ select: true }).then(function () { repaint(true); }).catch(function (err) { V.linkMsg = { cls: "bad", html: "로그인 실패: " + esc(err.message || err) }; repaint(true); }); return; }
       if (a === "ledger") { needLedger(); repaint(true); return; }
@@ -460,8 +491,16 @@
   /* 테스트·검증용: 모든 카드의 대조 결과를 반환 (화면 변경 없음) */
   function verifyAll() { OC = {}; var out = {}; Object.keys(DETAILS).forEach(function (id) { var D = DETAILS[id]; var yrs = D.yearly ? years() : [null]; out[id] = {}; yrs.forEach(function (y) { D.subs.forEach(function (s) { var r; var mn = missingNeeds(id); if (mn.length) r = { missing: "탭 없음/구조 변경: " + mn.join(", ") }; else { try { r = D.build({ id: id, year: y || V.year, sub: s[0], q: "", inc: false }); } catch (e) { r = { error: e.message }; } } out[id][(y ? y + "/" : "") + s[0]] = r.error ? { error: r.error } : r.loading ? { loading: true } : r.missing ? { missing: r.missing } : { rows: r.rows.length, checks: (r.checks || (r.check ? [r.check] : [])).map(function (c) { return c.cls + " " + c.text; }) }; }); }); }); return out; }
   var lastSig = "";
-  function sig() { var s = S.state, y = s.sync; return [s.version, s.epoch, s.mode, s.needSignIn, s.loading, y.status, y.stale, y.lastOkAt, y.consistency.length, y.issues.missingTabs.length, y.issues.badTabs.length].join("|"); }
+  function sig() { var s = S.state, y = s.sync; return [s.version, s.epoch, s.mode, s.needSignIn, s.loading, y.status, y.stale, y.lastOkAt, y.consistency.length, y.issues.missingTabs.length, y.issues.badTabs.length, y.progress ? y.progress.label : "", y.lastError ? y.lastError.code : ""].join("|"); }
   function softRepaint(n) { var a = document.activeElement; var typing = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.closest && a.closest(".ks") && String(a.value || "").length; if (typing && n < 8) { setTimeout(function () { softRepaint(n + 1); }, 1500); return; } if (document.querySelector(".ks")) repaintRef(true); }
   S.onChange(function () { if (!repaintRef || !document.querySelector(".ks")) return; var g = sig(); if (g === lastSig) return; lastSig = g; softRepaint(0); });
+  setInterval(function () {
+    var sy = S.state.sync, el = document.querySelector(".ks-prog");
+    if (sy.status === "syncing") {
+      var txt = progText(); document.querySelectorAll(".ks-prog").forEach(function (n) { n.textContent = txt; });
+      var p = sy.progress, bar = document.querySelector(".ks-pbar i"); if (bar && p && p.total) bar.style.width = Math.min(100, Math.round(p.done / p.total * 100)) + "%";
+      if (sy.startedAt && Date.now() - sy.startedAt > 30000 && !V.slowShown && repaintRef && document.querySelector(".ks")) { V.slowShown = true; softRepaint(0); }
+    } else V.slowShown = false;
+  }, 1000);
   window.B2BKPI = { page: page, after: after, state: V, verifyAll: verifyAll, DETAILS: DETAILS };
 })();
