@@ -9,7 +9,7 @@
 | `index.html` | 트래커 + KPI 대시보드 (브라우저에서 바로 열기, 설치 불필요) |
 | `apps-script/Code.gs` | 스프레드시트에 붙여 배포하는 읽기 전용 API (키 검증 · 호출 한도 · 허용 시트 목록) |
 | `apps-script/README.md` | 배포 순서와 보안 모델 |
-| `src/` | KPI 화면 모듈 소스 (`sheet-source.js` 데이터 소스 · `kpi-sheet-page.js` 화면 · `kpi-sheet-page.css`) |
+| `src/` | KPI 화면 모듈 소스 (`sheet-source.js` 데이터 소스 · `kpi-sheet-page.js` 화면 · `kpi-sheet-page.css` · 성장 분석: `growth-core.js` 계산 · `growth-page.js` 화면 · `growth-page.css`) |
 | `tools/` | 로컬 테스트용 모의 API 서버 (Apps Script 응답 방식 시뮬레이터 포함) |
 
 ## 사용 순서 (권장: A. Google 로그인)
