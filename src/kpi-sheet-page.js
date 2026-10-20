@@ -49,23 +49,56 @@
     return h;
   }
   function csv(cols, rows, name) { var lines = [cols.map(function (c) { return c.l || c.k; }).join(",")]; rows.forEach(function (o) { lines.push(cols.map(function (c) { var v = c.csv ? c.csv(o) : (c.f && !c.raw ? c.f(o) : o[c.k]); v = v == null ? "" : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(",")); }); var blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" }); var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name + ".csv"; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
-  function needLedger() { if (ledgerRows) return true; if (V.ledgerState !== "loading") { V.ledgerState = "loading"; S.ledger(function () { if (repaintRef) repaintRef(true); }).then(function (t) { ledgerRows = toObjs(t); V.ledgerState = "ready"; if (repaintRef) repaintRef(true); }).catch(function (e) { V.ledgerState = "error"; V.ledgerErr = e.message || String(e); if (repaintRef) repaintRef(true); }); } return false; }
+  function needLedger() { if (ledgerRows) return true; if (V.ledgerState !== "loading") { V.ledgerState = "loading"; S.ledger(function () { if (repaintRef) repaintRef(true); }).then(function (t) { ledgerRows = toObjs(t); V.ledgerSrc = t; V.ledgerState = "ready"; if (repaintRef) repaintRef(true); }).catch(function (e) { V.ledgerState = "error"; V.ledgerErr = e.message || String(e); if (repaintRef) repaintRef(true); }); } return false; }
   function ledgerOf(y) { return (ledgerRows || []).filter(function (r) { return y === "all" || String(r["연도"]) === y; }); }
   function loadingBox() { var p = S.state.ledgerProgress; return '<div class="loading">원문 읽는 중… ' + (p ? num(p.loaded) + " / " + num(p.total) : "") + (V.ledgerState === "error" ? '<div class="ks-warn">원문 읽기 실패: ' + esc(V.ledgerErr) + "</div>" : "") + "</div>"; }
 
   /* ---------- 상태 바 ---------- */
+  function hms(ts) { if (!ts) return "—"; var d = new Date(ts); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0") + ":" + String(d.getSeconds()).padStart(2, "0"); }
+  function ivText(ms) { return ms >= 60000 ? Math.round(ms / 60000) + "분" : Math.round(ms / 1000) + "초"; }
+  function schemaWarn(sy) {
+    var i = sy.issues || { missingTabs: [], badTabs: [] }; if (!i.missingTabs.length && !i.badTabs.length) return "";
+    return '<div class="ks-warn"><b>시트 구조 경고:</b> ' + (i.missingTabs.length ? "누락된 탭 " + i.missingTabs.length + "개(" + esc(i.missingTabs.join(", ")) + ")" : "") + (i.missingTabs.length && i.badTabs.length ? " · " : "") + (i.badTabs.length ? "열 구조가 바뀐 탭 " + i.badTabs.length + "개(" + i.badTabs.map(function (b) { return esc(b.tab) + " — 누락 열: " + esc(b.missing.join(", ")); }).join(" / ") + ")" : "") + ". 해당 탭에 의존하는 카드·목록은 값을 <b>0으로 대체하지 않고</b> '표시하지 않음/확인 불가'로 둡니다. 시트 구조를 복원하거나 대시보드를 갱신해야 합니다.</div>";
+  }
   function statusBar() {
-    var st = S.state, m = st.meta || {}, em = st.embeddedMeta || {};
-    var nd = S.noData();
-    var cls = st.needSignIn ? "fallback" : st.mode, label = st.needSignIn ? "Google 로그인 필요" : st.mode === "live" ? "구글시트 실시간" + (st.authMode === "google" ? "(Google 로그인)" : "") + " · " + hhmm(st.at) : st.mode === "fallback" ? (nd ? "연결 실패 · 데이터 없음" : "저장된 데이터 (연결 실패)") : nd ? "연결 대기 · 데이터 없음" : "저장된 데이터";
-    var sub = st.mode === "live" ? "시트 " + esc(m.title || "") + " · " + (m.lastUpdated ? "시트 수정 " + hhmm(m.lastUpdated) : "응답 " + hhmm(m.servedAt)) : nd ? "이 파일에는 회사 데이터가 들어 있지 않습니다. [연결 설정]에서 비공개 구글시트 웹앱 주소와 키를 입력하면 실제 데이터가 표시됩니다." : "마지막 검증본 " + esc(em.version || "") + " · 기준일 " + esc(em.asOf || "") + " · " + esc(em.verified || "");
-    var h = '<div class="ks-bar"><span class="ks-src ' + cls + '"><span class="dot"></span>' + esc(label) + "</span><span class=\"mini\">" + sub + "</span><span class=\"sp\"></span>" +
-      (st.needSignIn ? '<button class="btn" data-kact="gsignin">Google 로그인으로 연결</button>' : "") + '<button class="btn ghost" data-kact="refresh"' + (st.loading ? " disabled" : "") + ">" + (st.loading ? "읽는 중…" : "새로고침") + '</button><button class="btn ghost" data-kact="view" data-id="link">연결 설정</button><button class="btn ghost" data-kact="integrity">정합성 점검</button></div>';
+    var st = S.state, sy = st.sync, m = st.meta || {}, em = st.embeddedMeta || {};
+    var nd = S.noData(), live = st.mode === "live", signedBefore = !!(S.settings() || {}).signedBefore;
+    var cls, label;
+    if (live && sy.stale) { cls = "fallback"; label = "이전 데이터 · 마지막 정상 동기화 " + hms(sy.lastOkAt); }
+    else if (live) { cls = "live"; label = "구글시트 실시간 · 마지막 정상 동기화 " + hms(sy.lastOkAt); }
+    else if (sy.status === "denied") { cls = "fallback"; label = "접근 권한 없음 · 데이터 숨김"; }
+    else if (sy.status === "signedout") { cls = "fallback"; label = "로그아웃됨 · 데이터 숨김"; }
+    else if (st.needSignIn) { cls = "fallback"; label = "Google 로그인 필요"; }
+    else if (st.mode === "fallback") { cls = "fallback"; label = nd ? "연결 실패 · 데이터 없음" : "저장된 데이터 (연결 실패)"; }
+    else if (nd) { cls = "none"; label = "연결 대기 · 데이터 없음"; }
+    else { cls = "embedded"; label = "저장된 데이터"; }
+    var sub;
+    if (live) sub = "시트 " + esc(m.title || "") + (m.auth === "google" && st.email ? " · " + esc(st.email) : "") + " · " + (sy.status === "syncing" ? "동기화 중…" : (sy.changed === false ? "변경 없음 · " : sy.changed ? "방금 갱신됨 · " : "") + "다음 확인 " + hms(sy.nextAt) + " (" + ivText(sy.interval) + "마다 자동)");
+    else if (nd) sub = "이 파일에는 회사 데이터가 들어 있지 않습니다. 구글시트에 연결하면 실제 데이터가 표시됩니다.";
+    else sub = "마지막 검증본 " + esc(em.version || "") + " · 기준일 " + esc(em.asOf || "") + " · " + esc(em.verified || "");
+    var needBtn = st.needSignIn || sy.status === "auth";
+    var h = '<div class="ks-bar"><span class="ks-src ' + cls + '"><span class="dot"></span>' + esc(label) + '</span><span class="mini">' + sub + '</span><span class="sp"></span>' +
+      (needBtn ? '<button class="btn" data-kact="gsignin">' + (signedBefore ? "로그인 상태 재확인" : "Google 로그인으로 연결") + "</button>" : "") +
+      '<button class="btn ghost" data-kact="refresh"' + (st.loading ? " disabled" : "") + ">" + (st.loading ? "동기화 중…" : "지금 동기화") + '</button><button class="btn ghost" data-kact="view" data-id="link">연결 설정</button><button class="btn ghost" data-kact="integrity">정합성 점검</button>' +
+      ((st.signedIn || (live && m.auth === "google")) ? '<button class="btn ghost" data-kact="gsignout">로그아웃</button>' : "") + "</div>";
     h += '<div class="ks-note">2022~2025년은 확정 과거 실적(변경은 승인 정정만) · 2026년은 지속 갱신(기준일 ' + esc(em.asOf || "2026-10-20") + ') · 공식 L2→L3 전환율은 검증된 확정 건만, 검토 건은 별도 표시 · <b>모든 지표 카드를 클릭하면 근거 목록이 열립니다</b></div>';
-    if (st.needSignIn) h += '<div class="ks-warn" style="color:#92400E;background:#FFF4E5;border-color:#F5D9A8"><b>Google 로그인이 필요합니다.</b> 시트를 공유받은 직원 계정으로 로그인하면 실제 데이터가 표시됩니다. 로그인 토큰은 이 탭을 닫으면 사라집니다.</div>';
-    if (st.mode === "fallback") h += '<div class="ks-warn"><b>구글시트 연결 실패:</b> ' + esc(st.error) + (nd ? " — 표시할 데이터가 없어 '연결 대기' 상태입니다. [연결 설정]에서 주소·키를 확인하세요." : " — 아래 수치는 마지막 검증본(저장된 데이터)입니다. [연결 설정]에서 주소·키를 확인하세요.") + "</div>";
+    if (live && sy.stale) h += '<div class="ks-warn stale"><b>이전 데이터입니다.</b> ' + esc(sy.message) + " 마지막 정상 동기화: " + hhmm(sy.lastOkAt) + "</div>";
+    else if (st.needSignIn && !live) h += '<div class="ks-warn" style="color:#92400E;background:#FFF4E5;border-color:#F5D9A8"><b>' + (signedBefore ? "로그인 상태를 재확인해야 합니다." : "Google 로그인이 필요합니다.") + "</b> " + (signedBefore ? "[로그인 상태 재확인]을 한 번 누르면 이어서 자동으로 불러옵니다(팝업을 허용해 두면 다음부터는 열 때 자동 재확인). " : "시트를 공유받은 직원 계정으로 로그인하면 실제 데이터가 표시됩니다. ") + esc(sy.message || "") + "</div>";
+    else if ((sy.status === "denied" || sy.status === "signedout") && !live) h += '<div class="ks-warn"><b>' + (sy.status === "denied" ? "접근이 거부되었습니다." : "로그아웃되었습니다.") + "</b> " + esc(sy.message) + "</div>";
+    if (st.mode === "fallback" && !sy.stale) h += '<div class="ks-warn"><b>구글시트 연결 실패:</b> ' + esc(st.error) + (nd ? " — 표시할 데이터가 없어 '연결 대기' 상태입니다. [연결 설정]에서 설정을 확인하세요." : " — 아래 수치는 마지막 검증본(저장된 데이터)입니다. [연결 설정]에서 설정을 확인하세요.") + "</div>";
+    h += schemaWarn(sy);
+    if (sy.consistency && sy.consistency.length) h += '<div class="ks-warn"><b>원본 버전 불일치:</b> KPI 탭의 전체자재순매출과 판매 원문 합계가 다릅니다(' + sy.consistency.map(function (c) { return esc(c.year + "년 KPI " + num(c.kpi) + " ≠ 원문 " + num(c.ledger)); }).join(" / ") + "). 시트가 갱신 중일 수 있어 " + (sy.stale ? "새 값을 적용하지 않았습니다." : "확인이 필요합니다.") + "</div>";
     if (st.mode === "live" && st.frozenDiff.length) h += '<div class="ks-warn"><b>확정 연도(2022~2025) 값이 시트와 다릅니다 (' + st.frozenDiff.length + "건):</b> " + st.frozenDiff.slice(0, 6).map(function (d) { return esc(d.year + " " + d.col + " 검증본 " + d.embedded + " → 시트 " + d.live); }).join(" / ") + (st.frozenDiff.length > 6 ? " …" : "") + " — 시트 값을 표시하되, 승인 정정 없이 바뀐 것이면 확인이 필요합니다.</div>";
     return h;
+  }
+  function syncInfoCard() {
+    var st = S.state, sy = st.sync, m = st.meta || {}, live = st.mode === "live"; var iss = sy.issues || { missingTabs: [], badTabs: [] };
+    var stName = { idle: "연결 설정 없음", syncing: "동기화 중", ok: "정상", stale: "이전 데이터(연결 실패/갱신 중)", auth: "로그인 재확인 필요", denied: "접근 권한 없음", signedout: "로그아웃", error: "오류" }[sy.status] || sy.status;
+    var h = '<div class="card"><div class="card-h"><h2>동기화 상태</h2><span class="badge' + (sy.status === "ok" ? "" : " rev") + '">' + esc(stName) + "</span></div><div class=\"kv\"><span>마지막 정상 동기화</span><span>" + (sy.lastOkAt ? hhmm(sy.lastOkAt) + " (" + hms(sy.lastOkAt) + ")" : "없음") + "</span><span>마지막 시도</span><span>" + (sy.lastAttemptAt ? hhmm(sy.lastAttemptAt) + " (" + hms(sy.lastAttemptAt) + ")" : "—") + "</span><span>다음 자동 확인</span><span>" + (sy.nextAt ? hms(sy.nextAt) + " · " + ivText(sy.interval) + "마다, 화면이 보일 때" : "—") + "</span><span>최근 확인 결과</span><span>" + (sy.changed === true ? "변경 있음 → 전체 갱신 완료" : sy.changed === false ? "변경 없음" : "—") + "</span><span>로그인 계정</span><span>" + (st.email ? esc(st.email) : "—") + "</span><span>메시지</span><span>" + esc(sy.message || "—") + "</span></div>";
+    var exp = S.expectedTabs(); h += '<div class="card-h" style="margin-top:14px"><h2>탭 구조 점검 (' + exp.length + "개 탭)</h2></div>";
+    var badMap = {}; iss.badTabs.forEach(function (b) { badMap[b.tab] = b; });
+    h += table("schema", [{ k: "탭" }, { k: "행수", l: "행 수", r: 1, fmt: num }, { k: "상태", raw: 1, f: function (o) { return '<span class="st ' + (o.상태 === "정상" ? "ok" : o.상태 === "원문(필요 시 조회)" ? "" : "bad") + '">' + esc(o.상태) + "</span>"; }, csv: function (o) { return o.상태; } }, { k: "비고", wrap: 1 }], exp.map(function (n) { var inMeta = live && m.tabs && m.tabs[n]; var t = live ? (st.tabs && st.tabs[n]) : null; return { 탭: n, 행수: live ? (n === S.LEDGER ? (sy.ledgerCount != null ? sy.ledgerCount : null) : (t ? t.rows.length : null)) : null, 상태: !live ? "—" : n === S.LEDGER ? (iss.missingTabs.indexOf(n) >= 0 ? "누락" : badMap[n] ? "구조 변경" : "원문(필요 시 조회)") : iss.missingTabs.indexOf(n) >= 0 ? "누락" : badMap[n] ? "구조 변경" : inMeta ? "정상" : "—", 비고: badMap[n] ? "누락 열: " + badMap[n].missing.join(", ") : iss.missingTabs.indexOf(n) >= 0 ? "시트에 탭이 없습니다 — 0으로 표시하지 않음" : "" }; }), { per: 30 });
+    return h + "</div>";
   }
   function nav() { var items = [["home", "요약"], ["sales", "매출·원문"], ["awards", "낙찰"], ["vendors", "시공사"], ["activity", "영업활동"], ["leading", "선행지표"], ["link", "연결 설정"]]; return '<div class="ks-nav">' + items.map(function (x) { return '<button data-kact="view" data-id="' + x[0] + '"' + (V.view === x[0] ? ' aria-current="true"' : "") + ">" + x[1] + "</button>"; }).join("") + "</div>"; }
   function yearChips(cur, act) { return '<div class="ks-chips">' + years().map(function (y) { return '<button data-kact="' + act + '" data-id="' + y + '"' + (cur === y ? ' aria-current="true"' : "") + ">" + y + (y === "2026" ? " (~10/20)" : "") + "</button>"; }).join("") + "</div>"; }
@@ -114,10 +147,23 @@
       tile("신규 협력사 활성화율", Na ? pc(Na["값"]) : null, Na ? esc(Na["비고"]) : "", "", "activation") + "</div>";
     var cols = [{ k: "연도" }, { k: "데이터구분" }, { k: "전체자재순매출", l: "전체 순매출", r: 1, fmt: won }, { k: "메인자재순매출", l: "메인 순매출", r: 1, fmt: won }, { k: "메인비중", r: 1, fmt: pc }, { k: "POUR낙찰_건수", l: "POUR 낙찰", r: 1, fmt: num }, { k: "낙찰시공사수", l: "낙찰 시공사", r: 1, fmt: num }, { k: "POUR반영공고_건수", l: "POUR 공고", r: 1, fmt: num }, { k: "타사공법낙찰_건수", l: "타사공법 낙찰", r: 1, fmt: num }, { k: "기술자문문의_건수", l: "기술자문", r: 1, fmt: num }, { k: "컨설팅요청_건수", l: "컨설팅", r: 1, fmt: num }, { k: "L3전환_확정_공식", l: "L3 확정", r: 1 }, { k: "L2L3전환율_공식", l: "전환율(공식)", r: 1, fmt: pc }, { k: "L3전환_검토대상", l: "검토", r: 1 }];
     h += '<div class="card-h" style="margin-top:4px"><h2>연도별 비교 (1.통합KPI 탭)</h2></div>' + table("kpiy", cols, objs("1.통합KPI"), { per: 10 }) + "</div>";
+    h += chartsCard();
     h += reviewCard();
     return h;
   }
+  function chartsCard() {
+    if (!has("1.통합KPI")) return "";
+    var rows = objs("1.통합KPI");
+    var defs = [["전체 자재 순매출", "전체자재순매출", won, "salesTotal"], ["POUR 낙찰 건수", "POUR낙찰_건수", num, "awards"], ["POUR 반영 공고", "POUR반영공고_건수", num, "notices"], ["메인 자재 순매출", "메인자재순매출", won, "mainSales"]];
+    var h = '<div class="card"><div class="card-h"><h2>연도별 추이 (1.통합KPI 탭)</h2><span class="mini">막대를 누르면 그 연도의 근거 목록 · 2026은 10/20까지 누계 · 숫자가 아닌 값(미확인·데이터 없음)은 막대 없이 그대로 표기합니다</span></div><div class="ks-charts">';
+    defs.forEach(function (d) { var max = 0; rows.forEach(function (r) { if (isNum(r[d[1]]) && r[d[1]] > max) max = r[d[1]]; });
+      h += '<div class="ks-ch"><div class="t">' + esc(d[0]) + '</div><div class="bars">' + rows.map(function (r) { var v = r[d[1]], y = String(r["연도"]);
+        if (isNum(v)) return '<div class="b" data-kact="detail" data-id="' + d[3] + '" data-year="' + esc(y) + '" tabindex="0" role="button" title="' + esc(y + "년 " + d[2](v)) + '"><div class="v">' + esc(d[2](v)) + '</div><div class="bar" style="height:' + Math.max(2, Math.round(v / max * 84)) + 'px"></div><div class="y">' + esc(y) + "</div></div>";
+        return '<div class="b na"><div class="v">' + esc(v == null ? "—" : String(v)) + '</div><div class="bar" style="height:0"></div><div class="y">' + esc(y) + "</div></div>"; }).join("") + "</div></div>"; });
+    return h + "</div></div>";
+  }
   function reviewCard() {
+    if (!has("16.L2L3전환")) return '<div class="card"><div class="ks-warn"><b>시트 구조 경고:</b> 16.L2L3전환 탭이 없거나 열 구조가 바뀌어 L2→L3 검토 목록을 표시하지 않습니다(0건으로 대체하지 않음).</div></div>';
     var rows = objs("16.L2L3전환").filter(function (r) { return r["판정"] === "검토"; });
     var cols = [{ k: "판정코드", l: "코드" }, { k: "시공사", raw: 1, f: function (o) { return vlink(o["시공사"], o["통합ID"]); } }, { k: "L2현장명", l: "현장" }, { k: "L2일자", l: "L2" }, { k: "L3일자", l: "L3" }, { k: "L3유형" }, { k: "판정근거", wrap: 1 }, { k: "추가확인_상태", l: "상태" }];
     return '<div class="card"><div class="card-h"><h2>L2→L3 검토 ' + rows.length + '건 — 공식 계산 제외 · 별도 관리</h2><span class="badge rev">확정 시 승인 이력 기록 후 재계산</span><button class="btn ghost rt" data-kact="detail" data-id="review">상세·증빙 보기</button></div>' + table("review", cols, rows, { per: 20 }) + "</div>";
@@ -180,10 +226,14 @@
         return { cols: [{ k: "가입일자" }, { k: "업체명", raw: 1, f: VEND, csv: function (o) { return o["업체명"]; } }, { k: "통합ID" }, { k: "가입경로" }, { k: "집계대상" }, { k: "활동여부" }, { k: "활동건수_여정L2이상", l: "활동 건수(L2 이상)", r: 1 }, { k: "출처" }], rows: rows, keys: ["업체명", "통합ID", "가입경로", "집계대상"], checks: checks, note: "7b.플랫폼가입현황 탭 · 2026 플랫폼 가입(승인) 업체 중 여정 기록(L2 이상) 1건 이상 = 활동 · 내부·테스트·미승인은 집계 제외 · 전체 전환율과 분리 관리" }; } }
   };
   function chk(cardLabel, cardVal, listLabel, listVal, fmt) { var ok; if (typeof cardVal === "string" && !isNum(Number(cardVal))) return { cls: "na", text: cardLabel + " ‘" + cardVal + "’ — 카드에 수치가 없어 대조 대상 아님 (" + listLabel + " " + (listVal == null ? "—" : (fmt && fmt(listVal) != null ? fmt(listVal) : listVal)) + ")" }; if (cardVal == null || listVal == null) ok = null; else if (isNum(cardVal) && isNum(listVal)) ok = Math.abs(cardVal - listVal) < 0.5 || Math.abs(cardVal - listVal) <= 0.00005; else ok = String(cardVal) === String(listVal); var f = function (v) { if (v == null) return "확인 불가"; var t = fmt ? fmt(v) : null; return t == null ? String(v) : t; }; return { cls: ok === null ? "na" : ok ? "ok" : "bad", text: cardLabel + " " + f(cardVal) + (ok === null ? " · 대조 불가 (" + listLabel + " " + f(listVal) + ")" : ok ? " = " + listLabel + " " + f(listVal) + " · 일치" : " ≠ " + listLabel + " " + f(listVal) + " · 불일치") }; }
+  var NEEDS = { salesTotal: ["1.통합KPI"], mainSales: ["4.메인자재구매현황"], awards: ["5.POUR공고낙찰"], notices: ["5b.POUR반영공고"], tech: ["7.기술자문문의"], mainVendors: ["4.메인자재구매현황"], l2l3Rate: ["16.L2L3전환", "16b.L2L3시공사별", "16c.L2L3판정집계", "18.선행지표요약"], review: ["16.L2L3전환", "18.선행지표요약"], avgDays: ["16.L2L3전환", "18.선행지표요약"], inactive: ["17.장기무활동", "18.선행지표요약"], activation: ["7b.플랫폼가입현황", "18.선행지표요약"] };
+  function missingNeeds(id) { return (NEEDS[id] || []).filter(function (t) { return !has(t); }); }
   function openDetail(id) { var D = DETAILS[id]; if (!D) return; V.detail = { id: id, year: V.year, sub: D.subs[0][0], q: "", sort: null, inc: false }; V.page["detail"] = 0; }
   function detailModal() {
     var d = V.detail; if (!d) return ""; var D = DETAILS[d.id]; var res;
-    try { res = D.build(d); } catch (e) { res = { missing: "목록 생성 오류: " + (e.message || e) }; }
+    var mn = missingNeeds(d.id);
+    if (mn.length) res = { missing: "시트 구조 경고 — 필요한 탭이 없거나 열 구조가 바뀌어 이 카드는 표시하지 않습니다(0으로 대체하지 않음): " + mn.join(", ") };
+    else { try { res = D.build(d); } catch (e) { res = { missing: "목록 생성 오류: " + (e.message || e) }; } }
     var h = '<div class="ks-modal" data-kact="dclose-bg"><div class="box" role="dialog" aria-modal="true"><div class="hd"><h2>' + esc(D.title) + (D.yearly ? " · " + esc(d.year) + "년" : " · 전체 협력사 기준") + '</h2><span class="mini">출처 탭: ' + esc(D.tabs) + '</span><button class="x" data-kact="dclose">닫기 ✕</button></div><div class="bd">';
     if (D.yearly) h += '<div class="ks-chips">' + years().map(function (y) { return '<button data-kact="dyear" data-id="' + y + '"' + (d.year === y ? ' aria-current="true"' : "") + ">" + y + (y === "2026" ? " (~10/20)" : "") + "</button>"; }).join("") + "</div>";
     h += '<div class="ks-chips">' + D.subs.map(function (s) { return '<button data-kact="dsub" data-id="' + s[0] + '"' + (d.sub === s[0] ? ' aria-current="true"' : "") + ">" + esc(s[1]) + "</button>"; }).join("") + (D.inc ? '<button data-kact="dinc"' + (d.inc ? ' aria-current="true"' : "") + ">내부·테스트 포함</button>" : "") + "</div>";
@@ -311,7 +361,7 @@
     var h = '<div class="card"><div class="card-h"><h2>구글시트 연결 설정 (읽기 전용)</h2><span class="badge">' + (S.configured(s) && !V.draft ? "설정 저장됨 · " + hhmm(s.savedAt) : V.draft ? "입력 중(미저장)" : "미설정") + "</span>" + (stt.signedIn ? '<span class="st ok">Google 로그인됨</span>' : "") + "</div>";
     h += '<div class="ks-chips"><button data-kact="lmode" data-id="google"' + (mode === "google" ? ' aria-current="true"' : "") + '>A. Google 로그인 (권장)</button><button data-kact="lmode" data-id="appsscript"' + (mode === "appsscript" ? ' aria-current="true"' : "") + ">B. Apps Script 공유 키 (내부 시험용)</button></div>";
     if (mode === "google") {
-      h += '<p class="card-sub"><b>승인된 직원만 열람:</b> 시트를 공유받은 Google 계정으로 로그인해 Sheets API 로 직접 읽습니다. 공유 키가 없고, 열람 회수는 시트 공유 해제로 끝납니다. 아래 값은 비밀이 아니며(클라이언트 ID·시트 ID) 이 브라우저에만 저장됩니다. 로그인 토큰은 탭을 닫으면 사라집니다.</p>';
+      h += '<p class="card-sub"><b>승인된 직원만 열람:</b> 시트를 공유받은 Google 계정으로 로그인해 Sheets API 로 직접 읽습니다. <b>단, 시트의 일반 액세스가 ‘링크가 있는 모든 사용자’이면 로그인 없이도 누구나 읽을 수 있어 이 통제가 무효입니다 — 반드시 ‘제한됨’으로 두세요.</b> 공유 키가 없고, 열람 회수는 시트 공유 해제로 끝납니다. 아래 값은 비밀이 아니며(클라이언트 ID·시트 ID) 이 브라우저에만 저장됩니다. 로그인 토큰은 탭을 닫으면 사라집니다.</p>';
       h += '<div class="form"><label>OAuth 클라이언트 ID (Google Cloud → 사용자 인증 정보 → 웹 애플리케이션)</label><input id="ks-cid" type="text" placeholder="xxxxxxxx.apps.googleusercontent.com" value="' + esc(s.clientId || "") + '"><label>스프레드시트 ID (시트 주소의 /d/ 와 /edit 사이)</label><input id="ks-sid" type="text" placeholder="1AbC…" value="' + esc(s.sheetId || "") + '">';
       h += '<div class="row"><button class="btn ghost" data-kact="ltest">Google 로그인 후 연결 테스트</button><button class="btn" data-kact="lsave">저장 후 로그인·새로고침</button>' + (stt.signedIn ? '<button class="btn ghost" data-kact="gsignout">로그아웃</button>' : "") + '<button class="btn warnb" data-kact="lclear">설정 지우기</button></div>';
     } else {
@@ -321,6 +371,7 @@
     }
     if (V.linkMsg) h += '<div class="msg ' + V.linkMsg.cls + '">' + V.linkMsg.html + "</div>";
     h += "</div></div>";
+    h += syncInfoCard();
     h += '<div class="card"><div class="card-h"><h2>현재 데이터 상태</h2></div><div class="kv"><span>표시 중</span><span>' + (stt.mode === "live" ? "구글시트 실시간 (" + hhmm(stt.at) + ")" : stt.mode === "fallback" ? "저장된 데이터 — 연결 실패: " + esc(stt.error) : (S.noData() ? "연결 대기 (데이터 없음)" : "저장된 데이터 (연결 미설정)")) + "</span><span>저장된 데이터</span><span>" + (S.noData() ? "없음 — 이 파일에는 회사 데이터가 내장되어 있지 않습니다" : esc(em.version || "") + " · 기준일 " + esc(em.asOf || "") + " · 내보내기 " + hhmm(em.exportedAt) + " · " + esc(em.verified || "")) + "</span><span>연결 시트</span><span>" + (stt.mode === "live" ? esc(m.title || "") + " · " + (m.auth === "google" ? "Google 로그인 · " : "공유 키 · ") + (m.lastUpdated ? "수정 " + hhmm(m.lastUpdated) : "응답 " + hhmm(m.servedAt)) + " · ID " + esc(m.spreadsheetId || "") + (m.missingTabs && m.missingTabs.length ? " · 시트에 없는 탭 " + m.missingTabs.length + "개" : "") : "—") + "</span><span>확정 연도 대조</span><span>" + (stt.mode === "live" ? (stt.frozenDiff.length ? stt.frozenDiff.length + "건 차이 (요약 화면 경고 참고)" : "2022~2025 KPI 시트 값 = 검증본 값") : "실시간 연결 시 자동 대조") + "</span></div>";
     var tabs = Object.keys(em.tabs || {}); if (!tabs.length && stt.mode === "live" && m.tabs) tabs = Object.keys(m.tabs); if (tabs.length) h += '<div class="card-h" style="margin-top:14px"><h2>탭별 행 수 (저장된 데이터 ↔ 시트)</h2></div>' + table("tabs", [{ k: "탭" }, { k: "저장", r: 1, fmt: num }, { k: "시트", r: 1, fmt: num }, { k: "비고" }], tabs.map(function (t) { var a = em.tabs[t].rows, b = stt.mode === "live" && m.tabs && m.tabs[t] ? m.tabs[t].rows : null; return { 탭: t, 저장: a, 시트: b, 비고: b == null ? (stt.mode === "live" ? "시트에 탭 없음" : "") : a == null ? "시트에서 읽음" : a === b ? "일치" : "차이 " + (b - a) }; }), { per: 30 });
     h += "</div>";
@@ -328,16 +379,23 @@
     return h;
   }
 
-  /* ---------- 연결 대기 화면 (데이터 없음) ---------- */
+  /* ---------- 연결 대기·잠금 화면 (표시할 데이터 없음) ---------- */
   function waiting() {
-    var items = ["① 전체 자재 순매출", "② POUR 낙찰", "③ POUR 반영 공고", "④ 메인 자재 순매출", "⑤ 공식 L2→L3 전환율", "⑥ 장기 무활동 협력사"];
-    var h = '<div class="card core6"><div class="card-h"><h2>팀장 핵심 지표 6</h2><span class="badge rev">연결 대기</span><span class="mini">구글시트 연결 후 표시 · 임의 수치는 표시하지 않습니다</span></div><div class="tiles six">' + items.map(function (l) { return '<div class="tile"><div class="l">' + esc(l) + '</div><div class="v na">연결 대기</div><div class="s">비공개 구글시트에서 읽어옵니다</div></div>'; }).join("") + "</div></div>";
-    h += '<div class="card"><div class="card-h"><h2>구글시트 연결이 필요합니다</h2></div><p class="card-sub">이 화면은 실제 회사 데이터를 파일에 담지 않습니다. 시트 소유자가 배포한 읽기 전용 웹앱 주소와 액세스 키를 [연결 설정]에 입력하면 통합 KPI 탭 25개(매출·공고·낙찰·시공사·영업활동·선행지표)를 읽어 모든 카드와 상세 목록이 채워집니다. 연결 정보는 이 브라우저에만 저장됩니다.</p><div class="ks-tools" style="margin:0"><button class="btn" data-kact="view" data-id="link">연결 설정 열기</button>' + (S.state.needSignIn ? '<button class="btn" data-kact="gsignin">Google 로그인으로 연결</button>' : (S.configured(S.settings()) ? '<button class="btn ghost" data-kact="refresh">다시 연결</button>' : "")) + "</div></div>";
+    var items = ["① 전체 자재 순매출", "② POUR 낙찰", "③ POUR 반영 공고", "④ 메인 자재 순매출", "⑤ 공식 L2→L3 전환율", "⑥ 장기 무활동 협력사"], st = S.state, sy = st.sync;
+    var kind = sy.status === "denied" ? "denied" : sy.status === "signedout" ? "signedout" : st.needSignIn ? "login" : st.mode === "live" ? "schema" : "wait";
+    var badge = { denied: "접근 권한 없음", signedout: "로그아웃됨", login: "로그인 필요", schema: "시트 구조 경고", wait: "연결 대기" }[kind];
+    var tileTxt = kind === "wait" ? "연결 대기" : kind === "login" ? "로그인 필요" : kind === "schema" ? "확인 불가" : "숨김";
+    var h = '<div class="card core6"><div class="card-h"><h2>팀장 핵심 지표 6</h2><span class="badge rev">' + badge + '</span><span class="mini">조회한 데이터는 화면에 남기지 않습니다 · 임의 수치는 표시하지 않습니다</span></div><div class="tiles six">' + items.map(function (l) { return '<div class="tile"><div class="l">' + esc(l) + '</div><div class="v na">' + tileTxt + '</div><div class="s">' + (kind === "denied" ? "열람 권한이 필요합니다" : kind === "signedout" ? "다시 로그인하면 표시됩니다" : "비공개 구글시트에서 읽어옵니다") + "</div></div>"; }).join("") + "</div></div>";
+    var title = { denied: "이 계정에는 시트 열람 권한이 없습니다", signedout: "로그아웃되었습니다", login: "Google 로그인이 필요합니다", schema: "1.통합KPI 탭을 읽을 수 없습니다", wait: "구글시트 연결이 필요합니다" }[kind];
+    var body = kind === "schema" ? "시트에 1.통합KPI 탭이 없거나 열 구조가 바뀌어 핵심 지표를 계산할 수 없습니다. 위 경고의 탭·열을 복원하면 다음 동기화에서 자동으로 표시됩니다. 값을 0으로 대체하지 않습니다." : kind === "denied" ? "시트 소유자가 이 계정을 공유 목록에서 뺐거나, 처음부터 공유되지 않았습니다. 이전에 불러온 데이터는 화면에서 지웠고 다른 곳에 저장하지 않았습니다. 시트 소유자에게 '뷰어' 공유를 요청하거나 다른 계정으로 로그인하세요." : kind === "signedout" ? "조회한 데이터를 화면과 메모리에서 지웠습니다. 다시 로그인하면 최신 데이터를 불러옵니다." : kind === "login" ? "시트를 공유받은 직원 계정으로 로그인하면 최신 데이터를 자동으로 불러오고, 이후 5분마다 변경을 확인합니다." : "이 화면은 실제 회사 데이터를 파일에 담지 않습니다. [연결 설정]에서 OAuth 클라이언트 ID와 시트 ID를 입력하고 Google 로그인하면 25개 탭(매출·공고·낙찰·시공사·영업활동·선행지표)을 읽어 모든 카드와 상세 목록이 채워집니다. 연결 정보는 이 브라우저에만 저장됩니다.";
+    h += '<div class="card"><div class="card-h"><h2>' + title + '</h2></div><p class="card-sub">' + esc(body) + " " + esc(kind === "denied" ? sy.message : "") + '</p><div class="ks-tools" style="margin:0"><button class="btn" data-kact="view" data-id="link">연결 설정 열기</button>' + (kind === "login" ? '<button class="btn" data-kact="gsignin">' + ((S.settings() || {}).signedBefore ? "로그인 상태 재확인" : "Google 로그인으로 연결") + "</button>" : "") + (kind === "denied" || kind === "signedout" ? '<button class="btn" data-kact="gswitch">' + (kind === "denied" ? "다른 계정으로 로그인" : "다시 로그인") + "</button>" : "") + '</div></div>';
     return h;
   }
   /* ---------- 페이지 ---------- */
   function page() {
-    OC = {};
+    OC = {}; var st0 = S.state;
+    if (V.epoch !== st0.epoch) { ledgerRows = null; V.ledgerSrc = null; V.ledgerState = "idle"; V.detail = null; V.vendor = null; V.integrity = null; V.q = ""; V.page = {}; V.epoch = st0.epoch; }   /* 로그아웃·접근 취소 시 화면 쪽 사본도 지운다 */
+    if (ledgerRows) { var lt = st0.tabs && st0.tabs[S.LEDGER]; if (!lt) { ledgerRows = null; V.ledgerSrc = null; if (V.ledgerState === "ready") V.ledgerState = "idle"; } else if (V.ledgerSrc !== lt) { ledgerRows = toObjs(lt); V.ledgerSrc = lt; } }   /* 새 스냅샷이 오면 원문 사본도 같은 버전으로 교체 */
     if (!S.state.ready) return '<div class="kp ks"><div class="card"><div class="loading">' + (S.state.decodeError ? "데이터를 열 수 없습니다: " + esc(S.state.decodeError) : "저장된 데이터 여는 중…") + "</div></div></div>";
     var ready = has("1.통합KPI");
     if (!ready && V.view !== "link") { V.detail = null; V.integrity = null; return '<div class="kp ks">' + statusBar() + nav() + waiting() + "</div>"; }
@@ -360,7 +418,7 @@
       if (a === "iclose") { V.integrity = null; repaint(true); return; }
       if (a === "ibad") { V.integrityBadOnly = !V.integrityBadOnly; repaint(true); return; }
       if (a === "icsv") { csv([{ k: "카드" }, { k: "보기" }, { k: "행수" }, { k: "결과" }, { k: "내용" }], V.integrityRows || [], "정합성점검_" + new Date().toISOString().slice(0, 10)); return; }
-      if (a === "detail") { openDetail(id); repaint(true); return; }
+      if (a === "detail") { openDetail(id); var yy = el.getAttribute("data-year"); if (yy && V.detail && DETAILS[id].yearly) V.detail.year = yy; repaint(true); return; }
       if (a === "dyear") { V.detail.year = id; V.detail.q = ""; V.page["detail"] = 0; repaint(true); return; }
       if (a === "dsub") { V.detail.sub = id; V.detail.q = ""; V.detail.sort = null; V.page["detail"] = 0; repaint(true); return; }
       if (a === "dinc") { V.detail.inc = !V.detail.inc; V.page["detail"] = 0; repaint(true); return; }
@@ -375,7 +433,8 @@
       if (a === "inact") { V.inactFilter = id; V.page = {}; repaint(true); return; }
       if (a === "pg") { V.page[id] = pageOf(id) + Number(el.getAttribute("data-d")); repaint(true); return; }
       if (a === "vclose") { V.vendor = null; repaint(true); return; }
-      if (a === "refresh") { ledgerRows = null; V.ledgerState = "idle"; S.refresh().then(function () { repaint(true); }); repaint(true); return; }
+      if (a === "refresh") { S.refresh().then(function () { repaint(true); }); repaint(true); return; }
+      if (a === "gswitch") { V.linkMsg = null; S.signIn({ select: true }).then(function () { repaint(true); }).catch(function (err) { V.linkMsg = { cls: "bad", html: "로그인 실패: " + esc(err.message || err) }; repaint(true); }); return; }
       if (a === "ledger") { needLedger(); repaint(true); return; }
       if (a === "csv") { var def = csvDefs()[id]; if (def) csv(def.cols, def.rows, def.name); return; }
       if (a === "lmode") { V.draft = Object.assign({}, S.settings() || {}, V.draft || {}); V.draft.mode = id; V.linkMsg = null; repaint(true); return; }
@@ -399,7 +458,10 @@
     };
   }
   /* 테스트·검증용: 모든 카드의 대조 결과를 반환 (화면 변경 없음) */
-  function verifyAll() { OC = {}; var out = {}; Object.keys(DETAILS).forEach(function (id) { var D = DETAILS[id]; var yrs = D.yearly ? years() : [null]; out[id] = {}; yrs.forEach(function (y) { D.subs.forEach(function (s) { var r; try { r = D.build({ id: id, year: y || V.year, sub: s[0], q: "", inc: false }); } catch (e) { r = { error: e.message }; } out[id][(y ? y + "/" : "") + s[0]] = r.error ? { error: r.error } : r.loading ? { loading: true } : r.missing ? { missing: r.missing } : { rows: r.rows.length, checks: (r.checks || (r.check ? [r.check] : [])).map(function (c) { return c.cls + " " + c.text; }) }; }); }); }); return out; }
-  S.onChange(function () { if (repaintRef && document.querySelector(".ks")) repaintRef(true); });
+  function verifyAll() { OC = {}; var out = {}; Object.keys(DETAILS).forEach(function (id) { var D = DETAILS[id]; var yrs = D.yearly ? years() : [null]; out[id] = {}; yrs.forEach(function (y) { D.subs.forEach(function (s) { var r; var mn = missingNeeds(id); if (mn.length) r = { missing: "탭 없음/구조 변경: " + mn.join(", ") }; else { try { r = D.build({ id: id, year: y || V.year, sub: s[0], q: "", inc: false }); } catch (e) { r = { error: e.message }; } } out[id][(y ? y + "/" : "") + s[0]] = r.error ? { error: r.error } : r.loading ? { loading: true } : r.missing ? { missing: r.missing } : { rows: r.rows.length, checks: (r.checks || (r.check ? [r.check] : [])).map(function (c) { return c.cls + " " + c.text; }) }; }); }); }); return out; }
+  var lastSig = "";
+  function sig() { var s = S.state, y = s.sync; return [s.version, s.epoch, s.mode, s.needSignIn, s.loading, y.status, y.stale, y.lastOkAt, y.consistency.length, y.issues.missingTabs.length, y.issues.badTabs.length].join("|"); }
+  function softRepaint(n) { var a = document.activeElement; var typing = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.closest && a.closest(".ks") && String(a.value || "").length; if (typing && n < 8) { setTimeout(function () { softRepaint(n + 1); }, 1500); return; } if (document.querySelector(".ks")) repaintRef(true); }
+  S.onChange(function () { if (!repaintRef || !document.querySelector(".ks")) return; var g = sig(); if (g === lastSig) return; lastSig = g; softRepaint(0); });
   window.B2BKPI = { page: page, after: after, state: V, verifyAll: verifyAll, DETAILS: DETAILS };
 })();
