@@ -34,6 +34,43 @@
     return { pp: (cur - base) * 100, state: "ok", why: null };
   }
 
+  /* 비교 가능 여부 · 증감 — 원문 집계(build)와 공개 집계값(buildPublic)이 같은 규칙을 쓰도록 분리 */
+  function attachCompare(G, c) {
+    var prevOf = c.prevOf, lastY = c.lastY, endMD = c.endMD, mainOK = c.mainOK, firstSale = c.firstSale, metrics = c.metrics, led = c.led;
+    function blockFor(basis, y, key) {
+      var p = prevOf(y); if (!p) return "비교할 전년 자료 없음";
+      if (basis === "ann" && y === lastY) return "연중 누계(" + endMD.replace("-", "/") + "까지)라 전년 연간과 직접 비교할 수 없음 — '동일기간' 보기를 사용하세요";
+      if (key === "main" || key === "mainAmt" || key === "mainRate") { if (!mainOK(y)) return y + "년 메인자재 값 미확인(품목명 검증 전)"; if (!mainOK(p)) return p + "년 메인자재 값 미확인(품목명 검증 전)"; if (!led) return "판매 원문을 읽는 중 — 메인자재 첫 판매일 확인 후 표시"; if (firstSale.main) { var pStart = p + "-01-01"; if (firstSale.main > pStart) return p + "년은 메인자재 판매 개시 연도(첫 판매 " + firstSale.main + ")라 연 전체 기간과 비교할 수 없음"; } }
+      if (key === "ratio" || key === "notices") { }
+      return null;
+    }
+    G.blockFor = blockFor;
+    G.growth = function (basis, y, key) {
+      var p = prevOf(y), c = metrics(basis, y), b = p ? metrics(basis, p) : null, blk = blockFor(basis, y, key);
+      var map = { notices: "notices", noticesPour: "noticesPour", awards: "awards", awardAmt: "awardAmt", awardVendors: "awardVendors", sales: "sales", main: "main" };
+      if (key === "ratio") return rateDiff(c.awardRatio, b && b.awardRatio, blk);
+      if (key === "buyRate") return rateDiff(c.cohort && c.cohort.buyRate, b && b.cohort && b.cohort.buyRate, blk);
+      if (key === "mainRate") return rateDiff(c.cohort && c.cohort.mainRate, b && b.cohort && b.cohort.mainRate, blockFor(basis, y, "mainRate"));
+      if (key === "mainShare") return rateDiff(c.mainShare, b && b.mainShare, blockFor(basis, y, "main"));
+      if (key === "cohortBuyAmt") return growth(c.cohort && c.cohort.buyAmt, b && b.cohort && b.cohort.buyAmt, blk);
+      if (!map[key]) return growth(null, null, "알 수 없는 지표");
+      return growth(c[map[key]], b && b[map[key]], key === "main" ? blockFor(basis, y, "main") : blk);
+    };
+    /* 메인 3품목 증감: 기준 기간 전체에 판매가 있었는지(판매 개시 이전 기간 혼재)를 확인 */
+    G.famGrowth = function (basis, y, fam) {
+      var p = prevOf(y), c = metrics(basis, y), b = p ? metrics(basis, p) : null; var blk = null;
+      if (!p) blk = "비교할 전년 자료 없음"; else if (basis === "ann" && y === lastY) blk = blockFor(basis, y, "x"); else if (!c.fam || !b || !b.fam) blk = !isNum(c.main) || !(b && isNum(b.main)) ? "메인자재 값 미확인 연도 포함" : "원문을 읽어 오는 중이라 계산 전";
+      else if (firstSale[fam] && firstSale[fam] > p + "-01-01") blk = p + "년 " + FAM_LABEL[fam] + " 판매 개시(첫 판매 " + firstSale[fam] + ") — 개시 이전 기간이 섞여 비교 불가";
+      return growth(c.fam && c.fam[fam], b && b.fam && b.fam[fam], blk);
+    };
+    G.famStatus = function (basis, y, fam) {       /* 값 대신 상태 문구: 판매 개시 전은 0 이 아니라 '판매 전' */
+      var m = metrics(basis, y); if (!isNum(m.main)) return { code: "unverified", label: "미확인" }; if (!m.fam) return { code: "wait", label: "원문 읽는 중" };
+      var fs = firstSale[fam]; var end = basis === "ann" ? y + "-12-31" : y + "-" + endMD; if (fs && fs > end) return { code: "prelaunch", label: "판매 개시 전" };
+      return { code: "ok", label: null };
+    };
+
+  }
+
   function build(src, opt) {
     opt = opt || {};
     var need = ["1.통합KPI", "2.시공사마스터", "4.메인자재구매현황", "5.POUR공고낙찰", "5b.POUR반영공고"];
@@ -126,38 +163,7 @@
     }
     G.metrics = metrics;
 
-    /* ---------- 비교 가능 여부 · 증감 ---------- */
-    function blockFor(basis, y, key) {
-      var p = prevOf(y); if (!p) return "비교할 전년 자료 없음";
-      if (basis === "ann" && y === lastY) return "연중 누계(" + endMD.replace("-", "/") + "까지)라 전년 연간과 직접 비교할 수 없음 — '동일기간' 보기를 사용하세요";
-      if (key === "main" || key === "mainAmt" || key === "mainRate") { if (!mainOK(y)) return y + "년 메인자재 값 미확인(품목명 검증 전)"; if (!mainOK(p)) return p + "년 메인자재 값 미확인(품목명 검증 전)"; if (!led) return "판매 원문을 읽는 중 — 메인자재 첫 판매일 확인 후 표시"; if (firstSale.main) { var pStart = p + "-01-01"; if (firstSale.main > pStart) return p + "년은 메인자재 판매 개시 연도(첫 판매 " + firstSale.main + ")라 연 전체 기간과 비교할 수 없음"; } }
-      if (key === "ratio" || key === "notices") { }
-      return null;
-    }
-    G.blockFor = blockFor;
-    G.growth = function (basis, y, key) {
-      var p = prevOf(y), c = metrics(basis, y), b = p ? metrics(basis, p) : null, blk = blockFor(basis, y, key);
-      var map = { notices: "notices", noticesPour: "noticesPour", awards: "awards", awardAmt: "awardAmt", awardVendors: "awardVendors", sales: "sales", main: "main" };
-      if (key === "ratio") return rateDiff(c.awardRatio, b && b.awardRatio, blk);
-      if (key === "buyRate") return rateDiff(c.cohort && c.cohort.buyRate, b && b.cohort && b.cohort.buyRate, blk);
-      if (key === "mainRate") return rateDiff(c.cohort && c.cohort.mainRate, b && b.cohort && b.cohort.mainRate, blockFor(basis, y, "mainRate"));
-      if (key === "mainShare") return rateDiff(c.mainShare, b && b.mainShare, blockFor(basis, y, "main"));
-      if (key === "cohortBuyAmt") return growth(c.cohort && c.cohort.buyAmt, b && b.cohort && b.cohort.buyAmt, blk);
-      if (!map[key]) return growth(null, null, "알 수 없는 지표");
-      return growth(c[map[key]], b && b[map[key]], key === "main" ? blockFor(basis, y, "main") : blk);
-    };
-    /* 메인 3품목 증감: 기준 기간 전체에 판매가 있었는지(판매 개시 이전 기간 혼재)를 확인 */
-    G.famGrowth = function (basis, y, fam) {
-      var p = prevOf(y), c = metrics(basis, y), b = p ? metrics(basis, p) : null; var blk = null;
-      if (!p) blk = "비교할 전년 자료 없음"; else if (basis === "ann" && y === lastY) blk = blockFor(basis, y, "x"); else if (!c.fam || !b || !b.fam) blk = !isNum(c.main) || !(b && isNum(b.main)) ? "메인자재 값 미확인 연도 포함" : "원문을 읽어 오는 중이라 계산 전";
-      else if (firstSale[fam] && firstSale[fam] > p + "-01-01") blk = p + "년 " + FAM_LABEL[fam] + " 판매 개시(첫 판매 " + firstSale[fam] + ") — 개시 이전 기간이 섞여 비교 불가";
-      return growth(c.fam && c.fam[fam], b && b.fam && b.fam[fam], blk);
-    };
-    G.famStatus = function (basis, y, fam) {       /* 값 대신 상태 문구: 판매 개시 전은 0 이 아니라 '판매 전' */
-      var m = metrics(basis, y); if (!isNum(m.main)) return { code: "unverified", label: "미확인" }; if (!m.fam) return { code: "wait", label: "원문 읽는 중" };
-      var fs = firstSale[fam]; var end = basis === "ann" ? y + "-12-31" : y + "-" + endMD; if (fs && fs > end) return { code: "prelaunch", label: "판매 개시 전" };
-      return { code: "ok", label: null };
-    };
+    attachCompare(G, { prevOf: prevOf, lastY: lastY, endMD: endMD, mainOK: mainOK, firstSale: firstSale, metrics: metrics, led: !!led });
 
     /* ---------- 업체 단위 ---------- */
     var link12 = {}; R12.forEach(function (r) { var id = r["통합ID"]; var t = String(r["연결상태"] || ""); var pr = /낙찰시공사↔이카운트|이카운트 거래처 후보 없음/.test(t) ? 2 : 1; if (!link12[id] || pr > link12[id].pr) link12[id] = { pr: pr, 상태: t, 사유: r["사유"] }; });
@@ -248,8 +254,35 @@
       });
       return out;
     };
+    /* ---------- 공개용 집계값 내보내기: 업체명·ID·현장명·거래 명세 없이 연도·기간별 합계/건수/비율만 ---------- */
+    var PUB_M = ["basis", "year", "notices", "noticesPour", "awards", "awardAmt", "awardAmtN", "awardAmtMissing", "awardVendors", "awardNames", "noticesWithAward", "unmatchedAwards", "awardRatio", "sales", "main", "mainWhy", "mainShare", "ledgerSales", "salesCheck", "ledgerMain", "mainCheck"];
+    var PUB_C = ["n", "buyN", "buyRate", "mainBuyN", "mainRate", "mainAmt", "mainWhy", "buyAmt", "totalAmt", "amtShare"];
+    function pubMetrics(m) { var o = {}; PUB_M.forEach(function (k) { if (m[k] !== undefined) o[k] = m[k]; }); if (m.fam) o.fam = { "재도장": m.fam["재도장"], "우레탄": m.fam["우레탄"], "에폭시": m.fam["에폭시"] }; else o.fam = null; if (m.cohort) { var c = {}; PUB_C.forEach(function (k) { if (m.cohort[k] !== undefined) c[k] = m.cohort[k]; }); o.cohort = c; } else o.cohort = null; return o; }
+    function pubTrades(basis, y) { var t = {}; awardsOf(basis, y).forEach(function (r) { var k = String(r["공종그룹"] || r["공종"] || "미기재"); var o = t[k] || (t[k] = { n: 0, amt: 0, amtN: 0 }); o.n++; if (isNum(r["낙찰금액"])) { o.amt += r["낙찰금액"]; o.amtN++; } }); return t; }
+    G.exportPublic = function () {
+      var out = { years: years.slice(), lastY: lastY, endMD: endMD, asOf: G.asOf, ledgerReady: !!led, firstSale: { main: firstSale.main, "재도장": firstSale["재도장"], "우레탄": firstSale["우레탄"], "에폭시": firstSale["에폭시"] }, mainOK: {}, metrics: { ann: {}, ytd: {} }, trades: { ann: {}, ytd: {} }, famRules: famRules.map(function (r) { return { fam: r.fam, re: r.re }; }) };
+      years.forEach(function (y) { out.mainOK[y] = mainOK(y); ["ann", "ytd"].forEach(function (b) { out.metrics[b][y] = pubMetrics(metrics(b, y)); out.trades[b][y] = pubTrades(b, y); }); });
+      out.coverage = G.coverage().map(function (c) { return { t: c.t, d: c.d }; }); out.reconcile = G.reconcile().map(function (r) { return { "연도": r["연도"], "항목": r["항목"], "새집계": r["새집계"], "KPI": r["KPI"], "결과": r["결과"] }; });
+      return out;
+    };
     return G;
   }
-  root.B2BGrowth = { DEFAULT_FAM_RULES: DEFAULT_FAM_RULES, build: build, growth: growth, FAMS: FAMS, FAM_LABEL: FAM_LABEL, isNum: isNum, famOf: famOf, nz: nz };
+  /* 공개 집계값(exportPublic 결과)으로 같은 화면 인터페이스를 제공 — 업체·현장 단위 메서드는 제공하지 않는다(restricted) */
+  function buildPublic(pub, opt) {
+    opt = opt || {};
+    var G = { missing: [], years: pub.years.slice(), lastY: pub.lastY, endMD: pub.endMD, asOf: pub.asOf, notes: [], famRules: pub.famRules || DEFAULT_FAM_RULES, ledgerReady: !!pub.ledgerReady, firstSale: pub.firstSale, restricted: true, publicMeta: pub.meta || null };
+    var kRow = {}; (opt.kpi || []).forEach(function (r) { kRow[String(r["연도"])] = r; });
+    function prevOf(y) { var i = G.years.indexOf(y); return i > 0 ? G.years[i - 1] : null; }
+    function mainOK(y) { return !!(pub.mainOK && pub.mainOK[y]); }
+    function metrics(b, y) { return (pub.metrics[b] || {})[y]; }
+    G.prevOf = prevOf; G.kpi = function (y) { return kRow[y] || null; }; G.master = function () { return null; }; G.mainOK = mainOK; G.metrics = metrics;
+    attachCompare(G, { prevOf: prevOf, lastY: G.lastY, endMD: G.endMD, mainOK: mainOK, firstSale: pub.firstSale, metrics: metrics, led: !!pub.ledgerReady });
+    G.coverage = function () { return pub.coverage || []; }; G.reconcile = function () { return pub.reconcile || []; };
+    G.trades = function (b, y) { return ((pub.trades || {})[b] || {})[y] || {}; };
+    G.linkGrade = function () { return { code: "na", label: "비공개", note: "업체별 정보는 공개하지 않습니다" }; }; G.vendorName = function (id, fb) { return fb || ""; };
+    G.awardRows = function () { return []; }; G.cohortRows = function () { return []; }; G.vendorSales = function () { return null; }; G.contributors = function () { return null; }; G.needCheck = function () { return []; }; G.vendorDetail = function () { return null; }; G.findVendors = function () { return []; };
+    return G;
+  }
+  root.B2BGrowth = { DEFAULT_FAM_RULES: DEFAULT_FAM_RULES, build: build, buildPublic: buildPublic, growth: growth, FAMS: FAMS, FAM_LABEL: FAM_LABEL, isNum: isNum, famOf: famOf, nz: nz };
   if (typeof module !== "undefined" && module.exports) module.exports = root.B2BGrowth;
 })(typeof window !== "undefined" ? window : (typeof globalThis !== "undefined" ? globalThis : this));

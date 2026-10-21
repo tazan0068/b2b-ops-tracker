@@ -1,5 +1,6 @@
 /* ============================================================
-   통합 구글시트 데이터 소스 — 업무 트래커 첫 화면용 (v5: 상시 자동 연동 · 멈춤 방지)
+   통합 구글시트 데이터 소스 — 업무 트래커 첫 화면용 (v6: 공개 보기 기본 · 상세 보기는 기존 Google 로그인 연동)
+   · 공개 보기(기본): 로그인·시트 연결 없이 서버(Apps Script)가 자동 집계해 둔 공개용 집계값만 읽는다. 시공사·현장·거래 명세·판매 원문은 이 경로에 없다.
    · 내장: #b2b-sheet-data (검증본 gzip+base64) → "저장된 데이터" / data-enc="none" → "연결 대기"(회사 데이터 미내장)
    · 실시간 A (권장): Google 로그인(OAuth, spreadsheets.readonly) + Sheets API 직접 읽기
        - 시트를 공유받은 직원만 읽음. 공유 키 없음. 회수 = 시트 공유 해제
@@ -39,7 +40,7 @@
 
   /* ---------- 설정 ---------- */
   function settings() { try { return JSON.parse(localStorage.getItem(KEY) || "null") || null; } catch (e) { return null; } }
-  function saveSettings(s) { var old = settings() || {}; localStorage.setItem(KEY, JSON.stringify({ mode: s.mode === "appsscript" ? "appsscript" : "google", clientId: String(s.clientId || "").trim(), sheetId: String(s.sheetId || "").trim(), endpoint: String(s.endpoint || "").trim(), key: String(s.key || ""), signedBefore: !!old.signedBefore, savedAt: new Date().toISOString() })); }
+  function saveSettings(s) { var old = settings() || {}; localStorage.setItem(KEY, JSON.stringify({ view: s.view || old.view || "public", mode: s.mode === "appsscript" ? "appsscript" : "google", clientId: String(s.clientId || "").trim(), sheetId: String(s.sheetId || "").trim(), endpoint: String(s.endpoint || "").trim(), key: String(s.key || ""), signedBefore: !!old.signedBefore, savedAt: new Date().toISOString() })); }
   function patchSettings(p) { var s = settings(); if (!s) return; for (var k in p) s[k] = p[k]; try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {} }
   function clearSettings() { localStorage.removeItem(KEY); try { localStorage.removeItem(UKEY); } catch (e) {} clearToken(); stopTimer(); }
   function emit() { listeners.forEach(function (f) { try { f(state); } catch (e) {} }); }
@@ -269,6 +270,60 @@
   }
   function useEmbedded(reason) { state.mode = reason ? "fallback" : (noData() ? "none" : "embedded"); state.error = reason || null; state.tabs = embedded.tabs; state.meta = embedded.meta; state.frozenDiff = []; state.ledgerProgress = null; }
 
+  /* ---------- 공개 보기(기본): 로그인·시트 연결 없이 공개용 집계값을 읽는다 ---------- */
+  var PUBCONF = "./public-config.json"; var pubInflight = null, pubUrlCache = null;
+  state.view = "public"; state.pub = { status: "idle", data: null, error: null, checkedAt: null, hash: null, url: null, serve: null };
+  function isLocalHost() { var h = location.hostname; return h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h === ""; }
+  function viewPref() { var s = settings(); return s && s.view === "detail" && configured(s) ? "detail" : "public"; }
+  function okPubUrl(u) { return typeof u === "string" && u && (/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(u) || /^\.{0,2}\/[\w./-]+$/.test(u) || isLocalHost()); }
+  function pubUrl() {
+    if (pubUrlCache) return Promise.resolve(pubUrlCache);
+    var q = null; try { q = new URLSearchParams(location.search).get("pub"); } catch (e) {}
+    if (q && isLocalHost()) { pubUrlCache = q; return Promise.resolve(q); }          /* 시험용: 로컬 주소에서만 ?pub= 허용(링크로 가짜 수치를 보여 주는 것을 막음) */
+    if (okPubUrl(window.B2B_PUBLIC_URL)) { pubUrlCache = window.B2B_PUBLIC_URL; return Promise.resolve(pubUrlCache); }
+    return fetch(PUBCONF, { cache: "no-store", credentials: "omit" }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }).then(function (j) { var u = j && j.url; if (okPubUrl(u)) { pubUrlCache = u; return u; } return null; });
+  }
+  function fetchPublic(url) {
+    var ctl = typeof AbortController !== "undefined" ? new AbortController() : null, to = setTimeout(function () { if (ctl) ctl.abort(); }, 25000);
+    var u = url + (url.indexOf("?") >= 0 ? "&" : "?") + "t=" + Date.now();
+    return fetch(u, { cache: "no-store", credentials: "omit", redirect: "follow", signal: ctl ? ctl.signal : undefined })
+      .catch(function (e) { throw err(e && e.name === "AbortError" ? "TIMEOUT" : "NET", e && e.name === "AbortError" ? "공개 데이터 응답 시간 초과(25초)" : "공개 데이터를 불러오지 못했습니다(네트워크 확인)"); })
+      .then(function (r) { if (!r.ok) throw err("HTTP", "공개 데이터 서버 응답 오류(" + r.status + ")"); return r.text(); })
+      .then(function (txt) { clearTimeout(to); if (txt.length > 3000000) throw err("PUBBAD", "공개 데이터가 너무 큽니다"); var j; try { j = JSON.parse(txt); } catch (e) { throw err("PUBBAD", "공개 데이터 형식 오류(JSON 아님)"); } if (j && j.ok === false) throw err("PUBNO", j.message || "공개 데이터가 아직 없습니다"); var bad = window.B2BPublicPack ? window.B2BPublicPack.validate(j) : "공개 데이터 검증 모듈을 불러오지 못했습니다"; if (bad) throw err("PUBBAD", "공개 데이터 검증 실패: " + bad); return j; }, function (e) { clearTimeout(to); throw e; });
+  }
+  function applyPublic(j) {
+    var sy = state.sync, p = state.pub, first = state.mode !== "public" || !p.data, changed = first || p.hash !== j.meta.hash;
+    if (state.mode !== "public") state.epoch++;                                     /* 상세 보기에서 넘어온 화면 쪽 사본을 지운다 */
+    if (changed) { var tabs = {}; Object.keys(j.tabs).forEach(function (n) { tabs[n] = { header: j.tabs[n].header, rows: j.tabs[n].rows }; }); state.tabs = tabs; state.version++; state.frozenDiff = []; }
+    state.meta = { source: "public", title: "공개 집계", auth: "public", servedAt: j.meta.generatedAt, tabs: {} };
+    p.status = "ok"; p.data = j; p.error = null; p.hash = j.meta.hash; p.checkedAt = Date.now(); p.serve = j.serve || null;
+    state.mode = "public"; state.error = null; state.needSignIn = false; state.at = new Date();
+    var stale = !!(j.serve && j.serve.state && j.serve.state !== "ok");
+    sy.status = stale ? "stale" : "ok"; sy.stale = stale; sy.message = stale ? (j.serve.message || "새 집계 게시가 보류되어 이전 정상 집계를 표시합니다") : ""; sy.lastOkAt = Date.now(); sy.changed = first ? null : !!changed; sy.lastError = null; sy.progress = null; sy.consistency = []; sy.issues = { missingTabs: [], badTabs: [] };
+  }
+  function classifyPublic(e) {
+    var sy = state.sync, p = state.pub, code = (e && e.code) || "INTERNAL", msg = (e && e.message) || String(e); sy.lastError = { code: code, message: msg, at: Date.now() }; p.error = { code: code, message: msg };
+    if (p.data && state.mode === "public") { p.status = "stale"; sy.status = "stale"; sy.stale = true; sy.message = msg + " — 표시 중인 값은 마지막으로 받은 공개 집계입니다. 다음 자동 확인 때 다시 시도합니다."; return; }
+    p.status = "error"; sy.status = "error"; sy.stale = false; sy.message = msg; useEmbedded(msg);
+  }
+  function syncPublic(reason) {
+    if (pubInflight) return pubInflight; var sy = state.sync;
+    state.loading = true; if (!state.pub.data || state.mode !== "public") sy.status = "syncing"; sy.lastAttemptAt = Date.now(); sy.startedAt = Date.now(); emit();
+    pubInflight = pubUrl().then(function (url) { if (!url) throw err("PUBCONF", "공개 데이터 주소가 설정되지 않았습니다"); state.pub.url = url; return fetchPublic(url); }).then(applyPublic)
+      .catch(function (e) { try { classifyPublic(e); } catch (x) { sy.status = "error"; sy.message = String((x && x.message) || x); } })
+      .then(function () { state.loading = false; pubInflight = null; sy.startedAt = null; startTimer(); sy.nextAt = Date.now() + interval; state.at = new Date(); emit(); return state; });
+    return pubInflight;
+  }
+  /* 보기 전환: 'public'(기본) ↔ 'detail'(기존 Google 로그인 연동 — 시트를 공유받은 직원용). 한쪽 데이터는 전환 시 메모리에서 지운다 */
+  function setViewMode(v) {
+    if (v === "detail") { var s0 = settings(); if (!configured(s0)) return Promise.reject(err("CONFIG", "상세 보기에는 연결 설정(OAuth 클라이언트 ID·시트 ID)이 필요합니다")); patchSettings({ view: "detail" }); }
+    else patchSettings({ view: "public" });
+    abortInflight(); stopTimer(); var sy = state.sync;
+    state.epoch++; state.version++; state.tabs = embedded ? embedded.tabs : null; state.meta = embedded ? embedded.meta : null; state.mode = noData() ? "none" : "embedded"; state.frozenDiff = []; state.ledgerProgress = null; state.needSignIn = false; state.pub.hash = null; state.pub.data = null; state.pub.status = "idle";
+    sy.fingerprint = ""; sy.ledgerCount = null; sy.consistency = []; sy.lastOkAt = null; sy.status = "idle"; sy.stale = false; sy.message = ""; sy.issues = { missingTabs: [], badTabs: [] };
+    return syncNow("switch");
+  }
+
   /* ---------- 동기화 ---------- */
   function stopTimer() { if (timer) { clearInterval(timer); timer = null; } state.sync.nextAt = null; }
   function startTimer() { if (timer) return; timer = setInterval(function () { if (document.hidden) return; syncNow("timer"); }, interval); }
@@ -277,7 +332,8 @@
   /* 동기화 1회: 어떤 경우에도 끝난다 — 전체 제한시간(워치독)·개별 요청 타임아웃·취소·예외 모두 finish 로 수렴 */
   function syncNow(reason) {
     if (!embedded) return Promise.resolve(state);
-    if (syncing) return syncing;
+    if (viewPref() === "public") { state.view = "public"; state.authMode = null; return syncPublic(reason); }
+    state.view = "detail"; if (syncing) return syncing;
     var s = settings(); state.authMode = s ? (s.mode === "appsscript" ? "appsscript" : "google") : null;
     if (!configured(s)) { useEmbedded(null); state.needSignIn = false; state.sync.status = "idle"; stopTimer(); state.at = new Date(); emit(); return Promise.resolve(state); }
     var sy = state.sync, run = ++runSeq, token = { dead: false }, wd = null, rejWd = null;
@@ -330,6 +386,7 @@
       .then(function () { rep.ok = rep.steps.length > 0 && rep.steps.every(function (x) { return x.ok === true; }); rep.totalMs = Date.now() - rep.startedAt; tick(); return rep; });
   }
   function ledger(onProgress) {
+    if (state.mode === "public") return Promise.reject(new Error("공개 보기에서는 판매 원문을 제공하지 않습니다 — 상세 보기(로그인)에서 열람할 수 있습니다"));
     if (state.mode !== "live") { var t0 = embedded.tabs[LEDGER]; return t0 ? Promise.resolve(t0) : Promise.reject(new Error("연결 대기 — 구글시트에 연결한 뒤 원문을 읽을 수 있습니다")); }
     if (state.tabs[LEDGER]) return Promise.resolve(state.tabs[LEDGER]);
     var s = settings(); var ep = state.epoch;
@@ -339,17 +396,17 @@
     function step(off) { return api(s, { action: "tab", tab: LEDGER, offset: off, limit: LIMIT }, 120000).then(function (j) { if (!acc) acc = { header: j.header, rows: [] }; acc.rows = acc.rows.concat(j.rows); state.ledgerProgress = { loaded: acc.rows.length, total: j.total }; if (onProgress) onProgress(state.ledgerProgress); if (acc.rows.length < j.total && j.rows.length) return step(acc.rows.length); state.ledgerProgress = null; return acc; }); }
     return step(0).then(done);
   }
-  function tab(name) { if (state.mode === "live") return (state.tabs && state.tabs[name]) || null; var t = state.tabs && state.tabs[name]; if (t) return t; return embedded ? embedded.tabs[name] || null : null; }
+  function tab(name) { if (state.mode === "public") return (state.tabs && state.tabs[name]) || null; if (state.mode === "live") return (state.tabs && state.tabs[name]) || null; var t = state.tabs && state.tabs[name]; if (t) return t; return embedded ? embedded.tabs[name] || null : null; }
   /* 연결 테스트: google 은 사용자 클릭에서 호출(로그인 팝업) */
   function test(s) { if (s.mode === "appsscript") return api(s, { action: "meta" }, 30000).then(function (j) { return j.meta; }); if (!s.clientId || !s.sheetId) return Promise.reject(new Error("OAuth 클라이언트 ID 와 시트 ID 를 입력하세요")); var keep = settings(); saveSettings(s); return getToken(true).then(function () { return gMeta(s.sheetId, false); }).finally(function () { if (keep) localStorage.setItem(KEY, JSON.stringify(keep)); else localStorage.removeItem(KEY); }); }
   function signIn(opts) { state.sync.silentBlocked = false; return ((opts && opts.select) ? requestToken("select_account") : getToken(true)).then(function () { state.sync.expiredSince = null; return syncNow("signin"); }); }
   function signOut() { abortInflight(); var t = getStoredToken(); clearToken(); try { localStorage.removeItem(UKEY); } catch (e) {} patchSettings({ signedBefore: false }); state.email = ""; if (t && window.google && google.accounts && google.accounts.oauth2 && google.accounts.oauth2.revoke) { try { google.accounts.oauth2.revoke(t, function () {}); } catch (e) {} } purge("signedout", "로그아웃했습니다. 조회한 데이터를 화면에서 지웠습니다."); state.needSignIn = configured(settings()); emit(); return Promise.resolve(state); }
-  function setSyncInterval(ms, graceMs) { interval = Math.max(1000, Number(ms) || 300000); state.sync.interval = interval; if (graceMs) GRACE_MS = Math.max(1000, Number(graceMs)); stopTimer(); if (configured(settings()) && haveLive()) scheduleNext(); }
+  function setSyncInterval(ms, graceMs) { interval = Math.max(1000, Number(ms) || 300000); state.sync.interval = interval; if (graceMs) GRACE_MS = Math.max(1000, Number(graceMs)); stopTimer(); if (configured(settings()) && haveLive()) scheduleNext(); else if (viewPref() === "public" && state.mode === "public") { startTimer(); state.sync.nextAt = Date.now() + interval; } }
 
-  document.addEventListener("visibilitychange", function () { if (!document.hidden && configured(settings()) && state.sync.lastAttemptAt && Date.now() - state.sync.lastAttemptAt >= interval && state.sync.status !== "denied" && state.sync.status !== "signedout") syncNow("resume"); });
+  document.addEventListener("visibilitychange", function () { if (!document.hidden && (configured(settings()) || viewPref() === "public") && state.sync.lastAttemptAt && Date.now() - state.sync.lastAttemptAt >= interval && state.sync.status !== "denied" && state.sync.status !== "signedout") syncNow("resume"); });
 
   loadEmbedded().then(function () { state.ready = true; state.embeddedMeta = embedded.meta; useEmbedded(null); state.at = new Date(); state.email = getHint(); emit(); return syncNow("load"); })
     .catch(function (e) { state.decodeError = e.message || String(e); state.ready = false; emit(); });
 
-  window.B2BSheet = { noData: noData, state: state, refresh: function () { return syncNow("manual"); }, tab: tab, ledger: ledger, settings: settings, saveSettings: saveSettings, clearSettings: clearSettings, test: test, signIn: signIn, signOut: signOut, configured: configured, onChange: function (f) { listeners.push(f); }, setSyncInterval: setSyncInterval, cancel: cancelSync, setLimits: setLimits, diagnose: diagnose, getLog: getLog, expectedTabs: expectedTabs, schema: function () { return SCHEMA; }, LEDGER: LEDGER, KEY: KEY };
+  window.B2BSheet = { viewMode: viewPref, setViewMode: setViewMode, noData: noData, state: state, refresh: function () { return syncNow("manual"); }, tab: tab, ledger: ledger, settings: settings, saveSettings: saveSettings, clearSettings: clearSettings, test: test, signIn: signIn, signOut: signOut, configured: configured, onChange: function (f) { listeners.push(f); }, setSyncInterval: setSyncInterval, cancel: cancelSync, setLimits: setLimits, diagnose: diagnose, getLog: getLog, expectedTabs: expectedTabs, schema: function () { return SCHEMA; }, LEDGER: LEDGER, KEY: KEY };
 })();

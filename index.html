@@ -882,6 +882,10 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
 @media (max-width:640px){ .gw-flowt{table-layout:fixed} }
 .gw-defs .gr label{overflow-wrap:anywhere}.gw-defs textarea{resize:vertical}.gw .card{min-width:0;overflow-wrap:anywhere}
 .gw .mini,.ks-modal .gw-note,.ks-modal .mini{white-space:normal;line-height:1.55}
+/* 공개 보기 표시 */
+.gw-pubtag{display:inline-block;font-size:11.5px;font-weight:800;color:#166534;background:#ECFDF3;border-radius:100px;padding:3px 10px;margin:0 0 6px}
+.gw-priv{background:var(--surf);border:1px dashed var(--line);border-radius:9px;padding:9px 12px;line-height:1.65}
+.gw-defs input:disabled,.gw-defs textarea:disabled{background:var(--surf);color:var(--text-3);cursor:not-allowed}
 
 </style>
 </head>
@@ -902,7 +906,8 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
 <script id="b2b-sheet-data" type="text/plain" data-enc="none"></script>
 <script>
 /* ============================================================
-   통합 구글시트 데이터 소스 — 업무 트래커 첫 화면용 (v5: 상시 자동 연동 · 멈춤 방지)
+   통합 구글시트 데이터 소스 — 업무 트래커 첫 화면용 (v6: 공개 보기 기본 · 상세 보기는 기존 Google 로그인 연동)
+   · 공개 보기(기본): 로그인·시트 연결 없이 서버(Apps Script)가 자동 집계해 둔 공개용 집계값만 읽는다. 시공사·현장·거래 명세·판매 원문은 이 경로에 없다.
    · 내장: #b2b-sheet-data (검증본 gzip+base64) → "저장된 데이터" / data-enc="none" → "연결 대기"(회사 데이터 미내장)
    · 실시간 A (권장): Google 로그인(OAuth, spreadsheets.readonly) + Sheets API 직접 읽기
        - 시트를 공유받은 직원만 읽음. 공유 키 없음. 회수 = 시트 공유 해제
@@ -942,7 +947,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
 
   /* ---------- 설정 ---------- */
   function settings() { try { return JSON.parse(localStorage.getItem(KEY) || "null") || null; } catch (e) { return null; } }
-  function saveSettings(s) { var old = settings() || {}; localStorage.setItem(KEY, JSON.stringify({ mode: s.mode === "appsscript" ? "appsscript" : "google", clientId: String(s.clientId || "").trim(), sheetId: String(s.sheetId || "").trim(), endpoint: String(s.endpoint || "").trim(), key: String(s.key || ""), signedBefore: !!old.signedBefore, savedAt: new Date().toISOString() })); }
+  function saveSettings(s) { var old = settings() || {}; localStorage.setItem(KEY, JSON.stringify({ view: s.view || old.view || "public", mode: s.mode === "appsscript" ? "appsscript" : "google", clientId: String(s.clientId || "").trim(), sheetId: String(s.sheetId || "").trim(), endpoint: String(s.endpoint || "").trim(), key: String(s.key || ""), signedBefore: !!old.signedBefore, savedAt: new Date().toISOString() })); }
   function patchSettings(p) { var s = settings(); if (!s) return; for (var k in p) s[k] = p[k]; try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {} }
   function clearSettings() { localStorage.removeItem(KEY); try { localStorage.removeItem(UKEY); } catch (e) {} clearToken(); stopTimer(); }
   function emit() { listeners.forEach(function (f) { try { f(state); } catch (e) {} }); }
@@ -1172,6 +1177,60 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   }
   function useEmbedded(reason) { state.mode = reason ? "fallback" : (noData() ? "none" : "embedded"); state.error = reason || null; state.tabs = embedded.tabs; state.meta = embedded.meta; state.frozenDiff = []; state.ledgerProgress = null; }
 
+  /* ---------- 공개 보기(기본): 로그인·시트 연결 없이 공개용 집계값을 읽는다 ---------- */
+  var PUBCONF = "./public-config.json"; var pubInflight = null, pubUrlCache = null;
+  state.view = "public"; state.pub = { status: "idle", data: null, error: null, checkedAt: null, hash: null, url: null, serve: null };
+  function isLocalHost() { var h = location.hostname; return h === "localhost" || h === "127.0.0.1" || h === "[::1]" || h === ""; }
+  function viewPref() { var s = settings(); return s && s.view === "detail" && configured(s) ? "detail" : "public"; }
+  function okPubUrl(u) { return typeof u === "string" && u && (/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(u) || /^\.{0,2}\/[\w./-]+$/.test(u) || isLocalHost()); }
+  function pubUrl() {
+    if (pubUrlCache) return Promise.resolve(pubUrlCache);
+    var q = null; try { q = new URLSearchParams(location.search).get("pub"); } catch (e) {}
+    if (q && isLocalHost()) { pubUrlCache = q; return Promise.resolve(q); }          /* 시험용: 로컬 주소에서만 ?pub= 허용(링크로 가짜 수치를 보여 주는 것을 막음) */
+    if (okPubUrl(window.B2B_PUBLIC_URL)) { pubUrlCache = window.B2B_PUBLIC_URL; return Promise.resolve(pubUrlCache); }
+    return fetch(PUBCONF, { cache: "no-store", credentials: "omit" }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }).then(function (j) { var u = j && j.url; if (okPubUrl(u)) { pubUrlCache = u; return u; } return null; });
+  }
+  function fetchPublic(url) {
+    var ctl = typeof AbortController !== "undefined" ? new AbortController() : null, to = setTimeout(function () { if (ctl) ctl.abort(); }, 25000);
+    var u = url + (url.indexOf("?") >= 0 ? "&" : "?") + "t=" + Date.now();
+    return fetch(u, { cache: "no-store", credentials: "omit", redirect: "follow", signal: ctl ? ctl.signal : undefined })
+      .catch(function (e) { throw err(e && e.name === "AbortError" ? "TIMEOUT" : "NET", e && e.name === "AbortError" ? "공개 데이터 응답 시간 초과(25초)" : "공개 데이터를 불러오지 못했습니다(네트워크 확인)"); })
+      .then(function (r) { if (!r.ok) throw err("HTTP", "공개 데이터 서버 응답 오류(" + r.status + ")"); return r.text(); })
+      .then(function (txt) { clearTimeout(to); if (txt.length > 3000000) throw err("PUBBAD", "공개 데이터가 너무 큽니다"); var j; try { j = JSON.parse(txt); } catch (e) { throw err("PUBBAD", "공개 데이터 형식 오류(JSON 아님)"); } if (j && j.ok === false) throw err("PUBNO", j.message || "공개 데이터가 아직 없습니다"); var bad = window.B2BPublicPack ? window.B2BPublicPack.validate(j) : "공개 데이터 검증 모듈을 불러오지 못했습니다"; if (bad) throw err("PUBBAD", "공개 데이터 검증 실패: " + bad); return j; }, function (e) { clearTimeout(to); throw e; });
+  }
+  function applyPublic(j) {
+    var sy = state.sync, p = state.pub, first = state.mode !== "public" || !p.data, changed = first || p.hash !== j.meta.hash;
+    if (state.mode !== "public") state.epoch++;                                     /* 상세 보기에서 넘어온 화면 쪽 사본을 지운다 */
+    if (changed) { var tabs = {}; Object.keys(j.tabs).forEach(function (n) { tabs[n] = { header: j.tabs[n].header, rows: j.tabs[n].rows }; }); state.tabs = tabs; state.version++; state.frozenDiff = []; }
+    state.meta = { source: "public", title: "공개 집계", auth: "public", servedAt: j.meta.generatedAt, tabs: {} };
+    p.status = "ok"; p.data = j; p.error = null; p.hash = j.meta.hash; p.checkedAt = Date.now(); p.serve = j.serve || null;
+    state.mode = "public"; state.error = null; state.needSignIn = false; state.at = new Date();
+    var stale = !!(j.serve && j.serve.state && j.serve.state !== "ok");
+    sy.status = stale ? "stale" : "ok"; sy.stale = stale; sy.message = stale ? (j.serve.message || "새 집계 게시가 보류되어 이전 정상 집계를 표시합니다") : ""; sy.lastOkAt = Date.now(); sy.changed = first ? null : !!changed; sy.lastError = null; sy.progress = null; sy.consistency = []; sy.issues = { missingTabs: [], badTabs: [] };
+  }
+  function classifyPublic(e) {
+    var sy = state.sync, p = state.pub, code = (e && e.code) || "INTERNAL", msg = (e && e.message) || String(e); sy.lastError = { code: code, message: msg, at: Date.now() }; p.error = { code: code, message: msg };
+    if (p.data && state.mode === "public") { p.status = "stale"; sy.status = "stale"; sy.stale = true; sy.message = msg + " — 표시 중인 값은 마지막으로 받은 공개 집계입니다. 다음 자동 확인 때 다시 시도합니다."; return; }
+    p.status = "error"; sy.status = "error"; sy.stale = false; sy.message = msg; useEmbedded(msg);
+  }
+  function syncPublic(reason) {
+    if (pubInflight) return pubInflight; var sy = state.sync;
+    state.loading = true; if (!state.pub.data || state.mode !== "public") sy.status = "syncing"; sy.lastAttemptAt = Date.now(); sy.startedAt = Date.now(); emit();
+    pubInflight = pubUrl().then(function (url) { if (!url) throw err("PUBCONF", "공개 데이터 주소가 설정되지 않았습니다"); state.pub.url = url; return fetchPublic(url); }).then(applyPublic)
+      .catch(function (e) { try { classifyPublic(e); } catch (x) { sy.status = "error"; sy.message = String((x && x.message) || x); } })
+      .then(function () { state.loading = false; pubInflight = null; sy.startedAt = null; startTimer(); sy.nextAt = Date.now() + interval; state.at = new Date(); emit(); return state; });
+    return pubInflight;
+  }
+  /* 보기 전환: 'public'(기본) ↔ 'detail'(기존 Google 로그인 연동 — 시트를 공유받은 직원용). 한쪽 데이터는 전환 시 메모리에서 지운다 */
+  function setViewMode(v) {
+    if (v === "detail") { var s0 = settings(); if (!configured(s0)) return Promise.reject(err("CONFIG", "상세 보기에는 연결 설정(OAuth 클라이언트 ID·시트 ID)이 필요합니다")); patchSettings({ view: "detail" }); }
+    else patchSettings({ view: "public" });
+    abortInflight(); stopTimer(); var sy = state.sync;
+    state.epoch++; state.version++; state.tabs = embedded ? embedded.tabs : null; state.meta = embedded ? embedded.meta : null; state.mode = noData() ? "none" : "embedded"; state.frozenDiff = []; state.ledgerProgress = null; state.needSignIn = false; state.pub.hash = null; state.pub.data = null; state.pub.status = "idle";
+    sy.fingerprint = ""; sy.ledgerCount = null; sy.consistency = []; sy.lastOkAt = null; sy.status = "idle"; sy.stale = false; sy.message = ""; sy.issues = { missingTabs: [], badTabs: [] };
+    return syncNow("switch");
+  }
+
   /* ---------- 동기화 ---------- */
   function stopTimer() { if (timer) { clearInterval(timer); timer = null; } state.sync.nextAt = null; }
   function startTimer() { if (timer) return; timer = setInterval(function () { if (document.hidden) return; syncNow("timer"); }, interval); }
@@ -1180,7 +1239,8 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   /* 동기화 1회: 어떤 경우에도 끝난다 — 전체 제한시간(워치독)·개별 요청 타임아웃·취소·예외 모두 finish 로 수렴 */
   function syncNow(reason) {
     if (!embedded) return Promise.resolve(state);
-    if (syncing) return syncing;
+    if (viewPref() === "public") { state.view = "public"; state.authMode = null; return syncPublic(reason); }
+    state.view = "detail"; if (syncing) return syncing;
     var s = settings(); state.authMode = s ? (s.mode === "appsscript" ? "appsscript" : "google") : null;
     if (!configured(s)) { useEmbedded(null); state.needSignIn = false; state.sync.status = "idle"; stopTimer(); state.at = new Date(); emit(); return Promise.resolve(state); }
     var sy = state.sync, run = ++runSeq, token = { dead: false }, wd = null, rejWd = null;
@@ -1233,6 +1293,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
       .then(function () { rep.ok = rep.steps.length > 0 && rep.steps.every(function (x) { return x.ok === true; }); rep.totalMs = Date.now() - rep.startedAt; tick(); return rep; });
   }
   function ledger(onProgress) {
+    if (state.mode === "public") return Promise.reject(new Error("공개 보기에서는 판매 원문을 제공하지 않습니다 — 상세 보기(로그인)에서 열람할 수 있습니다"));
     if (state.mode !== "live") { var t0 = embedded.tabs[LEDGER]; return t0 ? Promise.resolve(t0) : Promise.reject(new Error("연결 대기 — 구글시트에 연결한 뒤 원문을 읽을 수 있습니다")); }
     if (state.tabs[LEDGER]) return Promise.resolve(state.tabs[LEDGER]);
     var s = settings(); var ep = state.epoch;
@@ -1242,19 +1303,19 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     function step(off) { return api(s, { action: "tab", tab: LEDGER, offset: off, limit: LIMIT }, 120000).then(function (j) { if (!acc) acc = { header: j.header, rows: [] }; acc.rows = acc.rows.concat(j.rows); state.ledgerProgress = { loaded: acc.rows.length, total: j.total }; if (onProgress) onProgress(state.ledgerProgress); if (acc.rows.length < j.total && j.rows.length) return step(acc.rows.length); state.ledgerProgress = null; return acc; }); }
     return step(0).then(done);
   }
-  function tab(name) { if (state.mode === "live") return (state.tabs && state.tabs[name]) || null; var t = state.tabs && state.tabs[name]; if (t) return t; return embedded ? embedded.tabs[name] || null : null; }
+  function tab(name) { if (state.mode === "public") return (state.tabs && state.tabs[name]) || null; if (state.mode === "live") return (state.tabs && state.tabs[name]) || null; var t = state.tabs && state.tabs[name]; if (t) return t; return embedded ? embedded.tabs[name] || null : null; }
   /* 연결 테스트: google 은 사용자 클릭에서 호출(로그인 팝업) */
   function test(s) { if (s.mode === "appsscript") return api(s, { action: "meta" }, 30000).then(function (j) { return j.meta; }); if (!s.clientId || !s.sheetId) return Promise.reject(new Error("OAuth 클라이언트 ID 와 시트 ID 를 입력하세요")); var keep = settings(); saveSettings(s); return getToken(true).then(function () { return gMeta(s.sheetId, false); }).finally(function () { if (keep) localStorage.setItem(KEY, JSON.stringify(keep)); else localStorage.removeItem(KEY); }); }
   function signIn(opts) { state.sync.silentBlocked = false; return ((opts && opts.select) ? requestToken("select_account") : getToken(true)).then(function () { state.sync.expiredSince = null; return syncNow("signin"); }); }
   function signOut() { abortInflight(); var t = getStoredToken(); clearToken(); try { localStorage.removeItem(UKEY); } catch (e) {} patchSettings({ signedBefore: false }); state.email = ""; if (t && window.google && google.accounts && google.accounts.oauth2 && google.accounts.oauth2.revoke) { try { google.accounts.oauth2.revoke(t, function () {}); } catch (e) {} } purge("signedout", "로그아웃했습니다. 조회한 데이터를 화면에서 지웠습니다."); state.needSignIn = configured(settings()); emit(); return Promise.resolve(state); }
-  function setSyncInterval(ms, graceMs) { interval = Math.max(1000, Number(ms) || 300000); state.sync.interval = interval; if (graceMs) GRACE_MS = Math.max(1000, Number(graceMs)); stopTimer(); if (configured(settings()) && haveLive()) scheduleNext(); }
+  function setSyncInterval(ms, graceMs) { interval = Math.max(1000, Number(ms) || 300000); state.sync.interval = interval; if (graceMs) GRACE_MS = Math.max(1000, Number(graceMs)); stopTimer(); if (configured(settings()) && haveLive()) scheduleNext(); else if (viewPref() === "public" && state.mode === "public") { startTimer(); state.sync.nextAt = Date.now() + interval; } }
 
-  document.addEventListener("visibilitychange", function () { if (!document.hidden && configured(settings()) && state.sync.lastAttemptAt && Date.now() - state.sync.lastAttemptAt >= interval && state.sync.status !== "denied" && state.sync.status !== "signedout") syncNow("resume"); });
+  document.addEventListener("visibilitychange", function () { if (!document.hidden && (configured(settings()) || viewPref() === "public") && state.sync.lastAttemptAt && Date.now() - state.sync.lastAttemptAt >= interval && state.sync.status !== "denied" && state.sync.status !== "signedout") syncNow("resume"); });
 
   loadEmbedded().then(function () { state.ready = true; state.embeddedMeta = embedded.meta; useEmbedded(null); state.at = new Date(); state.email = getHint(); emit(); return syncNow("load"); })
     .catch(function (e) { state.decodeError = e.message || String(e); state.ready = false; emit(); });
 
-  window.B2BSheet = { noData: noData, state: state, refresh: function () { return syncNow("manual"); }, tab: tab, ledger: ledger, settings: settings, saveSettings: saveSettings, clearSettings: clearSettings, test: test, signIn: signIn, signOut: signOut, configured: configured, onChange: function (f) { listeners.push(f); }, setSyncInterval: setSyncInterval, cancel: cancelSync, setLimits: setLimits, diagnose: diagnose, getLog: getLog, expectedTabs: expectedTabs, schema: function () { return SCHEMA; }, LEDGER: LEDGER, KEY: KEY };
+  window.B2BSheet = { viewMode: viewPref, setViewMode: setViewMode, noData: noData, state: state, refresh: function () { return syncNow("manual"); }, tab: tab, ledger: ledger, settings: settings, saveSettings: saveSettings, clearSettings: clearSettings, test: test, signIn: signIn, signOut: signOut, configured: configured, onChange: function (f) { listeners.push(f); }, setSyncInterval: setSyncInterval, cancel: cancelSync, setLimits: setLimits, diagnose: diagnose, getLog: getLog, expectedTabs: expectedTabs, schema: function () { return SCHEMA; }, LEDGER: LEDGER, KEY: KEY };
 })();
 
 </script>
@@ -1293,6 +1354,43 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     if (block) return { pp: null, state: "na", why: block };
     if (!isNum(cur) || !isNum(base)) return { pp: null, state: "na", why: "비율을 산출할 수 없는 기간 포함(데이터 부족)" };
     return { pp: (cur - base) * 100, state: "ok", why: null };
+  }
+
+  /* 비교 가능 여부 · 증감 — 원문 집계(build)와 공개 집계값(buildPublic)이 같은 규칙을 쓰도록 분리 */
+  function attachCompare(G, c) {
+    var prevOf = c.prevOf, lastY = c.lastY, endMD = c.endMD, mainOK = c.mainOK, firstSale = c.firstSale, metrics = c.metrics, led = c.led;
+    function blockFor(basis, y, key) {
+      var p = prevOf(y); if (!p) return "비교할 전년 자료 없음";
+      if (basis === "ann" && y === lastY) return "연중 누계(" + endMD.replace("-", "/") + "까지)라 전년 연간과 직접 비교할 수 없음 — '동일기간' 보기를 사용하세요";
+      if (key === "main" || key === "mainAmt" || key === "mainRate") { if (!mainOK(y)) return y + "년 메인자재 값 미확인(품목명 검증 전)"; if (!mainOK(p)) return p + "년 메인자재 값 미확인(품목명 검증 전)"; if (!led) return "판매 원문을 읽는 중 — 메인자재 첫 판매일 확인 후 표시"; if (firstSale.main) { var pStart = p + "-01-01"; if (firstSale.main > pStart) return p + "년은 메인자재 판매 개시 연도(첫 판매 " + firstSale.main + ")라 연 전체 기간과 비교할 수 없음"; } }
+      if (key === "ratio" || key === "notices") { }
+      return null;
+    }
+    G.blockFor = blockFor;
+    G.growth = function (basis, y, key) {
+      var p = prevOf(y), c = metrics(basis, y), b = p ? metrics(basis, p) : null, blk = blockFor(basis, y, key);
+      var map = { notices: "notices", noticesPour: "noticesPour", awards: "awards", awardAmt: "awardAmt", awardVendors: "awardVendors", sales: "sales", main: "main" };
+      if (key === "ratio") return rateDiff(c.awardRatio, b && b.awardRatio, blk);
+      if (key === "buyRate") return rateDiff(c.cohort && c.cohort.buyRate, b && b.cohort && b.cohort.buyRate, blk);
+      if (key === "mainRate") return rateDiff(c.cohort && c.cohort.mainRate, b && b.cohort && b.cohort.mainRate, blockFor(basis, y, "mainRate"));
+      if (key === "mainShare") return rateDiff(c.mainShare, b && b.mainShare, blockFor(basis, y, "main"));
+      if (key === "cohortBuyAmt") return growth(c.cohort && c.cohort.buyAmt, b && b.cohort && b.cohort.buyAmt, blk);
+      if (!map[key]) return growth(null, null, "알 수 없는 지표");
+      return growth(c[map[key]], b && b[map[key]], key === "main" ? blockFor(basis, y, "main") : blk);
+    };
+    /* 메인 3품목 증감: 기준 기간 전체에 판매가 있었는지(판매 개시 이전 기간 혼재)를 확인 */
+    G.famGrowth = function (basis, y, fam) {
+      var p = prevOf(y), c = metrics(basis, y), b = p ? metrics(basis, p) : null; var blk = null;
+      if (!p) blk = "비교할 전년 자료 없음"; else if (basis === "ann" && y === lastY) blk = blockFor(basis, y, "x"); else if (!c.fam || !b || !b.fam) blk = !isNum(c.main) || !(b && isNum(b.main)) ? "메인자재 값 미확인 연도 포함" : "원문을 읽어 오는 중이라 계산 전";
+      else if (firstSale[fam] && firstSale[fam] > p + "-01-01") blk = p + "년 " + FAM_LABEL[fam] + " 판매 개시(첫 판매 " + firstSale[fam] + ") — 개시 이전 기간이 섞여 비교 불가";
+      return growth(c.fam && c.fam[fam], b && b.fam && b.fam[fam], blk);
+    };
+    G.famStatus = function (basis, y, fam) {       /* 값 대신 상태 문구: 판매 개시 전은 0 이 아니라 '판매 전' */
+      var m = metrics(basis, y); if (!isNum(m.main)) return { code: "unverified", label: "미확인" }; if (!m.fam) return { code: "wait", label: "원문 읽는 중" };
+      var fs = firstSale[fam]; var end = basis === "ann" ? y + "-12-31" : y + "-" + endMD; if (fs && fs > end) return { code: "prelaunch", label: "판매 개시 전" };
+      return { code: "ok", label: null };
+    };
+
   }
 
   function build(src, opt) {
@@ -1387,38 +1485,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     }
     G.metrics = metrics;
 
-    /* ---------- 비교 가능 여부 · 증감 ---------- */
-    function blockFor(basis, y, key) {
-      var p = prevOf(y); if (!p) return "비교할 전년 자료 없음";
-      if (basis === "ann" && y === lastY) return "연중 누계(" + endMD.replace("-", "/") + "까지)라 전년 연간과 직접 비교할 수 없음 — '동일기간' 보기를 사용하세요";
-      if (key === "main" || key === "mainAmt" || key === "mainRate") { if (!mainOK(y)) return y + "년 메인자재 값 미확인(품목명 검증 전)"; if (!mainOK(p)) return p + "년 메인자재 값 미확인(품목명 검증 전)"; if (!led) return "판매 원문을 읽는 중 — 메인자재 첫 판매일 확인 후 표시"; if (firstSale.main) { var pStart = p + "-01-01"; if (firstSale.main > pStart) return p + "년은 메인자재 판매 개시 연도(첫 판매 " + firstSale.main + ")라 연 전체 기간과 비교할 수 없음"; } }
-      if (key === "ratio" || key === "notices") { }
-      return null;
-    }
-    G.blockFor = blockFor;
-    G.growth = function (basis, y, key) {
-      var p = prevOf(y), c = metrics(basis, y), b = p ? metrics(basis, p) : null, blk = blockFor(basis, y, key);
-      var map = { notices: "notices", noticesPour: "noticesPour", awards: "awards", awardAmt: "awardAmt", awardVendors: "awardVendors", sales: "sales", main: "main" };
-      if (key === "ratio") return rateDiff(c.awardRatio, b && b.awardRatio, blk);
-      if (key === "buyRate") return rateDiff(c.cohort && c.cohort.buyRate, b && b.cohort && b.cohort.buyRate, blk);
-      if (key === "mainRate") return rateDiff(c.cohort && c.cohort.mainRate, b && b.cohort && b.cohort.mainRate, blockFor(basis, y, "mainRate"));
-      if (key === "mainShare") return rateDiff(c.mainShare, b && b.mainShare, blockFor(basis, y, "main"));
-      if (key === "cohortBuyAmt") return growth(c.cohort && c.cohort.buyAmt, b && b.cohort && b.cohort.buyAmt, blk);
-      if (!map[key]) return growth(null, null, "알 수 없는 지표");
-      return growth(c[map[key]], b && b[map[key]], key === "main" ? blockFor(basis, y, "main") : blk);
-    };
-    /* 메인 3품목 증감: 기준 기간 전체에 판매가 있었는지(판매 개시 이전 기간 혼재)를 확인 */
-    G.famGrowth = function (basis, y, fam) {
-      var p = prevOf(y), c = metrics(basis, y), b = p ? metrics(basis, p) : null; var blk = null;
-      if (!p) blk = "비교할 전년 자료 없음"; else if (basis === "ann" && y === lastY) blk = blockFor(basis, y, "x"); else if (!c.fam || !b || !b.fam) blk = !isNum(c.main) || !(b && isNum(b.main)) ? "메인자재 값 미확인 연도 포함" : "원문을 읽어 오는 중이라 계산 전";
-      else if (firstSale[fam] && firstSale[fam] > p + "-01-01") blk = p + "년 " + FAM_LABEL[fam] + " 판매 개시(첫 판매 " + firstSale[fam] + ") — 개시 이전 기간이 섞여 비교 불가";
-      return growth(c.fam && c.fam[fam], b && b.fam && b.fam[fam], blk);
-    };
-    G.famStatus = function (basis, y, fam) {       /* 값 대신 상태 문구: 판매 개시 전은 0 이 아니라 '판매 전' */
-      var m = metrics(basis, y); if (!isNum(m.main)) return { code: "unverified", label: "미확인" }; if (!m.fam) return { code: "wait", label: "원문 읽는 중" };
-      var fs = firstSale[fam]; var end = basis === "ann" ? y + "-12-31" : y + "-" + endMD; if (fs && fs > end) return { code: "prelaunch", label: "판매 개시 전" };
-      return { code: "ok", label: null };
-    };
+    attachCompare(G, { prevOf: prevOf, lastY: lastY, endMD: endMD, mainOK: mainOK, firstSale: firstSale, metrics: metrics, led: !!led });
 
     /* ---------- 업체 단위 ---------- */
     var link12 = {}; R12.forEach(function (r) { var id = r["통합ID"]; var t = String(r["연결상태"] || ""); var pr = /낙찰시공사↔이카운트|이카운트 거래처 후보 없음/.test(t) ? 2 : 1; if (!link12[id] || pr > link12[id].pr) link12[id] = { pr: pr, 상태: t, 사유: r["사유"] }; });
@@ -1509,10 +1576,119 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
       });
       return out;
     };
+    /* ---------- 공개용 집계값 내보내기: 업체명·ID·현장명·거래 명세 없이 연도·기간별 합계/건수/비율만 ---------- */
+    var PUB_M = ["basis", "year", "notices", "noticesPour", "awards", "awardAmt", "awardAmtN", "awardAmtMissing", "awardVendors", "awardNames", "noticesWithAward", "unmatchedAwards", "awardRatio", "sales", "main", "mainWhy", "mainShare", "ledgerSales", "salesCheck", "ledgerMain", "mainCheck"];
+    var PUB_C = ["n", "buyN", "buyRate", "mainBuyN", "mainRate", "mainAmt", "mainWhy", "buyAmt", "totalAmt", "amtShare"];
+    function pubMetrics(m) { var o = {}; PUB_M.forEach(function (k) { if (m[k] !== undefined) o[k] = m[k]; }); if (m.fam) o.fam = { "재도장": m.fam["재도장"], "우레탄": m.fam["우레탄"], "에폭시": m.fam["에폭시"] }; else o.fam = null; if (m.cohort) { var c = {}; PUB_C.forEach(function (k) { if (m.cohort[k] !== undefined) c[k] = m.cohort[k]; }); o.cohort = c; } else o.cohort = null; return o; }
+    function pubTrades(basis, y) { var t = {}; awardsOf(basis, y).forEach(function (r) { var k = String(r["공종그룹"] || r["공종"] || "미기재"); var o = t[k] || (t[k] = { n: 0, amt: 0, amtN: 0 }); o.n++; if (isNum(r["낙찰금액"])) { o.amt += r["낙찰금액"]; o.amtN++; } }); return t; }
+    G.exportPublic = function () {
+      var out = { years: years.slice(), lastY: lastY, endMD: endMD, asOf: G.asOf, ledgerReady: !!led, firstSale: { main: firstSale.main, "재도장": firstSale["재도장"], "우레탄": firstSale["우레탄"], "에폭시": firstSale["에폭시"] }, mainOK: {}, metrics: { ann: {}, ytd: {} }, trades: { ann: {}, ytd: {} }, famRules: famRules.map(function (r) { return { fam: r.fam, re: r.re }; }) };
+      years.forEach(function (y) { out.mainOK[y] = mainOK(y); ["ann", "ytd"].forEach(function (b) { out.metrics[b][y] = pubMetrics(metrics(b, y)); out.trades[b][y] = pubTrades(b, y); }); });
+      out.coverage = G.coverage().map(function (c) { return { t: c.t, d: c.d }; }); out.reconcile = G.reconcile().map(function (r) { return { "연도": r["연도"], "항목": r["항목"], "새집계": r["새집계"], "KPI": r["KPI"], "결과": r["결과"] }; });
+      return out;
+    };
     return G;
   }
-  root.B2BGrowth = { DEFAULT_FAM_RULES: DEFAULT_FAM_RULES, build: build, growth: growth, FAMS: FAMS, FAM_LABEL: FAM_LABEL, isNum: isNum, famOf: famOf, nz: nz };
+  /* 공개 집계값(exportPublic 결과)으로 같은 화면 인터페이스를 제공 — 업체·현장 단위 메서드는 제공하지 않는다(restricted) */
+  function buildPublic(pub, opt) {
+    opt = opt || {};
+    var G = { missing: [], years: pub.years.slice(), lastY: pub.lastY, endMD: pub.endMD, asOf: pub.asOf, notes: [], famRules: pub.famRules || DEFAULT_FAM_RULES, ledgerReady: !!pub.ledgerReady, firstSale: pub.firstSale, restricted: true, publicMeta: pub.meta || null };
+    var kRow = {}; (opt.kpi || []).forEach(function (r) { kRow[String(r["연도"])] = r; });
+    function prevOf(y) { var i = G.years.indexOf(y); return i > 0 ? G.years[i - 1] : null; }
+    function mainOK(y) { return !!(pub.mainOK && pub.mainOK[y]); }
+    function metrics(b, y) { return (pub.metrics[b] || {})[y]; }
+    G.prevOf = prevOf; G.kpi = function (y) { return kRow[y] || null; }; G.master = function () { return null; }; G.mainOK = mainOK; G.metrics = metrics;
+    attachCompare(G, { prevOf: prevOf, lastY: G.lastY, endMD: G.endMD, mainOK: mainOK, firstSale: pub.firstSale, metrics: metrics, led: !!pub.ledgerReady });
+    G.coverage = function () { return pub.coverage || []; }; G.reconcile = function () { return pub.reconcile || []; };
+    G.trades = function (b, y) { return ((pub.trades || {})[b] || {})[y] || {}; };
+    G.linkGrade = function () { return { code: "na", label: "비공개", note: "업체별 정보는 공개하지 않습니다" }; }; G.vendorName = function (id, fb) { return fb || ""; };
+    G.awardRows = function () { return []; }; G.cohortRows = function () { return []; }; G.vendorSales = function () { return null; }; G.contributors = function () { return null; }; G.needCheck = function () { return []; }; G.vendorDetail = function () { return null; }; G.findVendors = function () { return []; };
+    return G;
+  }
+  root.B2BGrowth = { DEFAULT_FAM_RULES: DEFAULT_FAM_RULES, build: build, buildPublic: buildPublic, growth: growth, FAMS: FAMS, FAM_LABEL: FAM_LABEL, isNum: isNum, famOf: famOf, nz: nz };
   if (typeof module !== "undefined" && module.exports) module.exports = root.B2BGrowth;
+})(typeof window !== "undefined" ? window : (typeof globalThis !== "undefined" ? globalThis : this));
+
+</script>
+<script>
+/* ============================================================
+   공개용 집계 포장 모듈 — 시트 25탭(원본) → 공개 가능한 집계값(JSON) · 브라우저/Node/Apps Script 공용 (화면 없음)
+   · 원본은 읽기만 한다. 결과는 새 객체이며 원본·시트·업무 기록을 바꾸지 않는다.
+   · 공개 범위: 1.통합KPI(연도별 집계) · 18.선행지표요약(집계) · 성장 분석 집계(연도·기간별 건수·금액·비율·증감 근거)
+     공개하지 않음: 거래처(시공사)·현장·거래 명세, 사업자번호, 판매 원문, 연결 후보 목록, 영업활동 목록
+   · 게시 전 검증: 필수 탭·열 구조 → 기존 KPI 대조(불일치면 게시 중단) → 행 수 급감 → 업체·현장명 누출 검사
+   · 없는 값은 0 으로 채우지 않는다(null + 사유는 growth-core 규칙 그대로).
+   ============================================================ */
+(function (root) {
+  "use strict";
+  var SCHEMA_VER = "b2b-public-kpi/1";
+  var LEDGER = "3.이카운트판매원문";
+  var NEED = ["1.통합KPI", "2.시공사마스터", LEDGER, "4.메인자재구매현황", "5.POUR공고낙찰", "5b.POUR반영공고", "18.선행지표요약"];
+  var KEEP_NOTE = /^(장기 무활동|신규 협력사 활성화율|핵심 협력사 중 장기 무활동)/;       /* 18.선행지표요약 에서 비고를 공개하는 행(숫자만 있는 집계) */
+  var NAME_COLS = { "2.시공사마스터": ["대표업체명", "낙찰시공사_표기", "이카운트_거래처명", "플랫폼_업체명"], "5.POUR공고낙찰": ["낙찰시공사", "현장명"], "5b.POUR반영공고": ["현장명"] };
+  function isNum(v) { return typeof v === "number" && isFinite(v); }
+  function nz(s) { return String(s == null ? "" : s).replace(/\s|아파트|단지|\(|\)|㈜|주식회사/g, ""); }
+  function toObjs(t) { var h = t.header; return t.rows.map(function (r) { var o = {}; for (var i = 0; i < h.length; i++) o[h[i]] = r[i]; return o; }); }
+  /* 안정 해시(변경 감지용 · 보안용 아님) */
+  function hash53(str) { var h1 = 0xdeadbeef, h2 = 0x41c6ce57; for (var i = 0; i < str.length; i++) { var ch = str.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); } h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909); h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909); return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36); }
+
+  /* tabs: { 탭이름: { header:[…], rows:[[…]] } }  opt: { schema, prev, now, sourceModified, extraDeny:[문자열], maxShrink }
+     반환: { ok, errors[], warnings[], payload|null, stats } — ok=false 이면 payload 는 null 이고 게시하지 않는다 */
+  function pack(tabs, opt) {
+    opt = opt || {}; var errors = [], warnings = [], GC = root.B2BGrowth;
+    if (!GC || !GC.build) return { ok: false, errors: ["계산 모듈(growth-core)이 없습니다"], warnings: [], payload: null, stats: {} };
+    /* 1) 구조 검사 */
+    var schema = opt.schema || null;
+    if (schema) Object.keys(schema).forEach(function (n) { var t = tabs[n]; if (!t || !t.header || !t.rows) { errors.push("탭 없음: " + n); return; } var miss = schema[n].filter(function (c) { return t.header.indexOf(c) < 0; }); if (miss.length) errors.push("열 구조 변경: " + n + " (누락 열 " + miss.join(", ") + ")"); });
+    NEED.forEach(function (n) { if (!tabs[n] || !tabs[n].header || !tabs[n].rows) { if (!schema) errors.push("탭 없음: " + n); } });
+    if (errors.length) return { ok: false, errors: errors, warnings: warnings, payload: null, stats: {} };
+    var cache = {}; function O(n) { return cache[n] || (cache[n] = toObjs(tabs[n])); }
+    var led = O(LEDGER), stats = { tabs: Object.keys(tabs).length, ledgerRows: led.length };
+    if (opt.prev && isNum(opt.prev.ledgerRows) && opt.prev.ledgerRows > 0) { var shrink = opt.maxShrink == null ? 0.05 : opt.maxShrink; if (led.length < opt.prev.ledgerRows * (1 - shrink)) errors.push("판매 원문 행 수가 이전 게시본(" + opt.prev.ledgerRows + ")보다 " + Math.round(shrink * 100) + "% 넘게 줄었습니다(" + led.length + ") — 시트 편집 중이거나 데이터가 사라졌을 수 있어 게시를 보류합니다"); }
+    /* 2) 집계 (기본 정의 — 사용자 화면의 이름 변경은 브라우저에서만 적용) */
+    var src = { has: function (n) { return !!tabs[n]; }, objs: O, ledger: function () { return led; } };
+    var model; try { model = GC.build(src, {}); } catch (e) { return { ok: false, errors: ["집계 중 오류: " + (e && e.message || e)], warnings: warnings, payload: null, stats: stats }; }
+    if (model.missing && model.missing.length) errors.push("집계에 필요한 탭 없음: " + model.missing.join(", "));
+    /* 3) 기존 KPI 대조 — 불일치면 게시하지 않는다 */
+    var rec = model.reconcile(), bad = rec.filter(function (r) { return r.결과 === "불일치" && r.항목 !== "낙찰 시공사 수(표기 기준)"; }), okN = rec.filter(function (r) { return r.결과 === "일치"; }).length;
+    bad.forEach(function (r) { errors.push("KPI 대조 불일치: " + r.연도 + " " + r.항목 + " (집계 " + r.새집계 + " ≠ KPI " + r.KPI + ")"); });
+    stats.reconcile = { ok: okN, bad: bad.length, na: rec.filter(function (r) { return r.결과 === "대조 대상 아님"; }).length };
+    if (!model.ledgerReady) errors.push("판매 원문이 비어 있어 게시하지 않습니다");
+    if (errors.length) return { ok: false, errors: errors, warnings: warnings, payload: null, stats: stats };
+    /* 4) 공개 payload (허용 목록 방식: 아래에 적은 것만 나간다) */
+    var kpi = tabs["1.통합KPI"];
+    var lead = O("18.선행지표요약").map(function (r) { var lab = String(r["지표"] == null ? "" : r["지표"]); return [lab, r["값"] == null ? null : r["값"], r["기준"] == null ? null : r["기준"], KEEP_NOTE.test(lab) && r["비고"] != null ? r["비고"] : null]; });
+    var pub = model.exportPublic();
+    var body = { tabs: { "1.통합KPI": { header: kpi.header.slice(), rows: kpi.rows.map(function (r) { return r.slice(); }) }, "18.선행지표요약": { header: ["지표", "값", "기준", "비고"], rows: lead } }, growth: pub };
+    var bodyStr = JSON.stringify(body), h = hash53(bodyStr);
+    var payload = { schema: SCHEMA_VER, meta: { hash: h, generatedAt: opt.now || new Date().toISOString(), asOf: model.asOf, sourceModified: opt.sourceModified || null, source: "구글시트 25개 탭 → 자동 집계(공개용 집계값)", scope: "연도·기간별 집계값만 공개 · 시공사·현장·거래 명세, 사업자번호, 판매 원문은 비공개", calc: "growth-core v1", tabsRead: stats.tabs, ledgerRows: led.length, kpiCheck: { match: okN, mismatch: 0 }, bytes: bodyStr.length }, tabs: body.tabs, growth: body.growth };
+    var text = JSON.stringify(payload);
+    /* 5) 누출 검사: 업체·현장명(정규화 4자 이상)·내부 금지어가 한 글자라도 나오면 게시하지 않는다 */
+    var hay = nz(text), leaks = [], seen = {};
+    Object.keys(NAME_COLS).forEach(function (n) { if (!tabs[n]) return; O(n).forEach(function (r) { NAME_COLS[n].forEach(function (c) { var v = nz(r[c]); if (v.length >= 4 && !seen[v]) { seen[v] = 1; if (hay.indexOf(v) >= 0) leaks.push(n + "." + c); } }); }); });
+    (opt.extraDeny || []).forEach(function (w) { var v = nz(w); if (v.length >= 2 && hay.indexOf(v) >= 0) leaks.push("금지어"); });
+    if (leaks.length) return { ok: false, errors: ["공개 데이터에 업체·현장명이 포함되어 게시를 중단했습니다(" + leaks.slice(0, 5).join(", ") + (leaks.length > 5 ? " 외 " + (leaks.length - 5) + "건" : "") + ")"], warnings: warnings, payload: null, stats: stats };
+    stats.bytes = text.length; stats.hash = h;
+    if (text.length > 120000) warnings.push("공개 데이터가 " + text.length + "자 — Apps Script 저장 한도(15만 자)에 가깝습니다");
+    return { ok: true, errors: [], warnings: warnings, payload: payload, stats: stats };
+  }
+
+  /* 받은 JSON 이 우리 형식인지 확인(브라우저·테스트 공용). 실패 시 사유 문자열, 통과 시 null */
+  function validate(p) {
+    if (!p || typeof p !== "object") return "형식 오류(객체 아님)";
+    if (p.schema !== SCHEMA_VER) return "지원하지 않는 형식 버전: " + String(p.schema);
+    if (!p.meta || typeof p.meta.hash !== "string" || !p.meta.generatedAt) return "메타 정보 누락";
+    var k = p.tabs && p.tabs["1.통합KPI"], l = p.tabs && p.tabs["18.선행지표요약"];
+    if (!k || !Array.isArray(k.header) || !Array.isArray(k.rows) || !k.rows.length) return "1.통합KPI 누락";
+    if (!l || !Array.isArray(l.rows)) return "18.선행지표요약 누락";
+    var g = p.growth; if (!g || !Array.isArray(g.years) || !g.years.length || !g.metrics || !g.metrics.ann || !g.metrics.ytd) return "성장 분석 집계 누락";
+    for (var i = 0; i < g.years.length; i++) { var y = g.years[i]; if (!g.metrics.ann[y] || !g.metrics.ytd[y]) return "연도별 집계 누락: " + y; }
+    if (!/^\d{2}-\d{2}$/.test(String(g.endMD || ""))) return "기준일 형식 오류";
+    return null;
+  }
+
+  root.B2BPublicPack = { SCHEMA_VER: SCHEMA_VER, pack: pack, validate: validate, hash53: hash53, NEED: NEED };
+  if (typeof module !== "undefined" && module.exports) module.exports = root.B2BPublicPack;
 })(typeof window !== "undefined" ? window : (typeof globalThis !== "undefined" ? globalThis : this));
 
 </script>
@@ -1543,6 +1719,9 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   function toObjs(t) { return t.rows.map(function (r) { var o = {}; t.header.forEach(function (h, i) { o[h] = r[i]; }); return o; }); }
   function objs(name) { if (OC[name]) return OC[name]; var t = T(name); return (OC[name] = t ? toObjs(t) : []); }
   function has(name) { return !!T(name); }
+  /* 공개 보기(기본): 로그인 없이 서버가 집계해 둔 공개용 집계값만 쓴다. 시공사·현장·거래 명세 화면은 상세 보기(로그인)에서만 */
+  function isPub() { return S.state.mode === "public"; }
+  function pubWanted() { return S.viewMode() === "public"; }
   function kpiRow(y) { return objs("1.통합KPI").filter(function (r) { return String(r["연도"]) === String(y); })[0] || null; }
   function kpiVal(y, c) { var k = kpiRow(y); return k ? k[c] : null; }
   function years() { return objs("1.통합KPI").map(function (r) { return String(r["연도"]); }); }
@@ -1601,7 +1780,43 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     else h += '<p class="card-sub">로그인·시트 정보·탭 읽기·판매 원문 첫 구간을 순서대로 확인해 어디서 막히는지 보여 줍니다. 읽기 전용이며 시트를 수정하지 않습니다.</p>';
     return h + "</div>";
   }
+  function pubStatusBar() {
+    var st = S.state, sy = st.sync, p = st.pub || {}, pub = p.data, meta = (pub && pub.meta) || {}, serve = p.serve || {}, cls, label;
+    if (isPub() && sy.stale) { cls = "fallback"; label = !p.error && serve.state && serve.state !== "ok" ? "공개 집계 · 새 집계 게시 보류 (이전 정상 집계)" : "공개 집계 · 이전 데이터 (갱신 확인 실패)"; }
+    else if (isPub()) { cls = "live"; label = "공개 집계 · 자동 갱신 · 마지막 확인 " + hms(p.checkedAt); }
+    else if (sy.status === "syncing" || st.loading) { cls = "embedded"; label = "공개 집계 불러오는 중"; }
+    else if (st.mode === "fallback" && !S.noData()) { cls = "fallback"; label = "공개 집계를 불러오지 못함 · 저장된 검증본 표시 중"; }
+    else { cls = "fallback"; label = "공개 집계를 불러오지 못함"; }
+    var sub = isPub() ? "기준일 " + esc(meta.asOf || "") + " · 서버 집계 " + esc(hhmm(meta.generatedAt)) + " · 시트 변경 감지 " + esc(hhmm(meta.sourceModified)) + " · 다음 확인 " + hms(sy.nextAt) + " (" + ivText(sy.interval) + "마다 자동)" : (sy.status === "syncing" ? progHtml() : esc(sy.message || ""));
+    var h = '<div class="ks-bar"><span class="ks-src ' + cls + '"><span class="dot"></span>' + esc(label) + '</span><span class="mini">' + sub + '</span><span class="sp"></span><button class="btn ghost" data-kact="refresh"' + (st.loading ? " disabled" : "") + ">" + (st.loading ? "확인 중…" : "지금 확인") + '</button><button class="btn ghost" data-kact="view" data-id="link">상세 보기(로그인)</button>' + (isPub() ? '<button class="btn ghost" data-kact="integrity">검증 정보</button>' : "") + "</div>";
+    h += '<div class="ks-note"><b>공개 보기</b> — 로그인 없이 누구나 볼 수 있는 <b>집계값</b>입니다. 시공사·현장·거래 명세와 판매 원문은 포함하지 않으며(비공개), 시트를 공유받은 직원은 [상세 보기(로그인)]에서 기존처럼 근거 목록을 열람합니다. 2022~2025년은 확정 실적 · 2026년은 기준일까지 누계 · 시트가 바뀌면 서버가 자동으로 다시 집계합니다.</div>';
+    if (isPub() && sy.stale) h += '<div class="ks-warn stale"><b>이전 데이터입니다.</b> ' + esc(sy.message) + (p.checkedAt ? " 마지막 정상 확인: " + hhmm(p.checkedAt) : "") + '<div class="ks-tools" style="margin:8px 0 0"><button class="btn" data-kact="refresh">다시 시도</button></div></div>';
+    return h;
+  }
+  function pubWaiting() {
+    var st = S.state, sy = st.sync, busy = st.loading || sy.status === "syncing"; var code = sy.lastError && sy.lastError.code;
+    var title = busy ? "공개 집계를 불러오는 중입니다" : code === "PUBCONF" ? "공개 데이터 주소가 설정되지 않았습니다" : "공개 집계를 불러오지 못했습니다";
+    var body = busy ? "서버가 자동 집계해 둔 공개용 집계값을 가져옵니다. 잠시만 기다려 주세요." : code === "PUBCONF" ? "관리자가 공개 집계 서버(Apps Script) 주소를 설정해야 이 화면에 숫자가 표시됩니다. 임의의 수치는 표시하지 않습니다." : (sy.message || "원인을 확인하지 못했습니다") + " — 임의의 수치는 표시하지 않습니다.";
+    var h = '<div class="card core6"><div class="card-h"><h2>팀장 핵심 지표 6</h2><span class="badge rev">' + (busy ? "불러오는 중" : "연결 대기") + '</span></div><div class="tiles six">' + ["① 전체 자재 순매출", "② POUR 낙찰", "③ POUR 반영 공고", "④ 메인 자재 순매출", "⑤ 공식 L2→L3 전환율", "⑥ 장기 무활동 협력사"].map(function (l) { return '<div class="tile"><div class="l">' + esc(l) + '</div><div class="v na">' + (busy ? "불러오는 중" : "확인 불가") + '</div></div>'; }).join("") + "</div></div>";
+    return h + '<div class="card"><div class="card-h"><h2>' + esc(title) + '</h2></div><p class="card-sub">' + esc(body) + '</p><div class="ks-tools" style="margin:0"><button class="btn" data-kact="refresh">다시 시도</button><button class="btn ghost" data-kact="view" data-id="link">상세 보기(로그인)</button></div></div>';
+  }
+  function pubVerifyModal() {
+    var p = S.state.pub || {}, pub = p.data; if (!pub) return ""; var m = pub.meta || {}, g = pub.growth || {}, rec = g.reconcile || [], okn = rec.filter(function (r) { return r["결과"] === "일치"; }).length, bad = rec.filter(function (r) { return r["결과"] === "불일치"; }), na = rec.filter(function (r) { return r["결과"] === "대조 대상 아님"; }).length;
+    var kv = [["출처", m.source], ["공개 범위", m.scope], ["기준일", m.asOf], ["서버 집계 시각", hhmm(m.generatedAt)], ["시트 변경 감지", hhmm(m.sourceModified)], ["읽은 탭 수", m.tabsRead], ["판매 원문 행 수(집계에만 사용, 공개 안 함)", num(m.ledgerRows)], ["기존 KPI 대조", "일치 " + okn + " · 불일치 " + bad.length + " · 대조 대상 아님 " + na], ["집계 버전", (m.calc || "") + " · " + pub.schema], ["내용 해시", m.hash], ["서버 상태", (p.serve && p.serve.state) || "—"], ["서버 메시지", (p.serve && p.serve.message) || "없음"]];
+    return '<div class="ks-modal" data-kact="iclose-bg"><div class="box"><div class="hd"><h2>공개 집계 검증 정보</h2><button class="x" data-kact="iclose">닫기 ✕</button></div><div class="bd"><div class="kv">' + kv.map(function (x) { return "<span>" + esc(x[0]) + "</span><span>" + esc(x[1] == null ? "—" : x[1]) + "</span>"; }).join("") + '</div><p class="card-sub">서버는 게시 전에 ① 25개 탭·열 구조 ② 기존 KPI와의 대조 ③ 판매 원문 행 수 급감 ④ 업체·현장명 포함 여부를 검사하고, 하나라도 실패하면 새 값을 게시하지 않고 이전 정상 집계를 유지합니다.</p></div></div></div>';
+  }
+  function reviewPubCard() {
+    var Lr = leading("검토 대상"); return '<div class="card"><div class="card-h"><h2>L2→L3 검토 ' + (Lr ? esc(Lr["값"]) + "건" : "—") + ' — 공식 계산 제외 · 별도 관리</h2><span class="badge rev">목록 비공개</span></div><p class="card-sub">검토 대상의 시공사·현장 목록과 증빙은 공개 보기에 포함하지 않습니다. 건수는 위 선행지표와 같은 집계값입니다. 시트를 공유받은 직원은 [상세 보기(로그인)]에서 목록을 확인합니다.</p></div>';
+  }
+  function restrictedModal() {
+    return '<div class="ks-modal" data-kact="dclose-bg"><div class="box" role="dialog" aria-modal="true"><div class="hd"><h2>상세 근거는 비공개입니다</h2><button class="x" data-kact="dclose">닫기 ✕</button></div><div class="bd"><p class="card-sub">이 카드의 근거 목록에는 시공사·현장·거래 명세가 들어 있어 공개 보기에서는 제공하지 않습니다. 카드의 숫자와 연도별 추이는 화면의 집계값 그대로입니다. 시트를 공유받은 직원은 <b>상세 보기(로그인)</b>에서 기존처럼 근거 목록을 열람할 수 있습니다.</p><div class="ks-tools" style="margin:0"><button class="btn" data-kact="view" data-id="link">상세 보기(로그인)로 이동</button><button class="btn ghost" data-kact="dclose">닫기</button></div></div></div></div>';
+  }
+  function modeCard() {
+    var pubm = pubWanted(); var configured = S.configured(S.settings());
+    return '<div class="card"><div class="card-h"><h2>보기 방식</h2><span class="badge' + (pubm ? "" : " rev") + '">현재: ' + (pubm ? "공개 보기" : "상세 보기(로그인)") + '</span></div><p class="card-sub"><b>공개 보기(기본)</b> — 로그인·시트 연결 없이 어떤 컴퓨터·브라우저·계정에서도 같은 집계값이 보입니다. 서버가 구글시트를 자동으로 읽어 집계·검증한 값만 제공하며 시공사·현장·거래 명세는 없습니다.<br><b>상세 보기(로그인)</b> — 시트를 공유받은 직원이 Google 로그인으로 시트를 직접 읽어 근거 목록·시공사 상세까지 봅니다(기존 방식 그대로, 조회한 데이터는 메모리에만 두고 이 브라우저에 저장하지 않습니다).</p><div class="ks-tools" style="margin:0"><button class="btn' + (pubm ? "" : " ghost") + '" data-kact="vmode" data-id="public">공개 보기</button><button class="btn' + (pubm ? " ghost" : "") + '" data-kact="vmode" data-id="detail">상세 보기(로그인)' + (configured ? "" : " — 연결 설정 필요") + "</button></div></div>";
+  }
   function statusBar() {
+    if (pubWanted()) return pubStatusBar();
     var st = S.state, sy = st.sync, m = st.meta || {}, em = st.embeddedMeta || {};
     var nd = S.noData(), live = st.mode === "live", signedBefore = !!(S.settings() || {}).signedBefore;
     var cls, label;
@@ -1622,7 +1837,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     var needBtn = st.needSignIn || sy.status === "auth";
     var h = '<div class="ks-bar"><span class="ks-src ' + cls + '"><span class="dot"></span>' + esc(label) + '</span><span class="mini">' + sub + '</span><span class="sp"></span>' +
       (needBtn ? '<button class="btn" data-kact="gsignin">' + (signedBefore ? "로그인 상태 재확인" : "Google 로그인으로 연결") + "</button>" : "") +
-      '<button class="btn ghost" data-kact="refresh"' + (st.loading ? " disabled" : "") + ">" + (st.loading ? "동기화 중…" : "지금 동기화") + '</button>' + (st.loading ? '<button class="btn ghost" data-kact="cancelsync">취소</button>' : "") + '<button class="btn ghost" data-kact="view" data-id="link">연결 설정</button><button class="btn ghost" data-kact="integrity">정합성 점검</button>' +
+      '<button class="btn ghost" data-kact="refresh"' + (st.loading ? " disabled" : "") + ">" + (st.loading ? "동기화 중…" : "지금 동기화") + '</button>' + (st.loading ? '<button class="btn ghost" data-kact="cancelsync">취소</button>' : "") + '<button class="btn ghost" data-kact="view" data-id="link">연결 설정</button><button class="btn ghost" data-kact="vmode" data-id="public">공개 보기</button><button class="btn ghost" data-kact="integrity">정합성 점검</button>' +
       ((st.signedIn || (live && m.auth === "google")) ? '<button class="btn ghost" data-kact="gsignout">로그아웃</button>' : "") + "</div>";
     h += '<div class="ks-note">2022~2025년은 확정 과거 실적(변경은 승인 정정만) · 2026년은 지속 갱신(기준일 ' + esc(em.asOf || "2026-10-20") + ') · 공식 L2→L3 전환율은 검증된 확정 건만, 검토 건은 별도 표시 · <b>모든 지표 카드를 클릭하면 근거 목록이 열립니다</b></div>';
     if (live && sy.stale) h += '<div class="ks-warn stale"><b>이전 데이터입니다.</b> ' + esc(sy.message) + " 마지막 정상 동기화: " + hhmm(sy.lastOkAt) + '<div class="ks-tools" style="margin:8px 0 0"><button class="btn" data-kact="refresh">다시 시도</button><button class="btn ghost" data-kact="diag">연결 진단</button></div></div>';
@@ -1644,7 +1859,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     h += table("schema", [{ k: "탭" }, { k: "행수", l: "행 수", r: 1, fmt: num }, { k: "상태", raw: 1, f: function (o) { return '<span class="st ' + (o.상태 === "정상" ? "ok" : o.상태 === "원문(필요 시 조회)" ? "" : "bad") + '">' + esc(o.상태) + "</span>"; }, csv: function (o) { return o.상태; } }, { k: "비고", wrap: 1 }], exp.map(function (n) { var inMeta = live && m.tabs && m.tabs[n]; var t = live ? (st.tabs && st.tabs[n]) : null; return { 탭: n, 행수: live ? (n === S.LEDGER ? (sy.ledgerCount != null ? sy.ledgerCount : null) : (t ? t.rows.length : null)) : null, 상태: !live ? "—" : n === S.LEDGER ? (iss.missingTabs.indexOf(n) >= 0 ? "누락" : badMap[n] ? "구조 변경" : "원문(필요 시 조회)") : iss.missingTabs.indexOf(n) >= 0 ? "누락" : badMap[n] ? "구조 변경" : inMeta ? "정상" : "—", 비고: badMap[n] ? "누락 열: " + badMap[n].missing.join(", ") : iss.missingTabs.indexOf(n) >= 0 ? "시트에 탭이 없습니다 — 0으로 표시하지 않음" : "" }; }), { per: 30 });
     return h + "</div>" + diagCard();
   }
-  function nav() { var items = [["growth", "성장 분석"], ["home", "요약"], ["sales", "매출·원문"], ["awards", "낙찰"], ["vendors", "시공사"], ["activity", "영업활동"], ["leading", "선행지표"], ["link", "연결 설정"]]; return '<div class="ks-nav">' + items.map(function (x) { return '<button data-kact="view" data-id="' + x[0] + '"' + (V.view === x[0] ? ' aria-current="true"' : "") + ">" + x[1] + "</button>"; }).join("") + "</div>"; }
+  function nav() { var items = pubWanted() ? [["growth", "성장 분석"], ["home", "요약"], ["link", "상세 보기(로그인)"]] : [["growth", "성장 분석"], ["home", "요약"], ["sales", "매출·원문"], ["awards", "낙찰"], ["vendors", "시공사"], ["activity", "영업활동"], ["leading", "선행지표"], ["link", "연결 설정"]]; return '<div class="ks-nav">' + items.map(function (x) { return '<button data-kact="view" data-id="' + x[0] + '"' + (V.view === x[0] ? ' aria-current="true"' : "") + ">" + x[1] + "</button>"; }).join("") + "</div>"; }
   function yearChips(cur, act) { return '<div class="ks-chips">' + years().map(function (y) { return '<button data-kact="' + act + '" data-id="' + y + '"' + (cur === y ? ' aria-current="true"' : "") + ">" + y + (y === "2026" ? " (~10/20)" : "") + "</button>"; }).join("") + "</div>"; }
 
   /* ---------- 팀장 핵심 지표 6 (최신 연도 · 전년 동일기간 대비, 1.통합KPI 탭 값만 사용) ---------- */
@@ -1662,7 +1877,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     return h + "</div></div>";
   }
   function integrityModal() {
-    if (!V.integrity) return ""; var r = V.integrity; if (!Object.keys(r).length) return '<div class="ks-modal" data-kact="iclose-bg"><div class="box"><div class="hd"><h2>데이터 정합성 점검</h2><button class="x" data-kact="iclose">닫기 ✕</button></div><div class="bd">' + loadingBox() + '<div class="src">원문 원장을 먼저 읽은 뒤 11개 카드를 대조합니다.</div></div></div></div>'; var rows = []; var ok = 0, bad = 0, na = 0, missing = 0, ref = 0;
+    if (!V.integrity) return ""; if (V.integrity.pub) return pubVerifyModal(); var r = V.integrity; if (!Object.keys(r).length) return '<div class="ks-modal" data-kact="iclose-bg"><div class="box"><div class="hd"><h2>데이터 정합성 점검</h2><button class="x" data-kact="iclose">닫기 ✕</button></div><div class="bd">' + loadingBox() + '<div class="src">원문 원장을 먼저 읽은 뒤 11개 카드를 대조합니다.</div></div></div></div>'; var rows = []; var ok = 0, bad = 0, na = 0, missing = 0, ref = 0;
     Object.keys(r).forEach(function (id) { Object.keys(r[id]).forEach(function (k) { var x = r[id][k]; if (x.missing) { missing++; rows.push({ 카드: DETAILS[id].title, 보기: k, 행수: "", 결과: "탭 없음", 내용: x.missing }); return; } if (x.loading) { rows.push({ 카드: DETAILS[id].title, 보기: k, 행수: "", 결과: "원문 미적재", 내용: "원문을 먼저 불러온 뒤 다시 실행" }); return; } if (x.error) { bad++; rows.push({ 카드: DETAILS[id].title, 보기: k, 행수: "", 결과: "오류", 내용: x.error }); return; } if (!x.checks.length) { ref++; rows.push({ 카드: DETAILS[id].title, 보기: k, 행수: x.rows, 결과: "참고 보기", 내용: "대조 항목 없는 참고 목록(연도별 표·전체 목록 등)" }); return; } x.checks.forEach(function (c) { var cls = c.slice(0, c.indexOf(" ")); if (cls === "ok") ok++; else if (cls === "bad") bad++; else na++; rows.push({ 카드: DETAILS[id].title, 보기: k, 행수: x.rows, 결과: cls === "ok" ? "일치" : cls === "bad" ? "불일치" : "대조 대상 아님", 내용: c.slice(c.indexOf(" ") + 1) }); }); }); });
     var sum2 = "일치 " + ok + " · 불일치 " + bad + " · 대조 대상 아님(카드 값 없음) " + na + " · 참고 보기 " + ref + (missing ? " · 탭 없음 " + missing : "");
     var h = '<div class="ks-modal" data-kact="iclose-bg"><div class="box"><div class="hd"><h2>데이터 정합성 점검 — 카드 ↔ 근거 목록</h2><span class="chk ' + (bad ? "bad" : "ok") + '" style="margin:0">' + esc(sum2) + '</span><button class="x" data-kact="iclose">닫기 ✕</button></div><div class="bd"><div class="src">현재 표시 중인 데이터(' + (S.state.mode === "live" ? "구글시트 실시간" : "저장된 데이터") + ')로 11개 카드 × 연도 × 하위 보기의 건수·합계를 1.통합KPI·18.선행지표요약 값과 대조한 결과입니다. 시트 원천이 바뀌었는데 KPI 탭이 재계산되지 않으면 여기서 불일치로 드러납니다.</div>';
@@ -1691,7 +1906,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
       tile("신규 협력사 활성화율", Na ? pc(Na["값"]) : null, Na ? esc(Na["비고"]) : "", "", "activation") + "</div>";
     var cols = [{ k: "연도" }, { k: "데이터구분" }, { k: "전체자재순매출", l: "전체 순매출", r: 1, fmt: won }, { k: "메인자재순매출", l: "메인 순매출", r: 1, fmt: won }, { k: "메인비중", r: 1, fmt: pc }, { k: "POUR낙찰_건수", l: "POUR 낙찰", r: 1, fmt: num }, { k: "낙찰시공사수", l: "낙찰 시공사", r: 1, fmt: num }, { k: "POUR반영공고_건수", l: "POUR 공고", r: 1, fmt: num }, { k: "타사공법낙찰_건수", l: "타사공법 낙찰", r: 1, fmt: num }, { k: "기술자문문의_건수", l: "기술자문", r: 1, fmt: num }, { k: "컨설팅요청_건수", l: "컨설팅", r: 1, fmt: num }, { k: "L3전환_확정_공식", l: "L3 확정", r: 1 }, { k: "L2L3전환율_공식", l: "전환율(공식)", r: 1, fmt: pc }, { k: "L3전환_검토대상", l: "검토", r: 1 }];
     h += '<div class="card-h" style="margin-top:4px"><h2>연도별 비교 (1.통합KPI 탭)</h2></div>' + table("kpiy", cols, objs("1.통합KPI"), { per: 10 }) + "</div>";
-    h += reviewCard();
+    h += isPub() ? reviewPubCard() : reviewCard();
     return h;
   }
   function chartsCard() {
@@ -1771,9 +1986,9 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   function chk(cardLabel, cardVal, listLabel, listVal, fmt) { var ok; if (typeof cardVal === "string" && !isNum(Number(cardVal))) return { cls: "na", text: cardLabel + " ‘" + cardVal + "’ — 카드에 수치가 없어 대조 대상 아님 (" + listLabel + " " + (listVal == null ? "—" : (fmt && fmt(listVal) != null ? fmt(listVal) : listVal)) + ")" }; if (cardVal == null || listVal == null) ok = null; else if (isNum(cardVal) && isNum(listVal)) ok = Math.abs(cardVal - listVal) < 0.5 || Math.abs(cardVal - listVal) <= 0.00005; else ok = String(cardVal) === String(listVal); var f = function (v) { if (v == null) return "확인 불가"; var t = fmt ? fmt(v) : null; return t == null ? String(v) : t; }; return { cls: ok === null ? "na" : ok ? "ok" : "bad", text: cardLabel + " " + f(cardVal) + (ok === null ? " · 대조 불가 (" + listLabel + " " + f(listVal) + ")" : ok ? " = " + listLabel + " " + f(listVal) + " · 일치" : " ≠ " + listLabel + " " + f(listVal) + " · 불일치") }; }
   var NEEDS = { salesTotal: ["1.통합KPI"], mainSales: ["4.메인자재구매현황"], awards: ["5.POUR공고낙찰"], notices: ["5b.POUR반영공고"], tech: ["7.기술자문문의"], mainVendors: ["4.메인자재구매현황"], l2l3Rate: ["16.L2L3전환", "16b.L2L3시공사별", "16c.L2L3판정집계", "18.선행지표요약"], review: ["16.L2L3전환", "18.선행지표요약"], avgDays: ["16.L2L3전환", "18.선행지표요약"], inactive: ["17.장기무활동", "18.선행지표요약"], activation: ["7b.플랫폼가입현황", "18.선행지표요약"] };
   function missingNeeds(id) { return (NEEDS[id] || []).filter(function (t) { return !has(t); }); }
-  function openDetail(id) { var D = DETAILS[id]; if (!D) return; V.detail = { id: id, year: V.year, sub: D.subs[0][0], q: "", sort: null, inc: false }; V.page["detail"] = 0; }
+  function openDetail(id) { var D = DETAILS[id]; if (!D) return; if (isPub()) { V.detail = { restricted: true, id: id }; return; } V.detail = { id: id, year: V.year, sub: D.subs[0][0], q: "", sort: null, inc: false }; V.page["detail"] = 0; }
   function detailModal() {
-    var d = V.detail; if (!d) return ""; var D = DETAILS[d.id]; var res;
+    var d = V.detail; if (!d) return ""; if (d.restricted) return restrictedModal(); var D = DETAILS[d.id]; var res;
     var mn = missingNeeds(d.id);
     if (mn.length) res = { missing: "시트 구조 경고 — 필요한 탭이 없거나 열 구조가 바뀌어 이 카드는 표시하지 않습니다(0으로 대체하지 않음): " + mn.join(", ") };
     else { try { res = D.build(d); } catch (e) { res = { missing: "목록 생성 오류: " + (e.message || e) }; } }
@@ -1898,10 +2113,11 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   }
 
   /* ---------- 연결 설정 ---------- */
-  function link() {
+  function link() { return modeCard() + link0(); }
+  function link0() {
     var s = V.draft || S.settings() || {}; var stt = S.state; var m = stt.meta || {}, em = stt.embeddedMeta || {};
     var mode = (s.mode || "google") === "appsscript" ? "appsscript" : "google";
-    var h = '<div class="card"><div class="card-h"><h2>구글시트 연결 설정 (읽기 전용)</h2><span class="badge">' + (S.configured(s) && !V.draft ? "설정 저장됨 · " + hhmm(s.savedAt) : V.draft ? "입력 중(미저장)" : "미설정") + "</span>" + (stt.signedIn ? '<span class="st ok">Google 로그인됨</span>' : "") + "</div>";
+    var h = '<div class="card"><div class="card-h"><h2>상세 보기 연결 설정 (읽기 전용 · 시트를 공유받은 직원용)</h2><span class="badge">' + (S.configured(s) && !V.draft ? "설정 저장됨 · " + hhmm(s.savedAt) : V.draft ? "입력 중(미저장)" : "미설정") + "</span>" + (stt.signedIn ? '<span class="st ok">Google 로그인됨</span>' : "") + "</div>";
     h += '<div class="ks-chips"><button data-kact="lmode" data-id="google"' + (mode === "google" ? ' aria-current="true"' : "") + '>A. Google 로그인 (권장)</button><button data-kact="lmode" data-id="appsscript"' + (mode === "appsscript" ? ' aria-current="true"' : "") + ">B. Apps Script 공유 키 (내부 시험용)</button></div>";
     if (mode === "google") {
       h += '<p class="card-sub"><b>승인된 직원만 열람:</b> 시트를 공유받은 Google 계정으로 로그인해 Sheets API 로 직접 읽습니다. <b>단, 시트의 일반 액세스가 ‘링크가 있는 모든 사용자’이면 로그인 없이도 누구나 읽을 수 있어 이 통제가 무효입니다 — 반드시 ‘제한됨’으로 두세요.</b> 공유 키가 없고, 열람 회수는 시트 공유 해제로 끝납니다. 아래 값은 비밀이 아니며(클라이언트 ID·시트 ID) 이 브라우저에만 저장됩니다. 로그인 토큰은 탭을 닫으면 사라집니다.</p>';
@@ -1914,9 +2130,10 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     }
     if (V.linkMsg) h += '<div class="msg ' + V.linkMsg.cls + '">' + V.linkMsg.html + "</div>";
     h += "</div></div>";
+    if (pubWanted()) return h + '<div class="card"><div class="card-h"><h2>상세 보기를 쓰려면</h2></div><ol class="ol"><li>시트 소유자가 내 Google 계정에 시트를 <b>뷰어</b>로 공유합니다.</li><li>관리자에게 OAuth 클라이언트 ID와 시트 ID를 받아 위에 입력합니다(이 브라우저에만 저장).</li><li>[저장 후 로그인·새로고침]을 누르면 상세 보기로 전환됩니다. 공개 보기로 돌아가려면 위 [공개 보기]를 누르세요.</li></ol><p class="mini">공개 보기만 필요하면 아무 설정도 필요 없습니다.</p></div>';
     h += syncInfoCard();
     h += '<div class="card"><div class="card-h"><h2>현재 데이터 상태</h2></div><div class="kv"><span>표시 중</span><span>' + (stt.mode === "live" ? "구글시트 실시간 (" + hhmm(stt.at) + ")" : stt.mode === "fallback" ? "저장된 데이터 — 연결 실패: " + esc(stt.error) : (S.noData() ? "연결 대기 (데이터 없음)" : "저장된 데이터 (연결 미설정)")) + "</span><span>저장된 데이터</span><span>" + (S.noData() ? "없음 — 이 파일에는 회사 데이터가 내장되어 있지 않습니다" : esc(em.version || "") + " · 기준일 " + esc(em.asOf || "") + " · 내보내기 " + hhmm(em.exportedAt) + " · " + esc(em.verified || "")) + "</span><span>연결 시트</span><span>" + (stt.mode === "live" ? esc(m.title || "") + " · " + (m.auth === "google" ? "Google 로그인 · " : "공유 키 · ") + (m.lastUpdated ? "수정 " + hhmm(m.lastUpdated) : "응답 " + hhmm(m.servedAt)) + " · ID " + esc(m.spreadsheetId || "") + (m.missingTabs && m.missingTabs.length ? " · 시트에 없는 탭 " + m.missingTabs.length + "개" : "") : "—") + "</span><span>확정 연도 대조</span><span>" + (stt.mode === "live" ? (stt.frozenDiff.length ? stt.frozenDiff.length + "건 차이 (요약 화면 경고 참고)" : "2022~2025 KPI 시트 값 = 검증본 값") : "실시간 연결 시 자동 대조") + "</span></div>";
-    var tabs = Object.keys(em.tabs || {}); if (!tabs.length && stt.mode === "live" && m.tabs) tabs = Object.keys(m.tabs); if (tabs.length) h += '<div class="card-h" style="margin-top:14px"><h2>탭별 행 수 (저장된 데이터 ↔ 시트)</h2></div>' + table("tabs", [{ k: "탭" }, { k: "저장", r: 1, fmt: num }, { k: "시트", r: 1, fmt: num }, { k: "비고" }], tabs.map(function (t) { var a = em.tabs[t].rows, b = stt.mode === "live" && m.tabs && m.tabs[t] ? m.tabs[t].rows : null; return { 탭: t, 저장: a, 시트: b, 비고: b == null ? (stt.mode === "live" ? "시트에 탭 없음" : "") : a == null ? "시트에서 읽음" : a === b ? "일치" : "차이 " + (b - a) }; }), { per: 30 });
+    var tabs = Object.keys(em.tabs || {}); if (!tabs.length && stt.mode === "live" && m.tabs) tabs = Object.keys(m.tabs); if (tabs.length) h += '<div class="card-h" style="margin-top:14px"><h2>탭별 행 수 (저장된 데이터 ↔ 시트)</h2></div>' + table("tabs", [{ k: "탭" }, { k: "저장", r: 1, fmt: num }, { k: "시트", r: 1, fmt: num }, { k: "비고" }], tabs.map(function (t) { var a = em.tabs && em.tabs[t] ? em.tabs[t].rows : null, b = stt.mode === "live" && m.tabs && m.tabs[t] ? m.tabs[t].rows : null; return { 탭: t, 저장: a, 시트: b, 비고: b == null ? (stt.mode === "live" ? "시트에 탭 없음" : "") : a == null ? "시트에서 읽음" : a === b ? "일치" : "차이 " + (b - a) }; }), { per: 30 });
     h += "</div>";
     h += '<div class="card"><div class="card-h"><h2>설정 순서</h2></div><div class="two"><div><b>A. Google 로그인 (권장)</b><ol class="ol"><li>시트 소유자: 시트를 열람할 직원 계정에 <b>뷰어</b>로 공유</li><li>관리자: Google Cloud 콘솔에서 프로젝트 생성 → Google Sheets API 사용 설정 → OAuth 동의 화면(외부·테스트 사용자에 직원 이메일 추가) → 사용자 인증 정보 → OAuth 클라이언트 ID(웹 애플리케이션, 승인된 JavaScript 원본 = 이 사이트 주소)</li><li>직원: 위 입력란에 클라이언트 ID·시트 ID 입력 → Google 로그인 후 연결 테스트 → 저장</li></ol></div><div><b>B. Apps Script 공유 키</b><ol class="ol"><li>시트 → 확장 프로그램 → Apps Script → Code.gs 붙여넣기</li><li>스크립트 속성 ACCESS_KEY(32자 이상)</li><li>배포 → 웹 앱 → 실행 사용자 "나" · 액세스 "모든 사용자" → URL 복사</li><li>URL·키 입력 → 연결 테스트 → 저장</li></ol></div></div><p class="mini">두 방식 모두 시트를 공개로 바꾸지 않으며 쓰기 기능이 없습니다. 어떤 ID·키도 HTML 에 들어가지 않습니다.</p></div>';
     return h;
@@ -1931,7 +2148,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     var h = '<div class="card core6"><div class="card-h"><h2>팀장 핵심 지표 6</h2><span class="badge rev">' + badge + '</span><span class="mini">조회한 데이터는 화면에 남기지 않습니다 · 임의 수치는 표시하지 않습니다</span></div><div class="tiles six">' + items.map(function (l) { return '<div class="tile"><div class="l">' + esc(l) + '</div><div class="v na">' + tileTxt + '</div><div class="s">' + (kind === "denied" ? "열람 권한이 필요합니다" : kind === "signedout" ? "다시 로그인하면 표시됩니다" : "비공개 구글시트에서 읽어옵니다") + "</div></div>"; }).join("") + "</div></div>";
     var title = { denied: "이 계정에는 시트 열람 권한이 없습니다", signedout: "로그아웃되었습니다", login: "Google 로그인이 필요합니다", schema: "1.통합KPI 탭을 읽을 수 없습니다", wait: "구글시트 연결이 필요합니다" }[kind];
     var body = kind === "schema" ? "시트에 1.통합KPI 탭이 없거나 열 구조가 바뀌어 핵심 지표를 계산할 수 없습니다. 위 경고의 탭·열을 복원하면 다음 동기화에서 자동으로 표시됩니다. 값을 0으로 대체하지 않습니다." : kind === "denied" ? "시트 소유자가 이 계정을 공유 목록에서 뺐거나, 처음부터 공유되지 않았습니다. 이전에 불러온 데이터는 화면에서 지웠고 다른 곳에 저장하지 않았습니다. 시트 소유자에게 '뷰어' 공유를 요청하거나 다른 계정으로 로그인하세요." : kind === "signedout" ? "조회한 데이터를 화면과 메모리에서 지웠습니다. 다시 로그인하면 최신 데이터를 불러옵니다." : kind === "login" ? "시트를 공유받은 직원 계정으로 로그인하면 최신 데이터를 자동으로 불러오고, 이후 5분마다 변경을 확인합니다." : "이 화면은 실제 회사 데이터를 파일에 담지 않습니다. [연결 설정]에서 OAuth 클라이언트 ID와 시트 ID를 입력하고 Google 로그인하면 25개 탭(매출·공고·낙찰·시공사·영업활동·선행지표)을 읽어 모든 카드와 상세 목록이 채워집니다. 연결 정보는 이 브라우저에만 저장됩니다.";
-    h += '<div class="card"><div class="card-h"><h2>' + title + '</h2></div><p class="card-sub">' + esc(body) + " " + esc(kind === "denied" ? sy.message : "") + '</p><div class="ks-tools" style="margin:0"><button class="btn" data-kact="view" data-id="link">연결 설정 열기</button>' + (kind === "login" ? '<button class="btn" data-kact="gsignin">' + ((S.settings() || {}).signedBefore ? "로그인 상태 재확인" : "Google 로그인으로 연결") + "</button>" : "") + (kind === "denied" || kind === "signedout" ? '<button class="btn" data-kact="gswitch">' + (kind === "denied" ? "다른 계정으로 로그인" : "다시 로그인") + "</button>" : "") + '</div></div>';
+    h += '<div class="card"><div class="card-h"><h2>' + title + '</h2></div><p class="card-sub">' + esc(body) + " " + esc(kind === "denied" ? sy.message : "") + '</p><div class="ks-tools" style="margin:0"><button class="btn" data-kact="view" data-id="link">연결 설정 열기</button><button class="btn ghost" data-kact="vmode" data-id="public">공개 보기로 돌아가기</button>' + (kind === "login" ? '<button class="btn" data-kact="gsignin">' + ((S.settings() || {}).signedBefore ? "로그인 상태 재확인" : "Google 로그인으로 연결") + "</button>" : "") + (kind === "denied" || kind === "signedout" ? '<button class="btn" data-kact="gswitch">' + (kind === "denied" ? "다른 계정으로 로그인" : "다시 로그인") + "</button>" : "") + '</div></div>';
     return h;
   }
   /* ---------- 페이지 ---------- */
@@ -1944,7 +2161,8 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     if (ledgerRows) { var lt = st0.tabs && st0.tabs[S.LEDGER]; if (!lt) { ledgerRows = null; V.ledgerSrc = null; if (V.ledgerState === "ready") V.ledgerState = "idle"; } else if (V.ledgerSrc !== lt) { ledgerRows = toObjs(lt); V.ledgerSrc = lt; } }   /* 새 스냅샷이 오면 원문 사본도 같은 버전으로 교체 */
     if (!S.state.ready) return '<div class="kp ks"><div class="card"><div class="loading">' + (S.state.decodeError ? "데이터를 열 수 없습니다: " + esc(S.state.decodeError) : "저장된 데이터 여는 중…") + "</div></div></div>";
     var ready = has("1.통합KPI");
-    if (!ready && V.view !== "link") { V.detail = null; V.integrity = null; return '<div class="kp ks">' + statusBar() + nav() + waiting() + "</div>"; }
+    if (!ready && V.view !== "link") { V.detail = null; V.integrity = null; return '<div class="kp ks">' + statusBar() + nav() + (pubWanted() ? pubWaiting() : waiting()) + "</div>"; }
+    if (isPub() && !/^(growth|home|link)$/.test(V.view)) V.view = "growth";
     var body = V.view === "growth" ? growthBody() : V.view === "home" ? home() : V.view === "sales" ? sales() : V.view === "awards" ? awards() : V.view === "vendors" ? vendors() : V.view === "activity" ? activity() : V.view === "leading" ? leadingView() : link();
     return '<div class="kp ks">' + statusBar() + nav() + body + detailModal() + integrityModal() + "</div>";
   }
@@ -1963,7 +2181,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
       if (a === "q" || a === "dq") return;
       if (a === "dclose-bg") { if (e.target === el) { V.detail = null; repaint(true); } return; }
       if (a === "dclose") { V.detail = null; repaint(true); return; }
-      if (a === "integrity") { if (!has("1.통합KPI")) { if (S.state.needSignIn) { V.linkMsg = null; S.signIn().then(function () { repaint(true); }); return; } V.view = "link"; repaint(false); return; } var run = function () { V.integrity = verifyAll(); V.integrityBadOnly = false; repaint(true); }; if (!ledgerRows) { needLedger(); var wait = setInterval(function () { if (ledgerRows || V.ledgerState === "error") { clearInterval(wait); run(); } }, 300); V.integrity = {}; repaint(true); return; } run(); return; }
+      if (a === "integrity") { if (isPub()) { V.integrity = { pub: true }; repaint(true); return; } if (!has("1.통합KPI")) { if (S.state.needSignIn) { V.linkMsg = null; S.signIn().then(function () { repaint(true); }); return; } V.view = "link"; repaint(false); return; } var run = function () { V.integrity = verifyAll(); V.integrityBadOnly = false; repaint(true); }; if (!ledgerRows) { needLedger(); var wait = setInterval(function () { if (ledgerRows || V.ledgerState === "error") { clearInterval(wait); run(); } }, 300); V.integrity = {}; repaint(true); return; } run(); return; }
       if (a === "iclose-bg") { if (e.target === el) { V.integrity = null; repaint(true); } return; }
       if (a === "iclose") { V.integrity = null; repaint(true); return; }
       if (a === "ibad") { V.integrityBadOnly = !V.integrityBadOnly; repaint(true); return; }
@@ -1990,14 +2208,15 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
       if (a === "gswitch") { V.linkMsg = null; S.signIn({ select: true }).then(function () { repaint(true); }).catch(function (err) { V.linkMsg = { cls: "bad", html: "로그인 실패: " + esc(err.message || err) }; repaint(true); }); return; }
       if (a === "ledger") { needLedger(); repaint(true); return; }
       if (a === "csv") { var def = csvDefs()[id]; if (def) csv(def.cols, def.rows, def.name); return; }
+      if (a === "vmode") { V.linkMsg = null; if (id === "public") { S.setViewMode("public").then(function () { V.view = "growth"; ledgerRows = null; V.ledgerState = "idle"; repaint(false); }); repaint(true); return; } var sv = S.settings(); if (!S.configured(sv)) { V.view = "link"; V.linkMsg = { cls: "", html: "아래에 OAuth 클라이언트 ID와 시트 ID를 입력하고 [저장 후 로그인·새로고침]을 누르면 상세 보기로 전환됩니다." }; repaint(false); return; } S.setViewMode("detail").then(function () { repaint(true); }, function (er) { V.linkMsg = { cls: "bad", html: esc(er.message || er) }; repaint(true); }); repaint(true); return; }
       if (a === "lmode") { V.draft = Object.assign({}, S.settings() || {}, V.draft || {}); V.draft.mode = id; V.linkMsg = null; repaint(true); return; }
       if (a === "gsignin") { V.linkMsg = { cls: "", html: "Google 로그인 중…" }; S.signIn().then(function () { V.linkMsg = { cls: S.state.mode === "live" ? "ok" : "bad", html: S.state.mode === "live" ? "Google 로그인 · 구글시트 실시간 데이터로 전환했습니다." : "읽기 실패: " + esc(S.state.error || "로그인 필요") }; repaint(true); }).catch(function (err) { V.linkMsg = { cls: "bad", html: "로그인 실패: " + esc(err.message || err) }; repaint(true); }); repaint(true); return; }
       if (a === "gsignout") { S.signOut().then(function () { V.linkMsg = { cls: "ok", html: "로그아웃했습니다. 데이터는 연결 대기/저장된 데이터로 돌아갑니다." }; repaint(true); }); return; }
       if (a === "ltest" || a === "lsave") { var cur = Object.assign({ mode: "google" }, S.settings() || {}, V.draft || {}); var gv = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ""; }; var s = cur.mode === "appsscript" ? { mode: "appsscript", endpoint: gv("ks-ep"), key: document.getElementById("ks-key") ? document.getElementById("ks-key").value : "", sheetId: gv("ks-sid") } : { mode: "google", clientId: gv("ks-cid"), sheetId: gv("ks-sid") }; V.draft = Object.assign({}, s);
         if (s.mode === "appsscript" && !s.endpoint) { V.linkMsg = { cls: "bad", html: "웹앱 주소를 입력하세요." }; repaint(true); return; } if (s.mode === "google" && (!s.clientId || !s.sheetId)) { V.linkMsg = { cls: "bad", html: "OAuth 클라이언트 ID 와 시트 ID 를 입력하세요." }; repaint(true); return; }
         V.linkMsg = { cls: "", html: s.mode === "google" ? "Google 로그인 창을 확인하세요… 연결 확인 중" : "연결 확인 중…" }; repaint(true);
-        S.test(s).then(function (m) { var tabsN = Object.keys(m.tabs || {}).length; if (a === "lsave") { S.saveSettings(s); V.draft = null; ledgerRows = null; V.ledgerState = "idle"; V.linkMsg = { cls: "ok", html: "연결 성공 · 저장됨: " + esc(m.title) + " (탭 " + tabsN + "개). 시트에서 읽는 중…" }; repaint(true); return S.refresh().then(function () { V.linkMsg = { cls: S.state.mode === "live" ? "ok" : "bad", html: S.state.mode === "live" ? "구글시트 실시간 데이터로 전환했습니다." : "읽기 실패: " + esc(S.state.error || "로그인 필요") }; repaint(true); }); } V.linkMsg = { cls: "ok", html: "연결 성공: " + esc(m.title) + " · 탭 " + tabsN + "개 · 응답 " + hhmm(m.servedAt || m.lastUpdated) + " (아직 저장 안 됨)" }; repaint(true); }).catch(function (err) { V.linkMsg = { cls: "bad", html: "연결 실패: " + esc(err.message || err) }; repaint(true); }); return; }
-      if (a === "lclear") { S.clearSettings(); V.draft = null; ledgerRows = null; V.ledgerState = "idle"; V.linkMsg = { cls: "ok", html: "설정을 지웠습니다. 저장된 데이터로 표시합니다." }; S.refresh().then(function () { repaint(true); }); return; }
+        S.test(s).then(function (m) { var tabsN = Object.keys(m.tabs || {}).length; if (a === "lsave") { s.view = "detail"; S.saveSettings(s); V.draft = null; ledgerRows = null; V.ledgerState = "idle"; V.linkMsg = { cls: "ok", html: "연결 성공 · 저장됨: " + esc(m.title) + " (탭 " + tabsN + "개). 시트에서 읽는 중…" }; repaint(true); return S.refresh().then(function () { V.linkMsg = { cls: S.state.mode === "live" ? "ok" : "bad", html: S.state.mode === "live" ? "구글시트 실시간 데이터로 전환했습니다." : "읽기 실패: " + esc(S.state.error || "로그인 필요") }; repaint(true); }); } V.linkMsg = { cls: "ok", html: "연결 성공: " + esc(m.title) + " · 탭 " + tabsN + "개 · 응답 " + hhmm(m.servedAt || m.lastUpdated) + " (아직 저장 안 됨)" }; repaint(true); }).catch(function (err) { V.linkMsg = { cls: "bad", html: "연결 실패: " + esc(err.message || err) }; repaint(true); }); return; }
+      if (a === "lclear") { S.clearSettings(); V.draft = null; ledgerRows = null; V.ledgerState = "idle"; V.linkMsg = { cls: "ok", html: "설정을 지웠습니다. 공개 보기로 돌아갑니다." }; S.refresh().then(function () { repaint(true); }); return; }
     });
   }
   function csvDefs() {
@@ -2080,6 +2299,12 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   /* ---------- 모델 ---------- */
   var model = null, mkey = "";
   function getModel() {
+    var st0 = A.S.state;
+    if (st0.mode === "public" && st0.pub && st0.pub.data) {          /* 공개 보기: 서버가 집계해 둔 값(업체·현장 단위 정보 없음) */
+      var pkey = "pub|" + st0.pub.data.meta.hash + "|" + st0.version; if (model && mkey === pkey) return model;
+      try { model = GC.buildPublic(st0.pub.data.growth, { kpi: A.objs("1.통합KPI") }); model.publicMeta = st0.pub.data.meta; } catch (e) { model = { missing: ["공개 집계 해석 오류: " + (e.message || e)], years: [], error: true }; }
+      mkey = pkey; return model;
+    }
     var d = defs(), st = A.S.state, led = A.ledger(); var key = [st.version, st.epoch, st.mode, led ? led.length : 0, d.endMD || "", JSON.stringify(d.famRules || "")].join("|");
     if (model && mkey === key) return model;
     var src = { has: A.has, objs: A.objs, ledger: function () { return A.ledger(); } };
@@ -2143,7 +2368,13 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   function toggleBtn(id, onText, offText) { var on = !!Gs.open[id]; return '<button class="btn ghost" data-kact="gtoggle" data-id="' + id + '">' + esc(on ? onText : offText) + "</button>"; }
 
   /* ---------- 머리 · 출처 · 검색 ---------- */
+  function pubProvenance(m) {
+    var pm = m.publicMeta || {}, ps = A.S.state.pub || {}, sv = ps.serve || {};
+    var stale = sv.state && sv.state !== "ok";
+    return '<div class="gw-prov"><span><b>출처</b> 구글시트 25개 탭 → 서버 자동 집계(공개용)</span><span><b>기준일</b> ' + esc(m.asOf || "—") + "</span><span><b>최종 갱신</b> " + esc(A.hhmm(pm.generatedAt) || "—") + (stale ? " (새 집계 보류 · 이전 정상 집계)" : "") + "</span><span><b>시트 변경 감지</b> " + esc(A.hhmm(pm.sourceModified) || "—") + "</span><span><b>공개 범위</b> 집계값만</span><span><b>정의 버전</b> v" + defs().version + " · " + CALC_VER + "</span></div>";
+  }
   function provenance(m) {
+    if (m.restricted) return pubProvenance(m);
     var st = A.S.state, meta = st.meta || {}, em = st.embeddedMeta || {}, sy = st.sync, live = st.mode === "live", led = A.ledger();
     var src = live ? "구글시트 실시간 · " + esc(meta.title || "") : "저장된 데이터 " + esc(em.version || "") + " · " + esc(em.verified || "");
     var upd = live ? (sy.lastOkAt ? A.hhmm(sy.lastOkAt) + (sy.stale ? " (이전 데이터)" : "") : "—") : (em.exportedAt ? A.hhmm(em.exportedAt) : esc(em.asOf || "—"));
@@ -2152,16 +2383,16 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   }
   function header(m) {
     var d = defs(); var y0 = m.years[0], asOf = m.asOf || ""; var md = asOf.split("-"); var per = y0 + "년 1월 1일 ~ " + (md[0] || "") + "년 " + Number(md[1] || 0) + "월 " + Number(md[2] || 0) + "일";
-    var h = '<div class="card gw-head"><h1 class="gw-h1">POUR 사업 성장 분석 대시보드</h1><div class="gw-per">조회 기간 ' + esc(per) + "</div>" + provenance(m);
+    var h = '<div class="card gw-head"><h1 class="gw-h1">POUR 사업 성장 분석 대시보드</h1>' + (m.restricted ? '<div class="gw-pubtag">공개 집계 · 로그인 없이 열람 · 시공사·현장·거래 명세는 비공개</div>' : "") + '<div class="gw-per">조회 기간 ' + esc(per) + "</div>" + provenance(m);
     h += '<div class="gw-ctl"><div class="ks-chips"><button data-kact="gbasis" data-id="ytd"' + (Gs.basis === "ytd" ? ' aria-current="true"' : "") + ">동일기간 1/1~" + esc(m.endMD.replace("-", "/")) + '</button><button data-kact="gbasis" data-id="ann"' + (Gs.basis === "ann" ? ' aria-current="true"' : "") + ">연간(확정 연도)</button></div>";
     h += '<div class="ks-chips">' + m.years.map(function (y) { return '<button data-kact="gyearsel" data-id="' + y + '"' + (Gs.year === y ? ' aria-current="true"' : "") + ">" + y + "</button>"; }).join("") + "</div></div>";
-    h += '<div class="ks-tools gw-search"><input id="gw-q" data-kact="gq" type="search" placeholder="시공사 검색 (업체명·표기·통합ID·사업자번호)" value="' + esc(Gs.q) + '" autocomplete="off"><button class="btn" data-kact="gqgo">검색</button>' + (Gs.q ? '<button class="btn ghost" data-kact="gqclear">지우기</button>' : "") + "</div>";
+    h += '<div class="ks-tools gw-search"><input id="gw-q" data-kact="gq" type="search" placeholder="' + (m.restricted ? "시공사 검색은 상세 보기(로그인)에서 이용" : "시공사 검색 (업체명·표기·통합ID·사업자번호)") + '" value="' + esc(Gs.q) + '" autocomplete="off"><button class="btn" data-kact="gqgo">검색</button>' + (Gs.q ? '<button class="btn ghost" data-kact="gqclear">지우기</button>' : "") + "</div>";
     h += '<div class="gw-menu">' + [["gw-sum", "핵심 지표"], ["gw-flow", "종합 흐름"], ["gw-awards", "① 공고·낙찰"], ["gw-sales", "② 자재 매출"], ["gw-cohort", "③ 낙찰→구매 연결"], ["gw-q", "질문 답변"], ["gw-who", "기여·확인 필요 업체"], ["gw-cov", "데이터 신뢰도"], ["gw-def", "지표 정의"]].map(function (x) { return '<button data-kact="gjump" data-id="' + x[0] + '">' + x[1] + "</button>"; }).join("") + "</div>";
     if (m.missing && m.missing.length) h += '<div class="ks-warn"><b>시트 구조 경고:</b> ' + esc(m.missing.join(", ")) + " 탭이 없거나 구조가 달라 해당 분석은 표시하지 않습니다(0으로 대체하지 않음).</div>";
     return h + "</div>";
   }
   function searchCard(m) {
-    if (!Gs.q) return ""; var rs = Gs.qres || m.findVendors(Gs.q);
+    if (!Gs.q) return ""; if (m.restricted) return '<div class="card"><div class="card-h"><h2>시공사 검색</h2><span class="badge rev">비공개</span></div>' + restrictedNote("시공사 검색·상세 분석은 업체 정보가 포함되어 공개 보기에서 제공하지 않습니다") + "</div>"; var rs = Gs.qres || m.findVendors(Gs.q);
     var h = '<div class="card"><div class="card-h"><h2>시공사 검색 결과</h2><span class="badge">' + rs.length + (rs.length >= 40 ? "+" : "") + "곳</span><span class=\"mini\">업체명을 누르면 상세 분석이 열립니다</span></div>";
     h += gtable("gsearch", [{ k: "업체", raw: 1, f: function (r) { return vlink(r["통합ID"], r["대표업체명"]); } }, { k: "통합ID" }, { k: "사업자등록번호", l: "사업자번호" }, { k: "연결상태" }, { k: "낙찰시공사_표기", l: "낙찰 표기", wrap: 1 }], rs, { per: 8, empty: "일치하는 시공사가 없습니다" });
     return h + "</div>";
@@ -2202,7 +2433,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   /* ---------- ① 공고 · 낙찰 ---------- */
   function secAwards(m) {
     var B = Gs.basis, Y = Gs.year, ys = m.years, M = {}; ys.forEach(function (y) { M[y] = m.metrics(B, y); });
-    var h = '<div class="card" id="gw-awards"><div class="card-h"><h2>① POUR 공고·낙찰 성장 분석</h2><span class="badge">' + esc(ymLabel(m)) + "</span>" + tr("ok") + '<span class="mini">막대를 누르면 그 연도의 시공사·현장 목록이 아래에 열립니다 · 낙찰 시점은 공고일 기준(낙찰일 자료 없음)</span></div>';
+    var h = '<div class="card" id="gw-awards"><div class="card-h"><h2>① POUR 공고·낙찰 성장 분석</h2><span class="badge">' + esc(ymLabel(m)) + "</span>" + tr("ok") + '<span class="mini">' + (m.restricted ? "막대를 누르면 그 연도가 선택됩니다 · " : "막대를 누르면 그 연도의 시공사·현장 목록이 아래에 열립니다 · ") + '낙찰 시점은 공고일 기준(낙찰일 자료 없음)</span></div>';
     var f = function (v) { return cnt(v); };
     var ch1 = barChart({ title: "연도별 공고·낙찰 건수", cats: ys, catLabel: function (y) { return yl(m, y); }, sel: Y, click: { act: "gyear", sec: "awards" }, series: [{ name: L("notices"), cls: "c1", vals: ys.map(function (y) { return M[y].notices; }), fmt: f }, { name: L("awards"), cls: "c2", vals: ys.map(function (y) { return M[y].awards; }), fmt: f }] });
     var ch2 = barChart({ title: "연도별 낙찰금액", cats: ys, catLabel: function (y) { return yl(m, y); }, sel: Y, click: { act: "gyear", sec: "awards" }, series: [{ name: L("awardAmt"), cls: "c3", vals: ys.map(function (y) { return M[y].awardAmt; }), fmt: won }] });
@@ -2213,8 +2444,8 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     var rows = ys.map(function (y) { var c = M[y]; return [esc(yl(m, y)), esc(cnt(c.notices) || "—"), chip(m.growth(B, y, "notices")), chip(m.growth(B, y, "noticesPour")), esc(cnt(c.awards) || "—"), chip(m.growth(B, y, "awards")), esc(won(c.awardAmt) || "—"), chip(m.growth(B, y, "awardAmt")), esc(p1(c.awardRatio) || "—"), esc(cnt(c.awardVendors) || "—")]; });
     h += '<div class="card-h" style="margin-top:6px"><h2>연도별 실적 비교표</h2></div>' + simpleTable(["연도", "공고", "공고 증감", "POUR 공고만 증감", "낙찰", "낙찰 증감", "낙찰금액", "금액 증감", "낙찰/공고", "낙찰 시공사"], rows);
     h += '<p class="gw-note">2025년부터 원천이 \'전체 공고\' 목록이라 다특허(PD)·DO·CNC 공고가 포함됩니다(2022~2024는 POUR 공고만). 같은 모집단 비교가 필요하면 \'POUR 공고만 증감\'을 보세요.</p>';
-    h += '<div class="ks-tools"><span class="mini">상세: ' + esc(Y) + "년 " + esc(ymLabel(m)) + "</span>" + toggleBtn("awards", "상세 목록 접기", "시공사·현장 상세 목록 펼치기") + "</div>";
-    if (Gs.open.awards) h += '<div id="gw-det-awards">' + awardDetail(m) + "</div>";
+    h += '<div class="ks-tools"><span class="mini">상세: ' + esc(Y) + "년 " + esc(ymLabel(m)) + "</span>" + (m.restricted ? '<span class="gw-tr na">시공사·현장 목록 비공개</span>' : toggleBtn("awards", "상세 목록 접기", "시공사·현장 상세 목록 펼치기")) + "</div>";
+    if (m.restricted) h += pubTradeBlock(m); else if (Gs.open.awards) h += '<div id="gw-det-awards">' + awardDetail(m) + "</div>";
     return h + "</div>";
   }
   function awardDetail(m) {
@@ -2233,7 +2464,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   }
   function secSales(m) {
     var B = Gs.basis, Y = Gs.year, ys = m.years, M = {}; ys.forEach(function (y) { M[y] = m.metrics(B, y); });
-    var h = '<div class="card" id="gw-sales"><div class="card-h"><h2>② 자재 매출 성장 분석</h2><span class="badge">' + esc(ymLabel(m)) + "</span>" + tr("ok") + '<span class="mini">막대를 누르면 그 연도의 구매 업체·금액이 아래에 열립니다 · 비자재·용역 포함(기존 KPI 정의) · 메인자재는 검증된 품목 분류표 기준</span></div>';
+    var h = '<div class="card" id="gw-sales"><div class="card-h"><h2>② 자재 매출 성장 분석</h2><span class="badge">' + esc(ymLabel(m)) + "</span>" + tr("ok") + '<span class="mini">' + (m.restricted ? "막대를 누르면 그 연도가 선택됩니다 · " : "막대를 누르면 그 연도의 구매 업체·금액이 아래에 열립니다 · ") + '비자재·용역 포함(기존 KPI 정의) · 메인자재는 검증된 품목 분류표 기준</span></div>';
     var ch1 = barChart({ title: "연도별 전체 자재 매출", cats: ys, catLabel: function (y) { return yl(m, y); }, sel: Y, click: { act: "gyear", sec: "sales" }, series: [{ name: L("sales"), cls: "c1", vals: ys.map(function (y) { return M[y].sales; }), fmt: won }] });
     var ch2 = barChart({ title: "전체 자재 매출과 메인자재 매출", cats: ys, catLabel: function (y) { return yl(m, y); }, sel: Y, click: { act: "gyear", sec: "sales" }, series: [{ name: L("sales"), cls: "c1", vals: ys.map(function (y) { return M[y].sales; }), fmt: won }, { name: L("main"), cls: "c2", vals: ys.map(function (y) { return M[y].main; }), na: ys.map(function (y) { return M[y].mainWhy; }), fmt: won }] });
     var ch3 = barChart({ title: "메인자재 품목별 매출", cats: ys, catLabel: function (y) { return yl(m, y); }, sel: Y, click: { act: "gyear", sec: "sales" }, h: 210, series: famSeries(m, B) });
@@ -2243,8 +2474,8 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
       chartBox("우레탄·페인트·에폭시 매출 추이", "빗금 = 미확인/판매 전", ch3, legend([["c1", "페인트(재도장)"], ["c2", "우레탄 중도"], ["c3", "에폭시 중도"]]) + famYoy) + "</div>";
     var rows = ys.map(function (y) { var c = M[y], gS = m.growth(B, y, "sales"), gM = m.growth(B, y, "main"); return [esc(yl(m, y)), esc(won(c.sales) || "—"), isNum(gS.abs) ? esc((gS.abs >= 0 ? "+" : "−") + won(Math.abs(gS.abs))) : '<span class="mini">—</span>', chip(gS), isNum(c.main) ? esc(won(c.main)) : '<span class="mini">미확인</span>', isNum(gM.abs) ? esc((gM.abs >= 0 ? "+" : "−") + won(Math.abs(gM.abs))) : '<span class="mini">—</span>', chip(gM), esc(p1(c.mainShare) || "—"), chip(m.growth(B, y, "mainShare"), "pp")]; });
     h += '<div class="card-h" style="margin-top:6px"><h2>연도별 매출 비교표</h2></div>' + simpleTable(["연도", "전체 매출", "증감액", "증감률", "메인자재", "증감액", "증감률", "메인 비중", "비중 증감"], rows);
-    h += '<div class="ks-tools"><span class="mini">상세: ' + esc(Y) + "년 거래처별 매출 증감(" + esc(ymLabel(m)) + ")</span>" + toggleBtn("sales", "거래처 상세 접기", "거래처별 매출 증감·구매 업체 펼치기") + "</div>";
-    if (Gs.open.sales) h += '<div id="gw-det-sales">' + salesDetail(m) + "</div>";
+    h += '<div class="ks-tools"><span class="mini">상세: ' + esc(Y) + "년 거래처별 매출 증감(" + esc(ymLabel(m)) + ")</span>" + (m.restricted ? '<span class="gw-tr na">거래처별 목록 비공개</span>' : toggleBtn("sales", "거래처 상세 접기", "거래처별 매출 증감·구매 업체 펼치기")) + "</div>";
+    if (m.restricted) h += restrictedNote("거래처별 매출 증감·구매 업체 목록은 업체명과 거래 금액이 포함되어 공개 보기에서 제공하지 않습니다"); else if (Gs.open.sales) h += '<div id="gw-det-sales">' + salesDetail(m) + "</div>";
     return h + "</div>";
   }
   function measureOf(r, fam) { if (fam === "all") return [r.당기, r.전기]; if (fam === "main") return [r.메인당기, r.메인전기]; return [r.famNow ? r.famNow[fam] : 0, r.famPrev ? r.famPrev[fam] : 0]; }
@@ -2277,8 +2508,8 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     var rows = ys.map(function (y) { var c = co(y); return [esc(yl(m, y)), esc(cnt(M[y].awardVendors) || "—"), c ? esc(c.buyN + "곳") : '<span class="mini">대기</span>', c ? esc(p1(c.buyRate) || "—") : "", c ? chip(m.growth(B, y, "buyRate"), "pp") : "", c ? (c.mainBuyN == null ? '<span class="mini">미확인</span>' : esc(c.mainBuyN + "곳 · " + p1(c.mainRate))) : "", c ? esc(won(c.buyAmt) || "—") : "", c && c.mainAmt != null ? esc(won(c.mainAmt)) : '<span class="mini">—</span>']; });
     h += '<div class="card-h" style="margin-top:6px"><h2>연도별 연결 비교표</h2></div>' + simpleTable(["연도", "낙찰 시공사", "구매 확인", "연결률", "전년 대비", "메인 구매(비율)", "자재 구매액", "메인 구매액"], rows);
     h += '<p class="gw-note">낙찰 시공사 수는 통합ID 기준 중복 제거 값입니다(㈜/(주) 등 표기 차이를 한 업체로 합침). 기존 KPI 카드의 \'낙찰 시공사 수\'는 표기 기준이라 값이 다를 수 있습니다 — 아래 [데이터 신뢰도]에서 대조합니다.</p>';
-    h += '<div class="ks-tools"><span class="mini">상세: ' + esc(Y) + "년 낙찰 시공사별 구매 연결</span>" + toggleBtn("cohort", "연결 상세 접기", "낙찰 시공사별 구매 연결 상세 펼치기") + "</div>";
-    if (Gs.open.cohort) h += '<div id="gw-det-cohort">' + cohortDetail(m) + "</div>";
+    h += '<div class="ks-tools"><span class="mini">상세: ' + esc(Y) + "년 낙찰 시공사별 구매 연결</span>" + (m.restricted ? '<span class="gw-tr na">시공사별 목록 비공개</span>' : toggleBtn("cohort", "연결 상세 접기", "낙찰 시공사별 구매 연결 상세 펼치기")) + "</div>";
+    if (m.restricted) h += restrictedNote("낙찰 시공사별 구매 연결 상세는 업체명이 포함되어 공개 보기에서 제공하지 않습니다 — 위 표의 연도별 집계(곳 수·비율·금액)만 공개합니다"); else if (Gs.open.cohort) h += '<div id="gw-det-cohort">' + cohortDetail(m) + "</div>";
     return h + "</div>";
   }
   function cohortDetail(m) {
@@ -2311,7 +2542,29 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     h += '<div class="gw-qa"><div class="q">공고는 증가했지만 낙찰 비율은 감소했는가?</div>' + q1 + '</div><div class="gw-qa"><div class="q">낙찰은 증가했지만 우리 자재 구매 연결률은 감소했는가?</div>' + q2 + '</div><div class="gw-qa"><div class="q">전체 매출 증가보다 메인자재 매출 증가가 더 빠른가?</div>' + q3 + "</div></div>";
     return h;
   }
+  function restrictedNote(t) { return '<div class="gw-note gw-priv"><span class="gw-tr na">비공개</span> ' + esc(t) + '. 시트를 공유받은 직원은 <a class="vlink" data-kact="view" data-id="link">상세 보기(로그인)</a>에서 확인합니다.</div>'; }
+  function pubTradeBlock(m) {
+    var B = Gs.basis, Y = Gs.year, P = m.prevOf(Y), cur = m.trades(B, Y) || {}, prev = P ? (m.trades(B, P) || {}) : null;
+    var block = !P ? "비교할 전년 자료 없음" : (B === "ann" && Y === m.lastY ? "연중 누계라 전년 연간과 비교하지 않음 — '동일기간' 보기를 사용하세요" : null);
+    var names = Object.keys(cur).concat(prev ? Object.keys(prev) : []).filter(function (x, i, a) { return a.indexOf(x) === i; });
+    var tot = 0; names.forEach(function (k) { tot += cur[k] ? cur[k].n : 0; });
+    names.sort(function (a, b) { return ((cur[b] || { n: 0 }).n) - ((cur[a] || { n: 0 }).n); });
+    var rows = names.map(function (k) { var c = cur[k] || { n: 0, amt: 0, amtN: 0 }, p = prev && prev[k] ? prev[k] : { n: 0 }; var d = block ? null : c.n - p.n;
+      return [esc(k), esc(String(c.n)), esc(tot ? (c.n / tot * 100).toFixed(1) + "%" : "—"), c.amtN ? esc(won(c.amt) || "—") : '<span class="mini">금액 미기재</span>', block ? '<span class="mini">비교 불가</span>' : esc(String(p.n)), d == null ? '<span class="mini">—</span>' : '<span class="gw-d ' + (d > 0 ? "up" : d < 0 ? "dn" : "fl") + '">' + (d > 0 ? "+" : d < 0 ? "−" : "") + Math.abs(d) + "건</span>"]; });
+    var h = '<div class="card-h" style="margin-top:6px"><h2>공종별 낙찰 집계 · ' + esc(Y) + "년 " + esc(ymLabel(m)) + '</h2><span class="mini">공종그룹 기준 건수·금액만 공개 (시공사·현장 목록은 비공개)</span></div>';
+    h += simpleTable(["공종", "낙찰(건)", "비중", "낙찰금액", P ? esc(P) + "년 건수" : "전년", "건수 증감"], rows.length ? rows : [['<span class="mini">집계 없음</span>', "", "", "", "", ""]]);
+    return h + (block ? '<p class="gw-note">' + esc(block) + "</p>" : "") + restrictedNote("시공사·현장별 낙찰 목록은 업체명이 포함되어 공개 보기에서 제공하지 않습니다");
+  }
+  function pubWho(m) {
+    var B = Gs.basis, Y = Gs.year, c = m.metrics(B, Y), co = c && c.cohort;
+    var h = '<div class="card" id="gw-who"><div class="two"><div><div class="card-h"><h2>어떤 시공사가 매출 성장에 기여했는가?</h2></div>' + restrictedNote("시공사별 매출 증감·기여도는 업체명과 거래 금액이 포함되어 공개 보기에서 제공하지 않습니다") + "</div>";
+    h += '<div><div class="card-h"><h2>낙찰 이력은 있지만 구매 확인이 필요한 업체는?</h2></div>';
+    if (!co) h += '<div class="ks-warn">해당 기간 집계값이 없습니다(데이터 부족)</div>';
+    else h += '<div class="gw-note">' + esc(Y) + "년 " + esc(ymLabel(m)) + " 낙찰 시공사 " + num(co.n) + "곳 중 같은 기간 자재 구매가 확인되지 않은 곳은 <b>" + num(co.n - co.buyN) + "곳</b>입니다. <b>구매 기록이 없다고 타사 자재를 썼다는 뜻이 아닙니다</b>(판매 원천에서 이름이 일치하는 거래처를 찾지 못했거나 구매가 없는 것)</div>" + restrictedNote("해당 업체 명단은 공개 보기에서 제공하지 않습니다");
+    return h + "</div></div></div>";
+  }
   function who(m) {
+    if (m.restricted) return pubWho(m);
     var B = Gs.basis, Y = Gs.year, P = m.prevOf(Y);
     var h = '<div class="card" id="gw-who"><div class="two">';
     h += '<div><div class="card-h"><h2>어떤 시공사가 매출 성장에 기여했는가?</h2></div>';
@@ -2343,10 +2596,11 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     var d = defs(), dr = Gs.draft || {}; var ruleLines = (d.famRules || GC.DEFAULT_FAM_RULES).map(function (r) { return r.fam + "=" + r.re; }).join("\n");
     var h = '<div class="card" id="gw-def"><div class="card-h"><h2>지표 정의 · 계산 기준</h2><span class="badge">정의 v' + d.version + "</span><span class=\"mini\">지표 이름·비교 기간·메인자재 분류 규칙을 바꾸면 이력이 남고, 원본 시트 데이터는 바뀌지 않습니다</span>" + toggleBtn("def", "접기", "열기") + "</div>";
     if (!Gs.open.def) return h + "</div>";
+    if (m.restricted) h += '<div class="gw-note gw-priv"><b>공개 보기:</b> 지표 이름과 기본 보기(동일기간/연간)는 이 브라우저에서 바꿀 수 있고 변경 이력이 남습니다. 비교 기간 종료일과 메인자재 분류 규칙은 서버 집계 기준(기본 정의)으로 고정되어 여기서 바꿀 수 없습니다 — 바꾸려면 상세 보기(로그인)에서 원문으로 다시 계산하거나, 서버 정의를 변경해야 합니다.' + ((STORE.over && (STORE.over.endMD || (STORE.over.famRules && STORE.over.famRules.length))) ? " 이 브라우저에 저장된 종료일·분류 규칙은 상세 보기에서만 적용됩니다." : "") + "</div>";
     h += '<div class="gw-defs">' + Object.keys(DEF_LABELS).map(function (k) { return '<div class="gr"><label for="gd-l-' + k + '">' + esc(DEF_LABELS[k]) + ' <span class="mini">(' + k + ')</span></label><input id="gd-l-' + k + '" data-kact="gdin" value="' + esc(dr["l-" + k] != null ? dr["l-" + k] : d.labels[k]) + '"><div class="mini">' + esc(RULE_TEXT[k]) + "</div></div>"; }).join("") + "</div>";
-    h += '<div class="gw-defs"><div class="gr"><label for="gd-end">비교 기간 종료일(월-일)</label><input id="gd-end" data-kact="gdin" placeholder="비움 = 시트 기준(' + esc(m.endMD) + ')" value="' + esc(dr.end != null ? dr.end : (d.endMD || "")) + '"><div class="mini">동일기간 비교의 끝 날짜입니다(예 10-20). 비우면 1.통합KPI 의 기준일을 따릅니다.</div></div>';
+    h += '<div class="gw-defs"><div class="gr"><label for="gd-end">비교 기간 종료일(월-일)</label><input id="gd-end" data-kact="gdin"' + (m.restricted ? " disabled" : "") + ' placeholder="비움 = 시트 기준(' + esc(m.endMD) + ')" value="' + esc(dr.end != null ? dr.end : (d.endMD || "")) + '"><div class="mini">동일기간 비교의 끝 날짜입니다(예 10-20). 비우면 1.통합KPI 의 기준일을 따릅니다.</div></div>';
     h += '<div class="gr"><label for="gd-basis">기본 보기</label><select id="gd-basis" data-kact="gdin"><option value="ytd"' + ((dr.basis || d.basis) === "ytd" ? " selected" : "") + '>동일기간</option><option value="ann"' + ((dr.basis || d.basis) === "ann" ? " selected" : "") + '>연간</option></select></div>';
-    h += '<div class="gr"><label for="gd-fam">메인자재 품목군 분류 규칙</label><textarea id="gd-fam" data-kact="gdin" rows="4">' + esc(dr.fam != null ? dr.fam : ruleLines) + '</textarea><div class="mini">한 줄에 "품목군=정규식"(위에서부터 처음 맞는 규칙). 품목군은 재도장·우레탄·에폭시. 연간 합계가 1.통합KPI 메인 매출과 다르면 아래 대조에서 불일치로 표시됩니다.</div></div>';
+    h += '<div class="gr"><label for="gd-fam">메인자재 품목군 분류 규칙</label><textarea id="gd-fam" data-kact="gdin" rows="4"' + (m.restricted ? " disabled" : "") + '>' + esc(dr.fam != null ? dr.fam : ruleLines) + '</textarea><div class="mini">한 줄에 "품목군=정규식"(위에서부터 처음 맞는 규칙). 품목군은 재도장·우레탄·에폭시. 연간 합계가 1.통합KPI 메인 매출과 다르면 아래 대조에서 불일치로 표시됩니다.</div></div>';
     h += '<div class="gr"><label for="gd-why">변경 사유 (필수)</label><input id="gd-why" data-kact="gdin" placeholder="예: 팀장 회의(2026-11-03) 결과 반영" value="' + esc(dr.why || "") + '"></div></div>';
     h += '<div class="ks-tools"><button class="btn" data-kact="gdsave">변경 저장</button><button class="btn ghost" data-kact="gdreset">기본값으로 복원</button></div>';
     if (Gs.msg) h += '<div class="gw-msg ' + Gs.msg.cls + '">' + esc(Gs.msg.t) + "</div>";
@@ -2384,7 +2638,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     A = a; if (!Gs.basis) Gs.basis = defs().basis; var m = getModel();
     if (m.error || !m.years || !m.years.length) return '<div class="card"><div class="ks-warn"><b>성장 분석을 계산할 수 없습니다.</b> ' + esc((m.missing || []).join(", ")) + " — 시트 구조를 확인하세요(0으로 대체하지 않음).</div></div>";
     if (!Gs.year || m.years.indexOf(Gs.year) < 0) Gs.year = m.lastY;
-    if (!A.ledger() && A.V.ledgerState === "idle") A.needLedger();
+    if (!m.restricted && !A.ledger() && A.V.ledgerState === "idle") A.needLedger();
     var h = '<div class="gw">' + header(m) + searchCard(m) + summary(m) + flow(m) + secAwards(m) + secSales(m) + secCohort(m) + questions(m) + who(m) + coverage(m) + defsCard(m) + "</div>" + vendorModal(m);
     return h;
   }

@@ -5,3 +5,5 @@
 !package.json
 store/
 node_modules/
+!public-config.json
+!apps-script-public/appsscript.json
