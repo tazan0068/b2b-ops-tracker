@@ -187,8 +187,14 @@
   function goalModel(id, api) {
     var G = TG(), C = G && G.kpis && G.kpis[id]; if (!C || !C.targets || !isNum(C.targets.official)) return null;
     var V = G.verification && G.verification[id] || {}, cur = null; try { cur = goalCurrent(id, api); } catch (e) { cur = null; }
-    var m = { id: id, name: C.name, T: C.targets, cur: cur, V: V, ok: !!(cur && isNum(cur.value) && V.match === true) };
-    if (m.ok) { m.rate = cur.value / C.targets.official * 100; m.gap = (C.targets.official - cur.value) * 100; m.reached = cur.value >= C.targets.official - 1e-9; m.bar = Math.max(0, Math.min(100, m.rate)); }
+    var m = { id: id, name: C.name, T: C.targets, cur: cur, V: V, ok: !!(cur && isNum(cur.value) && V.match === true) }, T = C.targets, has = !!(cur && isNum(cur.value));
+    m.curText = has ? (id === "kpi1" ? p1(cur.value) : api.pc(cur.value)) : null;
+    if (m.ok) { m.rate = cur.value / T.official * 100; m.gap = (T.official - cur.value) * 100; m.reached = cur.value >= T.official - 1e-9; }
+    if (has && isNum(T.challenge) && T.challenge > 0) {                                  /* 진행 막대: 도전 목표 = 막대 전체(100%), 초과해도 100%에서 멈춤 */
+      m.fillRaw = cur.value / T.challenge * 100; m.fill = Math.max(0, Math.min(100, m.fillRaw)); m.cGap = (T.challenge - cur.value) * 100; m.cReached = cur.value >= T.challenge - 1e-9;
+      m.mark = isNum(T.official) && T.official < T.challenge ? T.official / T.challenge * 100 : null;
+    }
+    m.prov = has && !m.ok;                                                              /* 정의가 검증되지 않은 현재값 → 임시·검증 필요 */
     return m;
   }
   function rateT(x) { return (Math.round(x * 10) / 10).toFixed(1) + "%"; }
@@ -198,12 +204,15 @@
     return "정의 확인 전이라 달성률을 계산하지 않았습니다.";
   }
   function goalBlock(m) {
-    var T = m.T, sm = [["기준", T.base], ["도전", T.challenge]]; if (isNum(T.long)) sm.push(["장기", T.long]);
-    var st = m.ok ? (m.reached ? "ok" : "gap") : "vf";
-    var h = '<div class="du-goal ' + st + '"><div class="gn">목표 지표 · ' + esc(m.name) + '</div><div class="gt"><span class="gk">상향 공식 목표</span><b class="gv">' + esc(pt(T.official)) + "</b>" +
-      '<span class="gp">' + (m.ok ? (m.reached ? "목표 달성" : "목표까지 " + (Math.round(m.gap * 10) / 10).toFixed(1) + "%p") : "검증 필요") + "</span></div>" +
-      '<div class="gbar' + (m.ok ? "" : " na") + '" role="progressbar" aria-valuemin="0" aria-valuemax="100"' + (m.ok ? ' aria-valuenow="' + Math.round(m.bar) + '"' : "") + "><i" + (m.ok ? ' style="width:' + m.bar.toFixed(1) + '%"' : "") + "></i></div>" +
-      '<div class="gm"><span>공식 목표 달성률 <b>' + (m.ok ? esc(rateT(m.rate)) : "검증 필요") + "</b></span>" + (m.ok ? "" : "") + "</div>" +
+    var T = m.T, sm = [["기준", T.base]]; if (isNum(T.long)) sm.push(["장기", T.long]);
+    var st = m.ok ? (m.reached ? "ok" : "gap") : "vf", fillOk = isNum(m.fill), f1 = function (x) { return (Math.round(x * 10) / 10).toFixed(1); };
+    var h = '<div class="du-goal ' + st + (m.prov ? " prov" : "") + '"><div class="gn">목표 지표 · ' + esc(m.name) + '</div>' +
+      '<div class="gt"><span class="gk">상향 공식 목표</span><b class="gv">' + esc(pt(T.official)) + '</b><span class="ga">공식 목표 달성률 <b>' + (m.ok ? esc(rateT(m.rate)) : "검증 필요") + "</b></span></div>" +
+      '<div class="gbar' + (m.prov ? " prov" : fillOk ? "" : " na") + '" role="progressbar" aria-label="도전 목표 ' + esc(pt(T.challenge)) + ' 대비 진행" aria-valuemin="0" aria-valuemax="100"' + (fillOk ? ' aria-valuenow="' + Math.round(m.fill) + '"' : "") + "><i" + (fillOk ? ' style="width:' + m.fill.toFixed(1) + '%"' : "") + "></i>" + (isNum(m.mark) && fillOk ? '<u class="mk" style="left:' + m.mark.toFixed(1) + '%" title="상향 공식 목표 ' + esc(pt(T.official)) + '"></u>' : "") + "</div>" +
+      '<div class="gx"><span>0%</span><span>도전 목표 ' + esc(pt(T.challenge)) + " = 막대 100%</span></div>" +
+      '<dl class="gr"><div><dt>현재 실적</dt><dd>' + (m.curText ? esc(m.curText) + (m.prov ? '<em class="gtag">임시 · 검증 필요</em>' : "") : '<em class="gtag">검증 필요</em>') + "</dd></div>" +
+      '<div><dt>상향 공식 목표 ' + esc(pt(T.official)) + '</dt><dd class="r-' + st + '">' + (m.ok ? (m.reached ? "달성" : "미달 · 목표까지 " + f1(m.gap) + "%p") : "검증 필요") + "</dd></div>" +
+      '<div><dt>도전 목표 ' + esc(pt(T.challenge)) + (isNum(m.cGap) && m.cReached ? "" : "까지") + '</dt><dd>' + (isNum(m.cGap) ? (m.cReached ? "달성" : esc(f1(m.cGap)) + "%p") + (m.prov ? '<em class="gtag">임시</em>' : "") : "—") + "</dd></div></dl>" +
       '<div class="gs">' + sm.map(function (x) { return "<span>" + esc(x[0]) + " " + esc(pt(x[1])) + "</span>"; }).join("") + "</div>";
     if (!m.ok) h += '<p class="gw">' + esc(goalWhy(m)) + " 자세한 내용은 상세 보기에서 확인합니다.</p>";
     return h + "</div>";
@@ -214,7 +223,7 @@
       var m = goalModel(id, api); if (!m) return; var T = m.T, V = m.V, cur = m.cur;
       var tiers = [["기준 목표", T.base], ["상향 공식 목표", T.official], ["도전 목표", T.challenge]]; if (isNum(T.long)) tiers.push(["장기 목표", T.long]);
       var rows = tiers.map(function (x) { var ach = m.ok ? cur.value / x[1] * 100 : null; return "<tr" + (x[0] === "상향 공식 목표" ? ' class="of"' : "") + '><th>' + esc(x[0]) + "</th><td>" + esc(pt(x[1])) + "</td><td>" + (m.ok ? esc(rateT(ach)) : "검증 필요") + "</td><td>" + (m.ok ? (cur.value >= x[1] - 1e-9 ? "달성" : "−" + (Math.round((x[1] - cur.value) * 1000) / 10).toFixed(1) + "%p") : "—") + "</td></tr>"; }).join("");
-      var calc = m.ok ? "공식 목표 달성률 = " + p1(cur.value) + " ÷ " + pt(T.official) + " × 100 = " + rateT(m.rate) + " · 목표까지 차이 = " + pt(T.official) + " − " + p1(cur.value) + " = " + (Math.round(m.gap * 10) / 10).toFixed(1) + "%p" + (m.reached ? " (목표 달성 — 진행 막대는 100%에서 멈추고 달성률은 실제 값으로 표시)" : "") : goalWhy(m);
+      var calc = m.ok ? "공식 목표 달성률 = " + p1(cur.value) + " ÷ " + pt(T.official) + " × 100 = " + rateT(m.rate) + " · 목표까지 차이 = " + pt(T.official) + " − " + p1(cur.value) + " = " + (Math.round(m.gap * 10) / 10).toFixed(1) + "%p" + (m.reached ? "" : "") + " · 진행 막대 = 현재 실적 ÷ 도전 목표 × 100 = " + p1(cur.value) + " ÷ " + pt(T.challenge) + " × 100 = " + rateT(m.fillRaw) + (m.fillRaw > 100 ? " (막대는 100%에서 멈춤)" : "") + " · 도전 목표까지 " + (m.cReached ? "도달" : (Math.round(m.cGap * 10) / 10).toFixed(1) + "%p") : goalWhy(m);
       var dm = V.match === true ? "확인됨" : V.match === false ? "다름" : "미확정";
       h += '<section class="du-card du-gdet"><header><h3>목표 달성 계산 · ' + esc(m.name) + "</h3>" + pill(V.match === true ? "ok" : V.match === false ? "bad" : "wait", "정의 " + dm) + "</header>" +
         '<p class="gl">현재 실적: <b>' + (cur ? esc(p1(cur.value)) : "—") + "</b>" + (cur ? " · " + esc(cur.label) + (isNum(cur.num) && isNum(cur.den) ? " · " + api.num(cur.num) + " / " + api.num(cur.den) + "곳" : "") : " · 확인된 값 없음") + (cur && cur.src ? '<span class="src"> 출처 ' + esc(cur.src) + "</span>" : "") + "</p>" +
