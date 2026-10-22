@@ -7,7 +7,7 @@
    ============================================================ */
 (function () {
   var S = window.B2BSheet;
-  var V = { view: "growth", year: "2026", q: "", page: {}, per: 50, awardYear: "all", awardTrade: "all", ledgerYear: "all", ledgerKind: "all", ledgerMain: "all", vendor: null, inactFilter: "all", actYear: "2026", linkMsg: null, ledgerState: "idle", detail: null, draft: null, integrity: null, integrityBadOnly: false };
+  var V = { view: "dash", year: "2026", q: "", page: {}, per: 50, awardYear: "all", awardTrade: "all", ledgerYear: "all", ledgerKind: "all", ledgerMain: "all", vendor: null, inactFilter: "all", actYear: "2026", linkMsg: null, ledgerState: "idle", detail: null, draft: null, integrity: null, integrityBadOnly: false };
   var repaintRef = null; var ledgerRows = null; var OC = {};
   var MAIN_UNVERIFIED = { "2022": 1, "2023": 1 };
   var INTERNAL = /테스트|포어솔루션|넷폼/;
@@ -94,7 +94,7 @@
     else { cls = "fallback"; label = "공개 집계를 불러오지 못함"; }
     var sub = isPub() ? "기준일 " + esc(meta.asOf || "") + " · 서버 집계 " + esc(hhmm(meta.generatedAt)) + " · 시트 변경 감지 " + esc(hhmm(meta.sourceModified)) + " · 다음 확인 " + hms(sy.nextAt) + " (" + ivText(sy.interval) + "마다 자동)" : (sy.status === "syncing" ? progHtml() : esc(sy.message || ""));
     var h = '<div class="ks-bar"><span class="ks-src ' + cls + '"><span class="dot"></span>' + esc(label) + '</span><span class="mini">' + sub + '</span><span class="sp"></span><button class="btn ghost" data-kact="refresh"' + (st.loading ? " disabled" : "") + ">" + (st.loading ? "확인 중…" : "지금 확인") + '</button><button class="btn ghost" data-kact="view" data-id="link">상세 보기(로그인)</button>' + (isPub() ? '<button class="btn ghost" data-kact="integrity">검증 정보</button>' : "") + "</div>";
-    h += '<div class="ks-note"><b>공개 보기</b> — 로그인 없이 누구나 볼 수 있는 <b>집계값</b>입니다. 시공사·현장·거래 명세와 판매 원문은 포함하지 않으며(비공개), 시트를 공유받은 직원은 [상세 보기(로그인)]에서 기존처럼 근거 목록을 열람합니다. 2022~2025년은 확정 실적 · 2026년은 기준일까지 누계 · 시트가 바뀌면 서버가 자동으로 다시 집계합니다.</div>';
+    if (V.view !== "dash") h += '<div class="ks-note"><b>공개 보기</b> — 로그인 없이 누구나 볼 수 있는 <b>집계값</b>입니다. 시공사·현장·거래 명세와 판매 원문은 포함하지 않으며(비공개), 시트를 공유받은 직원은 [상세 보기(로그인)]에서 기존처럼 근거 목록을 열람합니다. 2022~2025년은 확정 실적 · 2026년은 기준일까지 누계 · 시트가 바뀌면 서버가 자동으로 다시 집계합니다.</div>';
     if (isPub() && sy.stale) h += '<div class="ks-warn stale"><b>이전 데이터입니다.</b> ' + esc(sy.message) + (p.checkedAt ? " 마지막 정상 확인: " + hhmm(p.checkedAt) : "") + '<div class="ks-tools" style="margin:8px 0 0"><button class="btn" data-kact="refresh">다시 시도</button></div></div>';
     return h;
   }
@@ -144,7 +144,7 @@
       (needBtn ? '<button class="btn" data-kact="gsignin">' + (signedBefore ? "로그인 상태 재확인" : "Google 로그인으로 연결") + "</button>" : "") +
       '<button class="btn ghost" data-kact="refresh"' + (st.loading ? " disabled" : "") + ">" + (st.loading ? "동기화 중…" : "지금 동기화") + '</button>' + (st.loading ? '<button class="btn ghost" data-kact="cancelsync">취소</button>' : "") + '<button class="btn ghost" data-kact="view" data-id="link">연결 설정</button><button class="btn ghost" data-kact="vmode" data-id="public">공개 보기</button><button class="btn ghost" data-kact="integrity">정합성 점검</button>' +
       ((st.signedIn || (live && m.auth === "google")) ? '<button class="btn ghost" data-kact="gsignout">로그아웃</button>' : "") + "</div>";
-    h += '<div class="ks-note">2022~2025년은 확정 과거 실적(변경은 승인 정정만) · 2026년은 지속 갱신(기준일 ' + esc(em.asOf || "2026-10-20") + ') · 공식 L2→L3 전환율은 검증된 확정 건만, 검토 건은 별도 표시 · <b>모든 지표 카드를 클릭하면 근거 목록이 열립니다</b></div>';
+    if (V.view !== "dash") h += '<div class="ks-note">2022~2025년은 확정 과거 실적(변경은 승인 정정만) · 2026년은 지속 갱신(기준일 ' + esc(em.asOf || "2026-10-20") + ') · 공식 L2→L3 전환율은 검증된 확정 건만, 검토 건은 별도 표시 · <b>모든 지표 카드를 클릭하면 근거 목록이 열립니다</b></div>';
     if (live && sy.stale) h += '<div class="ks-warn stale"><b>이전 데이터입니다.</b> ' + esc(sy.message) + " 마지막 정상 동기화: " + hhmm(sy.lastOkAt) + '<div class="ks-tools" style="margin:8px 0 0"><button class="btn" data-kact="refresh">다시 시도</button><button class="btn ghost" data-kact="diag">연결 진단</button></div></div>';
     else if (st.needSignIn && !live) h += '<div class="ks-warn" style="color:#92400E;background:#FFF4E5;border-color:#F5D9A8"><b>' + (signedBefore ? "로그인 상태를 재확인해야 합니다." : "Google 로그인이 필요합니다.") + "</b> " + (signedBefore ? "[로그인 상태 재확인]을 한 번 누르면 이어서 자동으로 불러옵니다(팝업을 허용해 두면 다음부터는 열 때 자동 재확인). " : "시트를 공유받은 직원 계정으로 로그인하면 실제 데이터가 표시됩니다. ") + esc(sy.message || "") + "</div>";
     else if ((sy.status === "denied" || sy.status === "signedout") && !live) h += '<div class="ks-warn"><b>' + (sy.status === "denied" ? "접근이 거부되었습니다." : "로그아웃되었습니다.") + "</b> " + esc(sy.message) + "</div>";
@@ -164,7 +164,92 @@
     h += table("schema", [{ k: "탭" }, { k: "행수", l: "행 수", r: 1, fmt: num }, { k: "상태", raw: 1, f: function (o) { return '<span class="st ' + (o.상태 === "정상" ? "ok" : o.상태 === "원문(필요 시 조회)" ? "" : "bad") + '">' + esc(o.상태) + "</span>"; }, csv: function (o) { return o.상태; } }, { k: "비고", wrap: 1 }], exp.map(function (n) { var inMeta = live && m.tabs && m.tabs[n]; var t = live ? (st.tabs && st.tabs[n]) : null; return { 탭: n, 행수: live ? (n === S.LEDGER ? (sy.ledgerCount != null ? sy.ledgerCount : null) : (t ? t.rows.length : null)) : null, 상태: !live ? "—" : n === S.LEDGER ? (iss.missingTabs.indexOf(n) >= 0 ? "누락" : badMap[n] ? "구조 변경" : "원문(필요 시 조회)") : iss.missingTabs.indexOf(n) >= 0 ? "누락" : badMap[n] ? "구조 변경" : inMeta ? "정상" : "—", 비고: badMap[n] ? "누락 열: " + badMap[n].missing.join(", ") : iss.missingTabs.indexOf(n) >= 0 ? "시트에 탭이 없습니다 — 0으로 표시하지 않음" : "" }; }), { per: 30 });
     return h + "</div>" + diagCard();
   }
-  function nav() { var items = pubWanted() ? [["growth", "성장 분석"], ["home", "요약"], ["link", "상세 보기(로그인)"]] : [["growth", "성장 분석"], ["home", "요약"], ["sales", "매출·원문"], ["awards", "낙찰"], ["vendors", "시공사"], ["activity", "영업활동"], ["leading", "선행지표"], ["link", "연결 설정"]]; return '<div class="ks-nav">' + items.map(function (x) { return '<button data-kact="view" data-id="' + x[0] + '"' + (V.view === x[0] ? ' aria-current="true"' : "") + ">" + x[1] + "</button>"; }).join("") + "</div>"; }
+
+  /* ============================================================
+     대시보드(첫 화면) — 화면 구조 정리: 핵심 KPI 3 → 주요 성과 그래프 → 상세 분석
+     · 데이터는 1.통합KPI · 18.선행지표요약 탭 값만 읽는다(기존 계산·동기화 코드 변경 없음). 값이 없으면 0 이 아니라 '—'/'데이터 연결 예정'
+     ============================================================ */
+  function dbIc(n) {
+    var p = { user: '<path d="M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1"/><circle cx="9.5" cy="7" r="3.5"/><path d="M19 8v6M16 11h6"/>', repeat: '<path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>', flow: '<circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="12" r="2.5"/><path d="M8 12h8M13 8l4 4-4 4"/>', biz: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>', chat: '<path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z"/>', award: '<circle cx="12" cy="9" r="6"/><path d="M8.5 14.5L7 22l5-3 5 3-1.5-7.5"/>', box: '<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>', cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>' }[n] || "";
+    return '<svg class="db-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + "</svg>";
+  }
+  function dbVal(v, fmt) {            /* 숫자만 값으로, 그 밖의 문구(미확인·데이터 없음·모수 없음)는 0 으로 바꾸지 않고 그대로 '값 없음' 상태로 */
+    if (isNum(v)) return { ok: true, t: fmt ? fmt(v) : String(v) };
+    var t = v == null || v === "" ? "—" : String(v); return { ok: false, t: t };
+  }
+  function dbKpi(o) {
+    var pend = !o.ok;
+    return '<article class="db-kpi ' + o.cls + (pend ? " pend" : "") + '"><div class="db-kpi-top"><span class="db-ic">' + dbIc(o.icon) + '</span><h3 class="db-kl">' + esc(o.label) + '</h3><span class="db-badge ' + (pend ? "wait" : "ok") + '">' + esc(o.badge) + "</span></div>" +
+      '<div class="db-kv' + (pend ? " na" : "") + '">' + (pend ? "—" : esc(o.value)) + "</div>" +
+      '<p class="db-kd">' + esc(o.def) + "</p>" + (o.foot ? '<p class="db-kf">' + o.foot + "</p>" : "") + "</article>";
+  }
+  function dbBars(o) {
+    var max = 0; o.series.forEach(function (s) { s.vals.forEach(function (v) { if (isNum(v) && v > max) max = v; }); });
+    var h = '<div class="db-chart"><div class="db-ch-h"><b>' + esc(o.title) + "</b>" + (o.sub ? '<span class="mini">' + esc(o.sub) + "</span>" : "") + '</div><div class="db-plot" style="--n:' + o.cats.length + '">';
+    o.cats.forEach(function (c, i) {
+      h += '<div class="db-col"><div class="db-grp">';
+      o.series.forEach(function (s) { var v = s.vals[i]; if (isNum(v)) h += '<i class="db-b ' + s.cls + '" style="height:' + Math.max(3, Math.round(v / max * 100)) + '%" title="' + esc(c.l + " · " + s.name + " " + s.fmt(v)) + '"></i>'; else h += '<i class="db-b na" title="' + esc(c.l + " · " + s.name + " " + (v == null ? "—" : v)) + '"></i>'; });
+      h += '</div><div class="db-y' + (c.cur ? " cur" : "") + '">' + esc(c.l) + '</div><div class="db-vals">';
+      o.series.forEach(function (s) { var v = s.vals[i]; h += '<span class="' + (isNum(v) ? "" : "na") + '"><i class="db-dot ' + s.cls + '"></i>' + esc(isNum(v) ? s.fmt(v) : (v == null || v === "" ? "—" : String(v))) + "</span>"; });
+      h += "</div></div>";
+    });
+    h += "</div>";
+    if (o.series.length > 1) h += '<div class="db-lg">' + o.series.map(function (s) { return '<span><i class="db-dot ' + s.cls + '"></i>' + esc(s.name) + "</span>"; }).join("") + "</div>";
+    return h + (o.foot ? '<p class="db-foot">' + esc(o.foot) + "</p>" : "") + "</div>";
+  }
+  function dbEmptyMonthly() {
+    var m = ""; for (var i = 1; i <= 12; i++) m += '<div class="db-col"><div class="db-grp"><i class="db-b ghost" style="height:' + (18 + (i * 37) % 46) + '%"></i></div><div class="db-y">' + i + "월</div></div>";
+    return '<div class="db-chart db-empty"><div class="db-ch-h"><b>월별 추이</b><span class="db-badge wait">데이터 연결 예정</span></div><div class="db-plot" style="--n:12" aria-hidden="true">' + m + '</div><div class="db-empty-msg"><b>월별 데이터가 아직 연결되지 않았습니다</b><span>연결되면 월별 공고·낙찰·매출 추이가 이 자리에 표시됩니다. 임의 수치는 넣지 않습니다.</span></div></div>';
+  }
+  function dbStat(label, v, sub, fmt) { var r = dbVal(v, fmt); return '<div class="db-stat' + (r.ok ? "" : " na") + '"><span class="l">' + esc(label) + '</span><b>' + esc(r.t) + "</b>" + (sub ? '<span class="s">' + sub + "</span>" : "") + "</div>"; }
+  function dbSec(id, ic, title, sub, body, link) {
+    return '<section class="db-sec" id="' + id + '"><header class="db-sec-h"><span class="db-ic sm">' + dbIc(ic) + "</span><div><h2>" + esc(title) + "</h2>" + (sub ? '<p class="mini">' + sub + "</p>" : "") + "</div>" + (link ? '<button class="btn ghost" data-kact="view" data-id="' + link[0] + '">' + esc(link[1]) + " →</button>" : "") + "</header>" + body + "</section>";
+  }
+  function dash() {
+    var ys = years(); if (!ys.length) return "";
+    var last = ys[ys.length - 1], kL = kpiRow(last) || {}, asOf = String(kL["기준"] || "").replace(/^~/, "");
+    var cats = ys.map(function (y) { return { l: y + (y === last ? "*" : ""), cur: y === last }; });
+    var col = function (c) { return ys.map(function (y) { return kpiVal(y, c); }); };
+    var L = leading("[공식] L2→L3 전환율"), Lc = leading("[공식] L3 전환 확정"), L2 = leading("L2 건수");
+    var okL = L && isNum(L["값"]);
+    var h = '<div class="db">';
+    h += '<header class="db-head"><div><h1>B2B 업무 성과 대시보드</h1><p class="mini">' + esc(ys[0]) + "~" + esc(last) + "년 · " + esc(last) + "년은 " + esc(asOf || "기준일") + "까지 누계(*) · 값이 없는 항목은 0 이 아니라 '—' 로 표시</p></div></header>";
+    /* 1) 핵심 KPI 3 */
+    h += '<div class="db-kpis">' +
+      dbKpi({ cls: "k1", icon: "user", label: "신규 업체 사용률", ok: false, badge: "데이터 연결 예정", def: "협약 체결 후 1년 이내 L3 활동 여부", foot: "신규 업체 = 협약 체결 1년 이내 업체" }) +
+      dbKpi({ cls: "k2", icon: "repeat", label: "재사용률", ok: false, badge: "데이터 연결 예정", def: "기존·신규 업체 전체 · 첫 L3 이후 다른 아파트의 L3 재발생 여부", foot: "기존·신규 업체 전체 기준" }) +
+      dbKpi({ cls: "k3", icon: "flow", label: "L2 → L3 전환률", ok: okL, value: okL ? pc(L["값"]) : "", badge: okL ? "시트 연결됨" : "데이터 연결 예정", def: "영업보고 이후 L3 활동으로 이어진 비율", foot: okL ? "현재 시트 기준값" + (Lc && L2 && isNum(Lc["값"]) && isNum(L2["값"]) ? " · " + num(Lc["값"]) + " ÷ " + num(L2["값"]) : "") + ' · <span class="warnt">정의 정리 예정</span>' : "시트에서 값을 읽지 못했습니다" }) + "</div>";
+    /* 2) 주요 성과 · 월별·연도별 추이 */
+    h += '<div class="db-sec-t"><h2>주요 성과</h2><span class="mini">연도별 추이 · 막대 아래 숫자가 값입니다</span></div><div class="db-grid">' +
+      dbBars({ title: "POUR 공고·낙찰", sub: "건수", cats: cats, series: [{ name: "POUR 반영 공고", cls: "c1", vals: col("POUR반영공고_건수"), fmt: num }, { name: "POUR 낙찰", cls: "c2", vals: col("POUR낙찰_건수"), fmt: num }], foot: "2022~2024는 POUR 공고만, 2025부터 전체 공고 중 자사 반영 공고(모집단 다름)" }) +
+      dbBars({ title: "낙찰금액", sub: "VAT 미확인", cats: cats, series: [{ name: "낙찰금액", cls: "c3", vals: col("POUR낙찰금액_VAT미확인"), fmt: function (v) { return won(v); } }] }) +
+      dbBars({ title: "자재 매출", sub: "전체 vs 메인자재 순매출", cats: cats, series: [{ name: "전체 자재", cls: "c1", vals: col("전체자재순매출"), fmt: function (v) { return won(v); } }, { name: "메인자재", cls: "c4", vals: col("메인자재순매출"), fmt: function (v) { return won(v); } }], foot: "메인자재는 2022~2023 품목명 검증 전이라 '미확인'" }) +
+      dbEmptyMonthly() + "</div>";
+    /* 3) 상세 분석 */
+    h += '<div class="db-sec-t"><h2>상세 분석</h2></div>';
+    /* 업체 현황 */
+    var tot = leading("전체 협력사"), inact = leading("장기 무활동"), none = leading("활동 이력 없음"), core = leading("핵심 협력사 수"), coreI = leading("핵심 협력사 중"), outer = leading("협력사 외 활동"), nu = leading("신규 협력사 활성화율");
+    var a = inact && isNum(inact["값"]) ? inact["값"] : null, nb = none && isNum(none["값"]) ? none["값"] : null, tv = tot && isNum(tot["값"]) ? tot["값"] : null;
+    var normal = inact && inact["비고"] ? Number(String(inact["비고"]).replace(/[^0-9]/g, "")) : null; if (!isNum(normal) || !normal) normal = null;
+    var seg = normal != null && a != null && nb != null && tv != null && normal + a + nb === tv ? [["정상 활동", normal, "c2"], ["장기 무활동(90일+)", a, "c3"], ["활동 이력 없음", nb, "c5"]] : null;
+    var bar = seg ? '<div class="db-stack" role="img" aria-label="협력사 활동 상태">' + seg.map(function (x) { return '<i class="' + x[2] + '" style="flex:' + x[1] + '" title="' + esc(x[0] + " " + num(x[1])) + '곳"></i>'; }).join("") + '</div><div class="db-lg">' + seg.map(function (x) { return '<span><i class="db-dot ' + x[2] + '"></i>' + esc(x[0]) + " <b>" + num(x[1]) + "</b></span>"; }).join("") + "</div>" : '<p class="mini">활동 상태 구성은 시트 값이 맞지 않아 표시하지 않습니다(데이터 확인 필요).</p>';
+    h += dbSec("db-vendor", "biz", "업체 현황", "B2B 마스터 기준 · 기준일 " + esc(tot && tot["기준"] ? String(tot["기준"]).replace(/^기준일\s*/, "") : "—"),
+      '<div class="db-stats">' + dbStat("전체 협력사", tv, "B2B 마스터", num) + dbStat("핵심 협력사", core ? core["값"] : null, "2025 낙찰 3건 이상(임시 정의)", num) + dbStat("핵심 중 장기 무활동", coreI ? coreI["값"] : null, "", num) + dbStat("협력사 외 활동 업체", outer ? outer["값"] : null, "마스터에 없는 업체", num) + dbStat("신규 협력사 활성화율", nu ? nu["값"] : null, nu && nu["비고"] ? esc(nu["비고"]) + " · 별도 정의" : "", pc) + "</div>" + bar);
+    /* 기술문의·공법설명회·컨설팅 */
+    var rows = [["기술자문 문의", "기술자문문의_건수"], ["컨설팅 요청", "컨설팅요청_건수"], ["공법설명회", "공법설명회_건수"], ["샘플·카탈로그", "샘플·카탈로그_건수"], ["기타 문의", "기타문의_건수"], ["영업활동 업체 수", "영업활동_업체수"]];
+    var pYear = ys[ys.length - 2], mx = 0; rows.forEach(function (r) { var v = kpiVal(last, r[1]); if (isNum(v) && v > mx) mx = v; });
+    h += dbSec("db-inq", "chat", "기술문의 · 공법설명회 · 컨설팅 현황", esc(last) + "년 " + esc(asOf) + " 누계" + (pYear ? " · " + esc(pYear) + "년 비교" : ""),
+      '<div class="db-hbars">' + rows.map(function (r) { var v = kpiVal(last, r[1]), p = pYear ? kpiVal(pYear, r[1]) : null; return '<div class="db-hb"><span class="l">' + esc(r[0]) + '</span><div class="trk">' + (isNum(v) ? '<i style="width:' + Math.max(2, Math.round(v / mx * 100)) + '%"></i>' : "") + '</div><b>' + esc(dbVal(v, num).t) + '</b><span class="p">' + esc(pYear || "") + ' ' + esc(dbVal(p, num).t) + "</span></div>"; }).join("") + '</div><p class="db-foot">2022~2024년은 플랫폼 기록이 없어 값이 없습니다(데이터 없음). ' + esc(pYear || "") + '년은 기록 시작(2025-06-24) 이후 값입니다.</p>', ["growth", "성장 분석"]);
+    /* 연도별 공고·낙찰 현황 */
+    h += dbSec("db-award", "award", "연도별 공고 · 낙찰 현황", "POUR 공고·낙찰 기준",
+      '<div class="db-years">' + ys.map(function (y) { var k = kpiRow(y) || {}; return '<div class="db-yc' + (y === last ? " cur" : "") + '"><h4>' + esc(y) + (y === last ? "<small>" + esc(asOf) + "까지</small>" : "") + "</h4>" + dbStat("POUR 반영 공고", k["POUR반영공고_건수"], "", num) + dbStat("POUR 낙찰", k["POUR낙찰_건수"], "", num) + dbStat("낙찰금액", k["POUR낙찰금액_VAT미확인"], "VAT 미확인", function (v) { return won(v); }) + dbStat("낙찰 시공사", k["낙찰시공사수"], "곳(표기 기준)", num) + dbStat("전체 공고", k["전체공고_건수"], "", num) + "</div>"; }).join("") + "</div>", ["growth", "성장 분석"]);
+    /* 메인자재 판매·매출 */
+    h += dbSec("db-main", "box", "메인자재 판매 · 매출 현황", "전체 자재 순매출과 메인자재(우레탄·페인트·에폭시) 기준",
+      '<div class="db-years">' + ys.map(function (y) { var k = kpiRow(y) || {}; return '<div class="db-yc' + (y === last ? " cur" : "") + '"><h4>' + esc(y) + (y === last ? "<small>" + esc(asOf) + "까지</small>" : "") + "</h4>" + dbStat("전체 자재 순매출", k["전체자재순매출"], "", function (v) { return won(v); }) + dbStat("메인자재 순매출", k["메인자재순매출"], "", function (v) { return won(v); }) + dbStat("메인 비중", k["메인비중"], "", pc) + dbStat("메인 구매 거래처", k["메인구매거래처수"], "곳", num) + "</div>"; }).join("") + "</div>", ["growth", "성장 분석"]);
+    h += '<p class="db-note">증감·동일기간 비교·공종별 집계·품목별 매출은 <a class="vlink" data-kact="view" data-id="growth">성장 분석</a>에서 볼 수 있습니다. 데이터는 구글시트(25개 탭)에서 자동 집계된 값이며 시공사·현장·거래 명세는 포함하지 않습니다.</p>';
+    return h + "</div>";
+  }
+  function nav() { var items = pubWanted() ? [["dash", "대시보드"], ["growth", "성장 분석"], ["link", "상세 보기(로그인)"]] : [["dash", "대시보드"], ["growth", "성장 분석"], ["home", "요약(근거 목록)"], ["sales", "매출·원문"], ["awards", "낙찰"], ["vendors", "시공사"], ["activity", "영업활동"], ["leading", "선행지표"], ["link", "연결 설정"]]; return '<div class="ks-nav">' + items.map(function (x) { return '<button data-kact="view" data-id="' + x[0] + '"' + (V.view === x[0] ? ' aria-current="true"' : "") + ">" + x[1] + "</button>"; }).join("") + "</div>"; }
   function yearChips(cur, act) { return '<div class="ks-chips">' + years().map(function (y) { return '<button data-kact="' + act + '" data-id="' + y + '"' + (cur === y ? ' aria-current="true"' : "") + ">" + y + (y === "2026" ? " (~10/20)" : "") + "</button>"; }).join("") + "</div>"; }
 
   /* ---------- 팀장 핵심 지표 6 (최신 연도 · 전년 동일기간 대비, 1.통합KPI 탭 값만 사용) ---------- */
@@ -467,9 +552,9 @@
     if (!S.state.ready) return '<div class="kp ks"><div class="card"><div class="loading">' + (S.state.decodeError ? "데이터를 열 수 없습니다: " + esc(S.state.decodeError) : "저장된 데이터 여는 중…") + "</div></div></div>";
     var ready = has("1.통합KPI");
     if (!ready && V.view !== "link") { V.detail = null; V.integrity = null; return '<div class="kp ks">' + statusBar() + nav() + (pubWanted() ? pubWaiting() : waiting()) + "</div>"; }
-    if (isPub() && !/^(growth|home|link)$/.test(V.view)) V.view = "growth";
-    var body = V.view === "growth" ? growthBody() : V.view === "home" ? home() : V.view === "sales" ? sales() : V.view === "awards" ? awards() : V.view === "vendors" ? vendors() : V.view === "activity" ? activity() : V.view === "leading" ? leadingView() : link();
-    return '<div class="kp ks">' + statusBar() + nav() + body + detailModal() + integrityModal() + "</div>";
+    if (isPub() && !/^(dash|growth|link)$/.test(V.view)) V.view = "dash";
+    var body = V.view === "dash" ? dash() : V.view === "growth" ? growthBody() : V.view === "home" ? home() : V.view === "sales" ? sales() : V.view === "awards" ? awards() : V.view === "vendors" ? vendors() : V.view === "activity" ? activity() : V.view === "leading" ? leadingView() : link();
+    return '<div class="kp ks' + (V.view === "dash" ? ' is-dash' : '') + '">' + statusBar() + nav() + body + detailModal() + integrityModal() + "</div>";
   }
   /* 성장 분석 모듈(growth-page.js)에 넘기는 공용 도구 */
   var API = { S: S, V: V, esc: esc, won: won, num: num, hhmm: hhmm, has: has, objs: objs, csv: csv, ledger: function () { return ledgerRows; }, needLedger: needLedger, repaint: function (soft) { if (repaintRef) repaintRef(!!soft); }, goOldVendor: function (id, name) { goVendor(id, name); }, setView: function (v) { V.view = v; if (repaintRef) repaintRef(false); } };
