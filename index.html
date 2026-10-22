@@ -770,104 +770,6 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
 .ks .ks-pbar{display:inline-block;vertical-align:middle;width:90px;height:6px;border-radius:3px;background:rgba(127,127,127,.25);margin-left:8px;overflow:hidden}
 .ks .ks-pbar i{display:block;height:100%;background:currentColor;opacity:.7;transition:width .3s}
 
-/* ===== 대시보드(첫 화면) — 밝고 깔끔한 SaaS 스타일 · 모바일 우선 (접두어 db-) ===== */
-.db{--db-line:#E7ECF3;--db-card:#fff;--db-ink:#1F2A44;--db-sub:#6B7790;--db-i:#4F6BED;--db-t:#14B8A6;--db-a:#F5A524;--db-p:#8B5CF6;--db-g:#CBD5E1;min-width:0}
-.db *{box-sizing:border-box}
-.db h1,.db h2,.db h3,.db h4{margin:0}
-.db-head{margin:2px 0 14px}
-.db-head h1{font-size:22px;font-weight:900;letter-spacing:-.4px;color:var(--db-ink);line-height:1.3}
-.db-head .mini{margin-top:3px;white-space:normal;line-height:1.55}
-.db-sec-t{display:flex;align-items:baseline;gap:10px;margin:26px 2px 10px}
-.db-sec-t h2{font-size:15px;font-weight:900;color:var(--db-ink);letter-spacing:-.2px}
-.db-sec-t .mini{white-space:normal}
-/* KPI 3 */
-.db-kpis{display:grid;grid-template-columns:1fr;gap:12px}
-@media (min-width:860px){ .db-kpis{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px} }
-.db-kpi{position:relative;background:var(--db-card);border:1px solid var(--db-line);border-radius:18px;padding:18px 18px 16px;box-shadow:0 1px 2px rgba(16,24,40,.04),0 8px 24px rgba(16,24,40,.05);overflow:hidden;min-width:0}
-.db-kpi::before{content:"";position:absolute;left:0;top:0;right:0;height:4px;background:var(--acc,var(--db-i))}
-.db-kpi.k1{--acc:var(--db-i);--accbg:#EEF1FE}.db-kpi.k2{--acc:var(--db-t);--accbg:#E6F8F5}.db-kpi.k3{--acc:var(--db-a);--accbg:#FFF4DE}
-.db-kpi-top{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
-.db-ic{width:34px;height:34px;border-radius:11px;background:var(--accbg,#EEF1FE);color:var(--acc,var(--db-i));display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
-.db-ic.sm{width:30px;height:30px;border-radius:9px;background:#EEF1FE;color:var(--db-i)}
-.db-svg{width:19px;height:19px}
-.db-kl{font-size:14.5px;font-weight:800;color:var(--db-ink);flex:1;min-width:0;letter-spacing:-.2px}
-.db-badge{font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:100px;white-space:nowrap}
-.db-badge.ok{background:#E8F7EE;color:#15803D}.db-badge.wait{background:#F1F4F9;color:#6B7790;border:1px dashed #C9D2E0}
-.db-kv{font-size:clamp(38px,6vw,52px);font-weight:900;letter-spacing:-1.5px;color:var(--db-ink);line-height:1.1;margin:6px 0 8px;font-variant-numeric:tabular-nums}
-.db-kv.na{color:#B6C0D0;font-weight:800}
-.db-kd{font-size:12.5px;color:var(--db-ink);line-height:1.6;font-weight:600;margin:0 0 6px;word-break:keep-all}
-.db-kf{font-size:11.5px;color:var(--db-sub);line-height:1.6;margin:0;word-break:keep-all}
-.db-kf .warnt{color:#B45309;font-weight:800}
-.db-kpi.pend .db-kv::after{content:"";display:block;height:6px;margin-top:10px;border-radius:6px;background:repeating-linear-gradient(90deg,#E4E9F2 0 8px,transparent 8px 14px)}
-/* 차트 */
-.db-grid{display:grid;grid-template-columns:1fr;gap:12px}
-@media (min-width:860px){ .db-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px} }
-.db-chart,.db-sec{background:var(--db-card);border:1px solid var(--db-line);border-radius:16px;padding:16px;box-shadow:0 1px 2px rgba(16,24,40,.03);min-width:0}
-.db-ch-h{display:flex;align-items:baseline;gap:8px;margin-bottom:12px;flex-wrap:wrap}
-.db-ch-h b{font-size:14px;font-weight:800;color:var(--db-ink)}
-.db-ch-h .mini{white-space:normal}
-.db-plot{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:6px;align-items:end}
-.db-col{display:flex;flex-direction:column;align-items:stretch;min-width:0}
-.db-grp{height:132px;display:flex;align-items:flex-end;justify-content:center;gap:3px;border-bottom:1px solid var(--db-line);padding:0 4%}
-.db-b{display:block;flex:1 1 0;max-width:30px;border-radius:6px 6px 0 0;background:var(--db-g);min-height:3px}
-.db-b.c1,.db-dot.c1{background:var(--db-i)}.db-b.c2,.db-dot.c2{background:var(--db-t)}.db-b.c3,.db-dot.c3{background:var(--db-a)}.db-b.c4,.db-dot.c4{background:var(--db-p)}.db-b.c5,.db-dot.c5{background:var(--db-g)}
-.db-b.na{background:repeating-linear-gradient(135deg,#E8EDF5 0 4px,#F6F8FB 4px 8px);border:1px dashed #C9D2E0;border-bottom:0;height:14px!important}
-.db-b.ghost{background:#EDF1F7;border:1px dashed #D3DBE8;border-bottom:0}
-.db-y{text-align:center;font-size:11px;font-weight:800;color:var(--db-sub);margin-top:6px}
-.db-y.cur{color:var(--db-i)}
-.db-vals{display:flex;flex-direction:column;gap:1px;margin-top:3px;text-align:center}
-.db-vals span{font-size:10.5px;font-weight:700;color:var(--db-ink);line-height:1.45;white-space:nowrap;font-variant-numeric:tabular-nums}
-.db-vals span.na{color:#9AA6BA;font-weight:600;font-size:10px}
-.db-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:1px;background:var(--db-g)}
-.db-lg{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:10px;font-size:11.5px;color:var(--db-sub);font-weight:700}
-.db-lg b{color:var(--db-ink);font-weight:800}
-.db-foot{font-size:11px;color:var(--db-sub);line-height:1.6;margin:10px 0 0}
-@media (max-width:420px){ .db-vals span{font-size:9.5px} .db-vals span.na{font-size:9px} .db-grp{padding:0 1%} }
-.db-empty .db-b.ghost{max-width:14px}
-.db-empty-msg{margin-top:12px;border:1px dashed #D3DBE8;background:#F8FAFD;border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--db-sub);line-height:1.6}
-.db-empty-msg b{color:var(--db-ink);font-size:12.5px}
-/* 상세 분석 섹션 */
-.db-sec{margin-bottom:12px;padding:18px}
-.db-sec-h{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
-.db-sec-h>div{flex:1;min-width:0}
-.db-sec-h h2{font-size:15px;font-weight:900;color:var(--db-ink);letter-spacing:-.2px}
-.db-sec-h .mini{white-space:normal;margin-top:1px}
-.db-sec-h .btn{padding:5px 10px;font-size:12px;white-space:nowrap}
-.db-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-@media (min-width:700px){ .db-stats{grid-template-columns:repeat(5,minmax(0,1fr))} }
-.db-stat{background:#F8FAFD;border:1px solid #EDF1F7;border-radius:12px;padding:11px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
-.db-stat .l{font-size:11.5px;color:var(--db-sub);font-weight:700;line-height:1.4}
-.db-stat b{font-size:19px;font-weight:900;color:var(--db-ink);letter-spacing:-.4px;font-variant-numeric:tabular-nums;line-height:1.25;word-break:keep-all}
-.db-stat.na b{color:#A9B4C7;font-size:15px;font-weight:800}
-.db-stat .s{font-size:10.5px;color:var(--db-sub);line-height:1.45}
-.db-stack{display:flex;height:12px;border-radius:8px;overflow:hidden;background:#EDF1F7;margin-top:16px;gap:2px}
-.db-stack i{display:block;min-width:3px}
-.db-stack i.c2{background:var(--db-t)}.db-stack i.c3{background:var(--db-a)}.db-stack i.c5{background:var(--db-g)}
-.db-hbars{display:flex;flex-direction:column;gap:9px}
-.db-hb{display:grid;grid-template-columns:104px minmax(0,1fr) auto;gap:4px 10px;align-items:center}
-.db-hb .l{font-size:12.5px;font-weight:700;color:var(--db-ink)}
-.db-hb .trk{height:10px;border-radius:6px;background:#EDF1F7;overflow:hidden}
-.db-hb .trk i{display:block;height:100%;border-radius:6px;background:var(--db-i)}
-.db-hb b{font-size:13px;font-weight:900;color:var(--db-ink);min-width:44px;text-align:right;font-variant-numeric:tabular-nums}
-.db-hb .p{grid-column:2/4;font-size:10.5px;color:var(--db-sub);margin-top:-3px}
-@media (min-width:700px){ .db-hb{grid-template-columns:130px minmax(0,1fr) 64px 110px} .db-hb .p{grid-column:auto;margin-top:0;text-align:right} }
-.db-years{display:grid;grid-template-columns:1fr;gap:10px}
-@media (min-width:520px){ .db-years{grid-template-columns:repeat(2,minmax(0,1fr))} }
-@media (min-width:980px){ .db-years{grid-template-columns:repeat(5,minmax(0,1fr))} }
-.db-yc{border:1px solid #EDF1F7;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0;background:#fff}
-.db-yc.cur{border-color:#C9D3FA;background:#F6F8FF}
-.db-yc h4{font-size:14px;font-weight:900;color:var(--db-ink);display:flex;align-items:baseline;gap:6px}
-.db-yc h4 small{font-size:10.5px;font-weight:700;color:var(--db-i)}
-.db-yc .db-stat{background:transparent;border:0;border-top:1px solid #F0F3F8;border-radius:0;padding:7px 0 0}
-.db-yc .db-stat b{font-size:16px}
-.db-note{font-size:12px;color:var(--db-sub);line-height:1.7;margin:16px 4px 4px}
-.db .mini{color:var(--db-sub)}
-.db .mini{border:0;background:none;padding:0;border-radius:0;display:block;font-weight:500;color:var(--db-sub);font-size:12px;line-height:1.55}
-.db-ch-h .mini{display:inline-block;background:#F1F4F9;border-radius:100px;padding:2px 9px;font-size:11px;font-weight:700}
-.db-sec-t .mini{display:inline}
-.db-sec-h h2{display:block}
-@media (max-width:640px){ .ks.is-dash .ks-bar .mini{display:none} .ks.is-dash .ks-bar{margin-bottom:8px} .ks.is-dash .ks-nav{margin-bottom:8px} .db-head{margin:0 0 10px} .db-head h1{font-size:19px} }
-
 /* ===== POUR 사업 성장 분석 대시보드 (접두어 gw-) — 모바일 우선, 트래커 토큰 재사용 ===== */
 .gw{min-width:0}
 .gw .card{margin-bottom:14px}
@@ -984,6 +886,164 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
 .gw-pubtag{display:inline-block;font-size:11.5px;font-weight:800;color:#166534;background:#ECFDF3;border-radius:100px;padding:3px 10px;margin:0 0 6px}
 .gw-priv{background:var(--surf);border:1px dashed var(--line);border-radius:9px;padding:9px 12px;line-height:1.65}
 .gw-defs input:disabled,.gw-defs textarea:disabled{background:var(--surf);color:var(--text-3);cursor:not-allowed}
+
+/* ===== B2B 업무 대시보드(접두어 du-) — 밝은 배경 · 차분한 청록/파랑 포인트 · PC 우선, 모바일 반응형 ===== */
+.du{--du-ink:#16233B;--du-sub:#64748B;--du-line:#E4EAF2;--du-bg:#F6F9FC;--du-blue:#2F6FDE;--du-teal:#0E9F9A;--du-navy:#27487F;--du-mute:#CBD5E1;--du-radius:16px;min-width:0}
+.du *{box-sizing:border-box}
+.du h1,.du h2,.du h3,.du h4,.du p{margin:0}
+.ks.is-dash .ks-note{display:none}
+.du-head{margin:2px 0 14px}
+.du-head h1{font-size:22px;font-weight:900;letter-spacing:-.4px;color:var(--du-ink);line-height:1.3}
+.du-head p{margin-top:3px;font-size:12.5px;color:var(--du-sub);line-height:1.55}
+.du-t{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:26px 2px 10px}
+.du-t h2{font-size:15px;font-weight:900;color:var(--du-ink);letter-spacing:-.2px}
+.du-t span{font-size:12px;color:var(--du-sub)}
+.du-svg{width:19px;height:19px}
+.du-pill{display:inline-block;font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:100px;white-space:nowrap;line-height:1.4}
+.du-pill.ok{background:#E3F6F1;color:#0B7A6E}.du-pill.part{background:#E8F0FD;color:#2455B8}.du-pill.bad{background:#FDEBEA;color:#B42318}
+.du-pill.wait{background:#F1F5F9;color:#64748B;border:1px dashed #C6D0DD}
+.du-dash{color:#8A97AB;font-weight:600}
+.du-go{padding:5px 10px;font-size:12px;white-space:nowrap}
+.du-lg{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:10px;font-size:11.5px;color:var(--du-sub);font-weight:700}
+.du-lg b{color:var(--du-ink)}
+.du-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:0;background:var(--du-mute)}
+.du-dot.c1,.du-stack i.c1{background:var(--du-blue)}.du-dot.c2,.du-stack i.c2{background:var(--du-teal)}.du-dot.c3,.du-stack i.c3{background:var(--du-mute)}
+/* KPI 3 */
+.du-kpis{display:grid;grid-template-columns:1fr;gap:12px}
+@media (min-width:900px){ .du-kpis{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px} }
+.du-kpi{position:relative;background:#fff;border:1px solid var(--du-line);border-radius:18px;padding:18px 18px 14px;box-shadow:0 1px 2px rgba(16,24,40,.04),0 10px 28px rgba(16,24,40,.05);overflow:hidden;min-width:0;display:flex;flex-direction:column;gap:8px}
+.du-kpi::before{content:"";position:absolute;left:0;top:0;right:0;height:4px;background:var(--acc)}
+.du-kpi.k1{--acc:var(--du-blue);--tint:#EAF1FD}.du-kpi.k2{--acc:var(--du-teal);--tint:#E3F6F4}.du-kpi.k3{--acc:var(--du-navy);--tint:#E9EEF8}
+.du-kpi .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.du-kpi .ic{width:34px;height:34px;border-radius:11px;background:var(--tint);color:var(--acc);display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.du-kpi h3{font-size:14.5px;font-weight:800;color:var(--du-ink);flex:1;min-width:0;letter-spacing:-.2px}
+.du-kpi .val{font-size:clamp(40px,5vw,54px);font-weight:900;letter-spacing:-1.6px;color:var(--du-ink);line-height:1.1;font-variant-numeric:tabular-nums;margin-top:4px}
+.du-kpi .val.na{color:#B8C3D3;font-weight:800}
+.du-kpi .def{font-size:12.5px;line-height:1.6;color:var(--du-ink);font-weight:600;word-break:keep-all;min-height:40px}
+.du-kpi .yoy,.du-kpi .trend{display:flex;align-items:center;gap:10px;font-size:12.5px;border-top:1px solid #EEF2F7;padding-top:8px;min-height:40px}
+.du-kpi .l{font-size:11.5px;color:var(--du-sub);font-weight:700;flex:0 0 52px}
+.du-kpi .yoy .v{font-weight:800;color:var(--du-ink);display:flex;flex-direction:column;gap:1px}
+.du-kpi .yoy .s{font-size:10.5px;color:var(--du-sub);font-weight:500}
+.du-kpi .kn{font-size:11.5px;color:var(--du-sub);line-height:1.55;word-break:keep-all}
+.du-kpi .warnt{color:#B45309;font-weight:800}
+.du-kpi .foot{display:flex;justify-content:flex-end;margin-top:auto;padding-top:2px}
+.du-kpi.pend .val::after{content:"";display:block;height:6px;margin-top:10px;border-radius:6px;background:repeating-linear-gradient(90deg,#E4E9F2 0 8px,transparent 8px 14px)}
+.du-spark{width:120px;height:30px}.du-spark path{fill:none;stroke:var(--acc);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* 카드 · 요약 */
+.du-card{background:#fff;border:1px solid var(--du-line);border-radius:var(--du-radius);padding:16px;box-shadow:0 1px 2px rgba(16,24,40,.03);min-width:0}
+.du-card>header{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.du-card>header h3{font-size:14px;font-weight:800;color:var(--du-ink);flex:1;min-width:0}
+.du-sum{display:grid;grid-template-columns:1fr;gap:12px}
+@media (min-width:700px){ .du-sum{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (min-width:1180px){ .du-sum{grid-template-columns:repeat(4,minmax(0,1fr));gap:14px} }
+.du-stat{display:flex;flex-direction:column;gap:2px;min-width:0}
+.du-stat .l{font-size:11.5px;color:var(--du-sub);font-weight:700;line-height:1.4}
+.du-stat b{font-size:19px;font-weight:900;color:var(--du-ink);letter-spacing:-.4px;font-variant-numeric:tabular-nums;line-height:1.25;word-break:keep-all}
+.du-stat.big b{font-size:26px}
+.du-stat b small{font-size:12px;font-weight:700;color:var(--du-sub);margin-left:3px}
+.du-stat.na b{color:#AAB5C6;font-weight:800}
+.du-stat .s{font-size:10.5px;color:var(--du-sub);line-height:1.45}
+.du-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.s2{font-size:11.5px;color:var(--du-sub);line-height:1.6;margin-top:10px!important}
+.s2 b.warnt{color:#B45309}
+.du-stack{display:flex;height:10px;border-radius:8px;overflow:hidden;background:#EDF1F7;margin-top:12px;gap:2px}
+.du-stack i{display:block;min-width:3px}
+.du-mini{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:6px;align-items:end;height:74px;margin-top:12px}
+.du-mini.big{height:150px;gap:8px;margin-top:4px}
+.du-mini .c{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;min-width:0;gap:4px}
+.du-mini i{display:block;width:100%;max-width:30px;border-radius:5px 5px 0 0;background:#BFD3F5;min-height:4px}
+.du-mini i.cur{background:var(--du-blue)}
+.du-mini i.na{height:14px!important;background:repeating-linear-gradient(135deg,#E8EDF5 0 4px,#F6F8FB 4px 8px);border:1px dashed #C9D2E0;border-bottom:0}
+.du-mini i.ghost{background:#EDF1F7;border:1px dashed #D3DBE8;border-bottom:0}
+.du-mini.big i{max-width:26px}
+.du-mini span{font-size:10.5px;font-weight:700;color:var(--du-sub);line-height:1}
+/* 추이 · 흐름 */
+.du-flowrow{display:grid;grid-template-columns:1fr;gap:12px}
+@media (min-width:980px){ .du-flowrow{grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:14px} }
+.du-empty{margin-top:12px;border:1px dashed #D3DBE8;background:#F8FAFD;border-radius:12px;padding:11px 14px;display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--du-sub);line-height:1.6}
+.du-empty b{color:var(--du-ink);font-size:12.5px}
+.du-flow{display:flex;align-items:center;gap:10px}
+.du-flow .n{flex:1;background:#F4F8FD;border:1px solid #E2EAF5;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.du-flow .n span{font-size:11.5px;color:var(--du-sub);font-weight:700}
+.du-flow .n b{font-size:24px;font-weight:900;color:var(--du-ink);font-variant-numeric:tabular-nums}
+.du-flow .ar{font-style:normal;font-size:20px;color:var(--du-teal);font-weight:900}
+.du-rate{display:flex;align-items:baseline;gap:10px;margin-top:12px;padding-top:10px;border-top:1px solid #EEF2F7}
+.du-rate span{font-size:12px;color:var(--du-sub);font-weight:700}
+.du-rate b{font-size:28px;font-weight:900;color:var(--du-navy);letter-spacing:-.8px}
+.du-routes{margin-top:12px;display:grid;grid-template-columns:1fr;gap:10px;background:#fff;border:1px solid var(--du-line);border-radius:var(--du-radius);padding:14px 16px}
+@media (min-width:760px){ .du-routes{grid-template-columns:repeat(3,minmax(0,1fr))} .du-rt-h{grid-column:1/-1} }
+.du-rt-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.du-rt-h h3{font-size:14px;font-weight:800;color:var(--du-ink)}.du-rt-h span{font-size:12px;color:var(--du-sub)}
+.du-rt{border:1px solid #E6ECF4;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.du-rt b{font-size:14px;font-weight:900;color:var(--du-ink)}.du-rt span{font-size:11.5px;color:var(--du-sub)}
+.du-rt em{font-style:normal;font-size:26px;font-weight:900;color:#B8C3D3;line-height:1.3}
+/* 추가 데이터 5종 */
+.du-data{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (min-width:760px){ .du-data{grid-template-columns:repeat(3,minmax(0,1fr))} }
+@media (min-width:1180px){ .du-data{grid-template-columns:repeat(5,minmax(0,1fr));gap:12px} }
+.du-dcard{all:unset;box-sizing:border-box;cursor:pointer;background:#fff;border:1px solid var(--du-line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:6px;align-items:flex-start;min-width:0;transition:border-color .15s,box-shadow .15s}
+.du-dcard:hover,.du-dcard:focus-visible{border-color:#9DB9EE;box-shadow:0 4px 14px rgba(47,111,222,.10)}
+.du-dcard .ic{width:32px;height:32px;border-radius:10px;background:#E9F0FC;color:var(--du-blue);display:inline-flex;align-items:center;justify-content:center}
+.du-dcard b{font-size:14px;font-weight:800;color:var(--du-ink)}
+.du-dcard .s{font-size:11.5px;color:var(--du-sub);line-height:1.5;word-break:keep-all;flex:1}
+/* 행동 이력 */
+.du-act{display:grid;grid-template-columns:1fr;gap:14px}
+@media (min-width:900px){ .du-act{grid-template-columns:minmax(0,2.2fr) minmax(0,1fr);align-items:center} }
+.du-actg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (min-width:700px){ .du-actg{grid-template-columns:repeat(5,minmax(0,1fr))} }
+.du-actb{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.du-note{font-size:12px;color:var(--du-sub);line-height:1.7;margin:16px 4px 4px}
+/* 데이터 화면 */
+.du-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;-webkit-overflow-scrolling:touch}
+.du-tabs button{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font-size:12.5px;font-weight:800;padding:8px 13px;border-radius:100px;border:1px solid var(--du-line);background:#fff;color:var(--du-sub);min-height:36px}
+.du-tabs button .ic{display:inline-flex;color:inherit}.du-tabs .du-svg{width:16px;height:16px}
+.du-tabs button[aria-current="true"]{background:var(--du-blue);border-color:var(--du-blue);color:#fff}
+.du-dhead{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px}
+.du-dhead>div{flex:1;min-width:0}
+.du-dhead h2{font-size:17px;font-weight:900;color:var(--du-ink)}
+.du-dhead p{font-size:12.5px;color:var(--du-sub);line-height:1.6;margin-top:3px}
+.du-dhead .src{margin-top:6px;font-size:11.5px}.du-dhead .src b{color:var(--du-ink);margin-right:4px}
+.du-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:12px}
+@media (min-width:760px){ .du-stats{grid-template-columns:repeat(5,minmax(0,1fr))} }
+.du-stats .du-stat{background:#fff;border:1px solid var(--du-line);border-radius:14px;padding:13px 14px}
+.du-filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;background:#fff;border:1px solid var(--du-line);border-radius:14px;padding:10px 12px}
+.du-filters .f{display:flex;flex-direction:column;gap:3px;min-width:96px}
+.du-filters .f.grow{flex:1;min-width:150px}
+.du-filters .f span{font-size:10.5px;font-weight:800;color:var(--du-sub)}
+.du-filters select,.du-filters input{font:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--du-line);border-radius:8px;background:#fff;min-height:36px;color:var(--du-ink);width:100%}
+.du-filters select:disabled,.du-filters input:disabled{background:#F4F7FA;color:#9AA7BA;cursor:not-allowed}
+.du-hint{font-size:11.5px;color:var(--du-sub);line-height:1.55;margin:4px 2px 10px!important}
+.du-dgrid{display:grid;grid-template-columns:1fr;gap:12px;margin:6px 0 12px}
+@media (min-width:980px){ .du-dgrid{grid-template-columns:repeat(3,minmax(0,1fr))} .du-dgrid .wide{grid-column:1/-1} }
+.du-h3{font-size:14px;font-weight:800;color:var(--du-ink);margin-bottom:8px!important}
+.du-ex{margin:0 0 6px;padding-left:18px;font-size:12.5px;color:var(--du-ink);line-height:1.8}
+.du-rank{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+.du-rank li{display:grid;grid-template-columns:minmax(70px,1.3fr) minmax(0,2fr) auto;gap:8px;align-items:center;font-size:12.5px}
+.du-rank .n{color:var(--du-ink);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.du-rank i{display:block;height:8px;border-radius:6px;background:#EDF1F7;overflow:hidden}.du-rank u{display:block;height:100%;border-radius:6px;background:var(--du-teal);text-decoration:none}
+.du-rank b{font-weight:900;color:var(--du-ink);font-variant-numeric:tabular-nums;min-width:36px;text-align:right}
+.du-rank.ghost li{opacity:.7}.du-rank.ghost .n,.du-rank.ghost b{display:block;height:8px;background:#EDF1F7;border-radius:4px}.du-rank.ghost u{background:#DCE4EF}
+.du-vs{display:flex;gap:6px;flex-wrap:wrap}
+.du-tw{overflow-x:auto;border:1px solid #EEF2F7;border-radius:12px}
+.du-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.du-tbl th{font-size:11px;color:var(--du-sub);font-weight:800;background:#F6F9FC;text-align:left;padding:9px 12px;white-space:nowrap;border-bottom:1px solid var(--du-line)}
+.du-tbl td{padding:9px 12px;border-bottom:1px solid #F0F3F8;color:var(--du-ink);white-space:nowrap}
+.du-tbl td.r{text-align:right;font-variant-numeric:tabular-nums}
+.du-tbl tr.dup td{background:#FFF7F6;color:#8A4B46}
+.du-tbl td.empty{white-space:normal;text-align:center;padding:30px 14px;color:var(--du-sub);line-height:1.7}
+.du-tbl td.empty b{display:block;color:var(--du-ink);font-size:13.5px;margin-bottom:2px}
+.du-pg{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:12px;color:var(--du-sub)}.du-pg .sp{flex:1}
+.du-pg .btn{padding:5px 11px;font-size:12px}
+@media (max-width:640px){
+  .du-head h1{font-size:19px} .du-head{margin:0 0 10px}
+  .ks.is-dash .ks-bar .mini{display:none} .ks.is-dash .ks-bar{margin-bottom:8px} .ks.is-dash .ks-nav{margin-bottom:8px}
+  .du-kpi{padding:16px 16px 12px} .du-stat.big b{font-size:23px}
+  .du-tbl thead{display:none} .du-tbl,.du-tbl tbody{display:block} .du-tbl tr{display:block;border:1px solid var(--du-line);border-radius:10px;margin:8px;padding:6px 10px}
+  .du-tbl td{display:flex;justify-content:space-between;gap:12px;white-space:normal;border:0;padding:4px 0;text-align:right}
+  .du-tbl td::before{content:attr(data-l);color:var(--du-sub);font-weight:700;font-size:11px;text-align:left;flex:0 0 38%}
+  .du-tbl td.empty{display:block;text-align:center;padding:24px 8px} .du-tbl td.empty::before{content:none}
+  .du-tbl tr:has(td.empty){border:0;margin:0;padding:0}
+}
 
 </style>
 </head>
@@ -1792,6 +1852,232 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
 </script>
 <script>
 /* ============================================================
+   B2B 업무 대시보드 — 화면 모듈 (kpi-sheet-page.js 의 '대시보드'·'데이터' 보기)
+   · 이 파일은 화면(UI)만 만든다. 구글시트·Apps Script·공개 집계 API·동기화·KPI 계산 코드는 읽기만 하고 수정하지 않는다.
+   · 실제로 연결된 값(1.통합KPI · 18.선행지표요약)만 표시하고, 없는 값은 0 이 아니라 '—' / '데이터 연결 예정' 으로 표시한다.
+   · 추가 데이터 5종(잔디 영업보고 L2 · 고객관리카드 협약일 · 잔디 L3 · 이카운트 매출 · 행동 이력)은
+     '데이터 어댑터' 한 곳만 연결하면 화면이 채워지도록 분리했다:
+
+       B2BDashUI.connect("l2" | "mou" | "l3" | "sales" | "act", function (api, filters) { return {
+         status: "connected" | "partial", asOf: "2026-10-23", source: "구글시트 탭 이름 등 원본 출처",
+         stats:  { <통계 키>: 값 | { v: 값, sub: "보조 문구" } },            // 키 목록은 아래 DATASETS[*].stats
+         monthly:[ { m: "2026-05", v: 12 }, … ],                           // 월별 추이
+         breakdowns: { <키>: [ { name: "…", v: 12 }, … ] },                // 업체별·현장별·공종별 등
+         rows:   [ { <DATASETS[*].cols 의 k 와 같은 키>: 값, verify: "ok" | "review" } , … ]   // 상세 표
+       }; });
+
+   · 같은 업체·현장·활동이 두 번 들어오면(중복 키 = DATASETS[*].dedupe) 표에서 '중복 의심'으로 표시하고 집계 건수에서 제외해 보여 준다.
+   · 이 모듈은 브라우저 저장소를 쓰지 않는다(필터 상태는 메모리).
+   ============================================================ */
+(function () {
+  "use strict";
+  var U = {}; window.B2BDashUI = U;
+  var MIN_SAMPLE = 30;                               /* 전년 대비를 보여 주기 위한 전년 표본(건수) 최소값 — 표시 기준일 뿐 계산식이 아님 */
+  var ST = { ds: "l2", F: { year: "all", month: "all", vendor: "", trade: "all" }, page: 0 };
+  var ADAPTERS = {};
+
+  /* ---------- 데이터 5종 정의(화면 구성) ---------- */
+  var DATASETS = {
+    l2: { id: "l2", short: "영업보고(L2)", title: "잔디 영업보고 (L2)", icon: "note", blurb: "잔디 영업보고(L2) 건수·업체·현장·L3 연결을 봅니다.", source: "잔디 추출 엑셀 → 구글시트", desc: "영업보고 = L2. 이후 같은 업체·현장에서 L3 활동으로 이어졌는지 확인합니다.",
+      stats: [["total", "전체 영업보고", "건"], ["vendors", "영업보고 업체", "곳"], ["sites", "아파트·현장", "곳"], ["linked", "L3 연결", "건"], ["unlinked", "L3 미연결", "건"]],
+      monthlyTitle: "월별 영업보고 추이", breakdowns: [["vendor", "업체별 영업보고"], ["site", "아파트·현장별 영업보고"], ["trade", "공종별 영업보고"]],
+      cols: [["date", "영업보고일"], ["vendor", "업체명"], ["site", "아파트명"], ["trade", "공종"], ["link", "L3 연결 여부"], ["source", "원본 출처"], ["state", "연결 상태"]], dedupe: ["date", "vendor", "site"], filters: ["year", "month", "vendor", "trade"] },
+    mou: { id: "mou", short: "협약일", title: "고객관리카드 협약일", icon: "doc", blurb: "실제 MOU 협약일 기준 신규·기존 업체 구분을 봅니다.", source: "고객관리카드 → 구글시트", desc: "실제 MOU 협약 체결일 기준으로 신규 업체(협약일부터 1년)를 구분합니다.",
+      stats: [["total", "전체 협약 업체", "곳"], ["fresh", "신규 업체(협약 1년 이내)", "곳"], ["dated", "협약일 등록", "곳"], ["undated", "협약일 미등록", "곳"]],
+      monthlyTitle: "월별 신규 협약 현황", breakdowns: [["month", "월별 신규 협약"], ["kind", "신규·기존 구분"]],
+      cols: [["vendor", "업체명"], ["code", "B2B 고유코드"], ["date", "실제 협약 체결일"], ["kind", "신규·기존 구분"], ["source", "원본 출처"]], dedupe: ["code"], filters: ["year", "month", "vendor"] },
+    l3: { id: "l3", short: "L3 자료", title: "잔디 L3 자료", icon: "chat", blurb: "기술자문·공법설명회·기타문의·컨설팅내역서 요청 이력을 봅니다.", source: "잔디 추출 엑셀 → 구글시트", desc: "L3 = 기술자문문의(기술자문) · 공법설명회(PT) · 기타문의 · 컨설팅내역서 요청.",
+      stats: [["advice", "기술자문문의", "건"], ["pt", "공법설명회(PT)", "건"], ["etc", "기타문의", "건"], ["consult", "컨설팅내역서 요청", "건"], ["vendors", "L3 경험 업체", "곳"]],
+      monthlyTitle: "월별 L3 활동 추이", breakdowns: [["vendor", "업체별 L3 이용 이력"], ["site", "현장별 L3 이용 이력"], ["type", "활동 유형별"]],
+      cols: [["date", "활동일"], ["vendor", "업체명"], ["site", "아파트명"], ["trade", "공종"], ["type", "활동 유형"], ["status", "요청 상태"], ["source", "원본 출처"]], dedupe: ["date", "vendor", "site", "type"], filters: ["year", "month", "vendor", "trade", "type"] },
+    sales: { id: "sales", short: "매출(이카운트)", title: "이카운트 매출", icon: "box", blurb: "전체·메인자재 매출과 낙찰 현장 연결 현황을 봅니다.", source: "이카운트 원본 → 구글시트(3.이카운트판매원문)", desc: "전체 자재 매출과 메인자재 매출, 낙찰 현장과 자재 구매의 연결 현황을 봅니다.",
+      stats: [["total", "전체 자재 매출", "원"], ["main", "메인자재 매출", "원"], ["share", "메인자재 매출 비중", "%"], ["linked", "낙찰 현장↔구매 연결", "곳"]],
+      monthlyTitle: "월별 매출 추이", breakdowns: [["trade", "공종별 메인자재 매출"], ["vendor", "업체별 구매 현황"], ["site", "낙찰 현장↔구매 연결"]],
+      cols: [["vendor", "업체명"], ["site", "현장명"], ["item", "품목"], ["date", "매출일"], ["amount", "금액"], ["kind", "구매 유형"]], dedupe: ["date", "vendor", "item", "amount"], filters: ["year", "month", "vendor", "trade"] },
+    act: { id: "act", short: "행동 이력", title: "팀 행동 이력 관리", icon: "check", blurb: "KPI 개선을 위한 팀의 실제 행동을 기록·관리합니다.", source: "팀 입력(관리 대상)", desc: "KPI 개선을 위해 팀이 실제로 한 행동을 기록·관리합니다. 행동 유형과 운영 기준은 확정되는 대로 반영하며, 기록을 자동 생성하지 않습니다.",
+      stats: [["total", "등록된 행동", "건"], ["targets", "활동 대상 업체", "곳"], ["done", "실행 완료", "건"], ["open", "진행·예정", "건"], ["follow", "후속 결과 기록", "건"]],
+      monthlyTitle: "월별 실행 횟수", breakdowns: [["type", "행동 유형별"], ["owner", "담당자별"], ["kpi", "관련 KPI별"]],
+      cols: [["vendor", "활동 대상 업체"], ["owner", "담당자"], ["type", "행동 유형"], ["date", "실행일"], ["count", "실행 횟수"], ["status", "실행 상태"], ["result", "후속 결과"], ["kpi", "관련 KPI"]], dedupe: ["vendor", "type", "date"], filters: ["year", "month", "vendor"],
+      examples: ["신규 업체에 기술지원 안내를 했는가", "L2(영업보고) 이후 후속 자료를 제공했는가", "첫 L3 이후 재접촉했는가"] }
+  };
+  var ORDER = ["l2", "mou", "l3", "sales", "act"];
+
+  /* ---------- 작은 도구 ---------- */
+  var A = null;
+  function esc(s) { return A.esc(s); }
+  function isNum(v) { return typeof v === "number" && isFinite(v); }
+  function ic(n) {
+    var p = { note: '<path d="M5 3h10l4 4v14H5z"/><path d="M14 3v5h5M8 13h8M8 17h6"/>', doc: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>', chat: '<path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z"/>', box: '<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>', check: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>', user: '<path d="M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1"/><circle cx="9.5" cy="7" r="3.5"/><path d="M19 8v6M16 11h6"/>', repeat: '<path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>', flow: '<circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="12" r="2.5"/><path d="M8 12h8M13 8l4 4-4 4"/>', biz: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>', award: '<circle cx="12" cy="9" r="6"/><path d="M8.5 14.5L7 22l5-3 5 3-1.5-7.5"/>', bar: '<path d="M5 20V10M12 20V4M19 20v-7"/>' }[n] || "";
+    return '<svg class="du-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + "</svg>";
+  }
+  function dv(v, fmt) { if (isNum(v)) return { ok: true, t: fmt ? fmt(v) : String(v) }; return { ok: false, t: v == null || v === "" ? "—" : String(v) }; }
+  function pill(kind, t) { return '<span class="du-pill ' + kind + '">' + esc(t) + "</span>"; }
+  function pending() { return pill("wait", "데이터 연결 예정"); }
+  function go(id, text) { return '<button class="btn ghost du-go" data-kact="dgo" data-id="' + id + '">' + esc(text || "자세히") + " →</button>"; }
+  function stat(label, v, sub, fmt, big) { var r = dv(v, fmt); return '<div class="du-stat' + (r.ok ? "" : " na") + (big ? " big" : "") + '"><span class="l">' + esc(label) + "</span><b>" + esc(r.t) + "</b>" + (sub ? '<span class="s">' + sub + "</span>" : "") + "</div>"; }
+  function mini(vals, labels, opt) {              /* 작은 막대(연도별) — 값이 없는 연도는 빗금 */
+    var max = 0; vals.forEach(function (v) { if (isNum(v) && v > max) max = v; });
+    return '<div class="du-mini" style="--n:' + vals.length + '">' + vals.map(function (v, i) { return '<div class="c"><i class="' + (isNum(v) ? "" : "na") + (labels[i].cur ? " cur" : "") + '"' + (isNum(v) ? ' style="height:' + Math.max(6, Math.round(v / max * 100)) + '%"' : "") + ' title="' + esc(labels[i].l + " · " + (isNum(v) ? (opt && opt.fmt ? opt.fmt(v) : v) : (v == null ? "—" : v))) + '"></i><span>' + esc(labels[i].s) + "</span></div>"; }).join("") + "</div>";
+  }
+  function ghostMonths(cols) { var h = ""; for (var i = 1; i <= 12; i++) h += '<div class="c"><i class="ghost" style="height:' + (22 + (i * 29 + (cols || 0)) % 44) + '%"></i><span>' + i + "월</span></div>"; return '<div class="du-mini big" style="--n:12" aria-hidden="true">' + h + "</div>"; }
+  function monthBars(rows, fmt) {
+    var max = 0; rows.forEach(function (r) { if (r.v > max) max = r.v; });
+    return '<div class="du-mini big" style="--n:' + rows.length + '">' + rows.map(function (r) { return '<div class="c"><i style="height:' + Math.max(6, Math.round(r.v / max * 100)) + '%" title="' + esc(r.m + " · " + (fmt ? fmt(r.v) : r.v)) + '"></i><span>' + esc(String(r.m).slice(5) + "월") + "</span></div>"; }).join("") + "</div>";
+  }
+
+  /* ---------- 메인 대시보드 ---------- */
+  function kpiCard(o) {
+    var okv = !!o.ok;
+    return '<article class="du-kpi ' + o.cls + (okv ? "" : " pend") + '"><div class="top"><span class="ic">' + ic(o.icon) + "</span><h3>" + esc(o.label) + '</h3><span class="du-pill ' + (okv ? "ok" : "wait") + '">' + esc(okv ? "시트 연결됨" : "데이터 연결 예정") + "</span></div>" +
+      '<div class="val' + (okv ? "" : " na") + '">' + (okv ? esc(o.value) : "—") + "</div>" +
+      '<p class="def">' + esc(o.def) + "</p>" +
+      '<div class="yoy"><span class="l">전년 대비</span><span class="v">' + o.yoy + "</span></div>" +
+      '<div class="trend"><span class="l">추이</span>' + o.trend + "</div>" +
+      (o.note ? '<p class="kn">' + o.note + "</p>" : "") +
+      '<div class="foot">' + go(o.to, "상세 보기") + "</div></article>";
+  }
+  function trendSpark(vals, labels) {
+    var pts = []; vals.forEach(function (v, i) { if (isNum(v)) pts.push([i, v]); });
+    if (pts.length < 2) return '<span class="du-dash">추이 — 연결 예정</span>';
+    var max = Math.max.apply(null, pts.map(function (p) { return p[1]; })), min = Math.min.apply(null, pts.map(function (p) { return p[1]; })), W = 120, H = 30, n = vals.length - 1 || 1;
+    var d = pts.map(function (p, i) { var x = p[0] / n * (W - 6) + 3, y = H - 4 - (max === min ? 0.5 : (p[1] - min) / (max - min)) * (H - 8); return (i ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1); }).join(" ");
+    return '<svg class="du-spark" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="연도별 추이"><path d="' + d + '"/></svg>';
+  }
+  function render(api) {
+    A = api; var ys = api.years(); if (!ys.length) return "";
+    var last = ys[ys.length - 1], prev = ys[ys.length - 2], kL = api.kpiRow(last) || {}, asOf = String(kL["기준"] || "").replace(/^~/, "");
+    var cats = ys.map(function (y) { return { l: y + "년" + (y === last ? " (" + asOf + "까지)" : ""), s: y.slice(2) + (y === last ? "*" : ""), cur: y === last }; });
+    var col = function (c) { return ys.map(function (y) { return api.kpiVal(y, c); }); };
+    var L = api.leading("[공식] L2→L3 전환율"), Lc = api.leading("[공식] L3 전환 확정"), L2n = api.leading("L2 건수"), Lr = api.leading("검토 대상");
+    var okL = !!(L && isNum(L["값"]));
+    /* KPI ③ 전년 대비: 전년 표본이 충분하고 값이 있을 때만(아니면 '비교 불가') */
+    var pv = prev ? api.kpiVal(prev, "L2L3전환율_공식") : null, pn = prev ? api.kpiVal(prev, "L2건수_유효") : null, yoy3;
+    if (!okL) yoy3 = "—"; else if (isNum(pv) && isNum(pn) && pn >= MIN_SAMPLE) { var dd = (L["값"] - pv) * 100; yoy3 = (dd >= 0 ? "▲ +" : "▼ −") + Math.abs(dd).toFixed(1) + "%p"; } else yoy3 = '<span class="du-dash">비교 불가</span><span class="s">' + esc(prev || "전년") + "년 표본 " + (isNum(pn) ? api.num(pn) + "건" : "—") + "</span>";
+    var rate = ys.map(function (y) { var n = api.kpiVal(y, "L2건수_유효"), v = api.kpiVal(y, "L2L3전환율_공식"); return isNum(v) && isNum(n) && n >= MIN_SAMPLE ? v : null; });
+    var h = '<div class="du">';
+    h += '<header class="du-head"><div><h1>B2B 업무 성과 대시보드</h1><p>' + esc(ys[0]) + "~" + esc(last) + "년 · " + esc(last) + "년은 " + esc(asOf || "기준일") + "까지 누계(*) · 값이 없는 항목은 0 이 아니라 '—' 로 표시</p></div></header>";
+    h += '<div class="du-kpis">' +
+      kpiCard({ cls: "k1", icon: "user", label: "신규 업체 사용률", ok: false, def: "실제 MOU 협약일부터 1년 · 신규 업체 중 L3 활동이 발생한 업체 비율", yoy: "—", trend: '<span class="du-dash">추이 — 연결 예정</span>', note: "협약일 데이터 반영 후 표시됩니다", to: "mou" }) +
+      kpiCard({ cls: "k2", icon: "repeat", label: "재사용률", ok: false, def: "기존·신규 업체 전체 · 첫 L3 이후 다른 아파트 현장에서 L3 활동이 다시 발생한 업체 비율", yoy: "—", trend: '<span class="du-dash">추이 — 연결 예정</span>', note: "L3 이력 데이터 반영 후 표시됩니다", to: "l3" }) +
+      kpiCard({ cls: "k3", icon: "flow", label: "L2 → L3 전환률", ok: okL, value: okL ? api.pc(L["값"]) : "", def: "영업보고(L2) 이후 같은 업체·현장에서 L3(기술자문·공법설명회·기타문의·컨설팅내역서 요청)로 이어진 비율", yoy: yoy3, trend: trendSpark(rate, cats), note: okL ? "현재 시트 기준값" + (Lc && L2n && isNum(Lc["값"]) && isNum(L2n["값"]) ? " · " + api.num(Lc["값"]) + " ÷ " + api.num(L2n["값"]) : "") + ' · <b class="warnt">정의 정리 예정</b>' : "시트에서 값을 읽지 못했습니다", to: "l2" }) + "</div>";
+
+    /* 2) 현황 요약 4 */
+    var tot = api.leading("전체 협력사"), inact = api.leading("장기 무활동"), none = api.leading("활동 이력 없음"), core = api.leading("핵심 협력사 수");
+    var tv = tot && isNum(tot["값"]) ? tot["값"] : null, ia = inact && isNum(inact["값"]) ? inact["값"] : null, nb = none && isNum(none["값"]) ? none["값"] : null, nm = inact && inact["비고"] ? Number(String(inact["비고"]).replace(/[^0-9]/g, "")) : null;
+    var seg = nm && ia != null && nb != null && tv != null && nm + ia + nb === tv ? [["정상", nm, "c1"], ["장기 무활동", ia, "c2"], ["이력 없음", nb, "c3"]] : null;
+    var stack = seg ? '<div class="du-stack">' + seg.map(function (x) { return '<i class="' + x[2] + '" style="flex:' + x[1] + '" title="' + esc(x[0] + " " + api.num(x[1])) + '곳"></i>'; }).join("") + '</div><div class="du-lg">' + seg.map(function (x) { return '<span><i class="du-dot ' + x[2] + '"></i>' + esc(x[0]) + " <b>" + api.num(x[1]) + "</b></span>"; }).join("") + "</div>" : "";
+    var won = api.won, l3sum = null; ["기술자문문의_건수", "컨설팅요청_건수", "공법설명회_건수", "기타문의_건수"].forEach(function (c) { if (isNum(kL[c])) l3sum = (l3sum || 0) + kL[c]; });
+    h += '<div class="du-t"><h2>현황 요약</h2><span>' + esc(last) + "년 " + esc(asOf) + " 누계 기준</span></div><div class=\"du-sum\">" +
+      '<section class="du-card"><header><h3>업체 현황</h3><button class="btn ghost du-go" data-kact="dgo" data-id="mou">자세히 →</button></header>' + stat("전체 협력사", tv, "B2B 마스터 기준", api.num, true) + stack + '<p class="s2">핵심 협력사 ' + esc(dv(core ? core["값"] : null, api.num).t) + "곳(임시 정의)</p></section>" +
+      '<section class="du-card"><header><h3>L2 · L3 활동 현황</h3><button class="btn ghost du-go" data-kact="dgo" data-id="l3">자세히 →</button></header><div class="du-pair"><div>' + stat("L2 영업보고", null, "데이터 연결 예정", null, true) + "</div><div>" + stat("L3 활동(시트 기준)", l3sum, "기술자문·컨설팅·설명회·기타", api.num, true) + '</div></div><p class="s2">기술자문 ' + esc(dv(kL["기술자문문의_건수"], api.num).t) + " · 컨설팅 " + esc(dv(kL["컨설팅요청_건수"], api.num).t) + " · 설명회 " + esc(dv(kL["공법설명회_건수"], api.num).t) + " · 기타 " + esc(dv(kL["기타문의_건수"], api.num).t) + "</p></section>" +
+      '<section class="du-card"><header><h3>공고 · 낙찰 현황</h3><button class="btn ghost du-go" data-kact="view" data-id="growth">자세히 →</button></header>' + stat("POUR 낙찰", kL["POUR낙찰_건수"], "공고 " + esc(dv(kL["POUR반영공고_건수"], api.num).t) + "건 · 낙찰금액 " + esc(dv(kL["POUR낙찰금액_VAT미확인"], won).t), function (v) { return api.num(v) + "건"; }, true) + mini(col("POUR낙찰_건수"), cats, { fmt: api.num }) + "</section>" +
+      '<section class="du-card"><header><h3>메인자재 매출</h3><button class="btn ghost du-go" data-kact="dgo" data-id="sales">자세히 →</button></header>' + stat("메인자재 순매출", kL["메인자재순매출"], "전체 " + esc(dv(kL["전체자재순매출"], won).t) + " · 비중 " + esc(dv(kL["메인비중"], api.pc).t), won, true) + mini(col("메인자재순매출"), cats, { fmt: won }) + "</section></div>";
+
+    /* 3) 추이·흐름·경로 */
+    var l2v = L2n && isNum(L2n["값"]) ? L2n["값"] : null, lcv = Lc && isNum(Lc["값"]) ? Lc["값"] : null, lrv = Lr && isNum(Lr["값"]) ? Lr["값"] : null;
+    h += '<div class="du-t"><h2>추이 · 흐름</h2><span>월별 값은 데이터 연결 후 표시됩니다</span></div><div class="du-flowrow">' +
+      '<section class="du-card wide"><header><h3>월별 활동 및 성과 추이</h3>' + pending() + "</header>" + ghostMonths(3) + '<div class="du-lg"><span><i class="du-dot c1"></i>L2 영업보고</span><span><i class="du-dot c2"></i>L3 활동</span><span><i class="du-dot c3"></i>낙찰·매출</span></div><div class="du-empty"><b>월별 데이터가 아직 연결되지 않았습니다</b><span>연결되면 월별 L2·L3 활동과 성과 추이가 이 자리에 표시됩니다. 임의 수치는 넣지 않습니다.</span></div></section>' +
+      '<section class="du-card"><header><h3>L2 → L3 흐름</h3>' + pill(okL ? "ok" : "wait", okL ? "현재 시트 기준" : "데이터 연결 예정") + '</header><div class="du-flow"><div class="n"><span>L2 영업보고</span><b>' + esc(dv(l2v, api.num).t) + '</b></div><i class="ar">→</i><div class="n"><span>L3 전환 확정</span><b>' + esc(dv(lcv, api.num).t) + '</b></div></div><div class="du-rate"><span>전환률</span><b>' + (okL ? esc(api.pc(L["값"])) : "—") + '</b></div><p class="s2">검토 대상 ' + esc(dv(lrv, api.num).t) + '건은 공식 계산에서 제외 · <b class="warnt">L2·L3 정의 정리 예정</b></p></section></div>';
+    h += '<div class="du-routes"><div class="du-rt-h"><h3>경로별 결과 비교</h3><span>L4 정의가 확정되면 연결됩니다</span></div>' +
+      [["L2 → L3 → L4", "영업보고 후 L3를 거쳐 L4로"], ["L2 → L4", "영업보고에서 바로 L4로"], ["L3 → L4", "L3에서 L4로 (영업보고 없이)"]].map(function (r) { return '<div class="du-rt"><b>' + esc(r[0]) + "</b><span>" + esc(r[1]) + '</span><em>—</em>' + pill("wait", "데이터 연결 예정") + "</div>"; }).join("") + "</div>";
+
+    /* 4) 추가 데이터 5종 */
+    h += '<div class="du-t"><h2>추가 데이터</h2><span>화면에서 바로 확인하거나 상세 분석으로 이동합니다</span></div><div class="du-data">' +
+      ORDER.map(function (id) { var d = DATASETS[id], st = statusOf(id); return '<button class="du-dcard" data-kact="dgo" data-id="' + id + '"><span class="ic">' + ic(d.icon) + '</span><b>' + esc(d.short) + "</b><span class=\"s\">" + esc(d.blurb) + "</span>" + pill(st === "connected" ? "ok" : st === "partial" ? "part" : "wait", st === "connected" ? "연결됨" : st === "partial" ? "일부 연결" : "데이터 연결 예정") + "</button>"; }).join("") + "</div>";
+
+    /* 5) 행동 이력 */
+    h += '<div class="du-t"><h2>팀 행동 이력 · 관리 대상</h2><span>KPI 개선을 위해 팀이 실제로 한 행동</span></div><section class="du-card du-act"><div class="du-actg">' +
+      stat("등록된 행동", null, "", null) + stat("관리 대상 업체", null, "", null) + stat("실행 완료", null, "", null) + stat("진행·예정", null, "", null) + stat("후속 결과 기록", null, "", null) + '</div><div class="du-actb">' + pill("wait", "데이터 연결 예정") + '<p class="s2">행동 유형과 운영 기준이 확정되면 기록을 시작합니다. 기록은 자동 생성하지 않습니다.</p>' + go("act", "행동 이력 관리") + "</div></section>";
+    h += '<p class="du-note">공고·낙찰·메인자재의 증감과 동일기간 비교는 <a class="vlink" data-kact="view" data-id="growth">성장 분석</a>에서 볼 수 있습니다. 데이터는 구글시트에서 자동 집계된 값이며 시공사·현장·거래 명세는 포함하지 않습니다.</p>';
+    return h + "</div>";
+  }
+
+  /* ---------- 데이터 연결 상태 ---------- */
+  function builtin(id) {                               /* 이미 연결된 값만 쓰는 일부 연결(이카운트 매출: 1.통합KPI 연도별 값) */
+    if (id !== "sales" || !A) return null;
+    var ys = A.years(); if (!ys.length) return null; var last = ys[ys.length - 1], k = A.kpiRow(last) || {};
+    if (!isNum(k["전체자재순매출"])) return null;
+    return { status: "partial", asOf: String(k["기준"] || ""), source: "1.통합KPI (연도별 집계) — 월별·업체별·상세는 연결 예정", stats: { total: k["전체자재순매출"], main: k["메인자재순매출"], share: k["메인비중"] }, builtin: true };
+  }
+  function adapterData(id, api) {
+    var fn = ADAPTERS[id]; if (fn) { try { return fn(api, ST.F) || null; } catch (e) { return { error: String(e && e.message || e) }; } }
+    return builtin(id);
+  }
+  function statusOf(id) { var d = (ADAPTERS[id] ? adapterData(id, A) : builtin(id)); if (!d || d.error) return "pending"; return d.status === "connected" ? "connected" : "partial"; }
+
+  /* ---------- 데이터 화면(5종 공통 컴포넌트) ---------- */
+  function filtersBar(d, spec, enabled, rows) {
+    var yrs = {}, trades = {}, types = {};
+    (rows || []).forEach(function (r) { var dt = String(r.date || "").slice(0, 4); if (/^\d{4}$/.test(dt)) yrs[dt] = 1; if (r.trade) trades[r.trade] = 1; if (r.type) types[r.type] = 1; });
+    var sel = function (k, label, opts) { return '<label class="f"><span>' + esc(label) + '</span><select data-kact="dfil" data-id="' + k + '"' + (enabled ? "" : " disabled") + '><option value="all">전체</option>' + opts.map(function (o) { return '<option value="' + esc(o) + '"' + (ST.F[k] === o ? " selected" : "") + ">" + esc(o) + "</option>"; }).join("") + "</select></label>"; };
+    var months = []; for (var m = 1; m <= 12; m++) months.push(String(m).padStart(2, "0"));
+    var h = '<div class="du-filters">' + (spec.filters.indexOf("year") >= 0 ? sel("year", "연도", Object.keys(yrs).sort()) : "") + (spec.filters.indexOf("month") >= 0 ? sel("month", "월", months) : "") +
+      (spec.filters.indexOf("vendor") >= 0 ? '<label class="f grow"><span>업체</span><input type="search" data-kact="dfilv" placeholder="업체명 검색" value="' + esc(ST.F.vendor) + '"' + (enabled ? "" : " disabled") + "></label>" : "") +
+      (spec.filters.indexOf("trade") >= 0 ? sel("trade", "공종", Object.keys(trades).sort()) : "") + (spec.filters.indexOf("type") >= 0 ? sel("type", "활동 유형", Object.keys(types).sort()) : "") + "</div>";
+    return h + (enabled ? "" : '<p class="du-hint">필터는 데이터가 연결되면 활성화됩니다.</p>');
+  }
+  function dedupe(rows, keys) {
+    var seen = {}, dup = 0; rows.forEach(function (r) { var k = r.key || keys.map(function (c) { return String(r[c] == null ? "" : r[c]).trim().toLowerCase(); }).join("|"); if (seen[k]) { r._dup = true; dup++; } else seen[k] = 1; });
+    return dup;
+  }
+  function applyFilters(rows) {
+    var F = ST.F; return rows.filter(function (r) { var dt = String(r.date || ""); return (F.year === "all" || dt.slice(0, 4) === F.year) && (F.month === "all" || dt.slice(5, 7) === F.month) && (!F.vendor || String(r.vendor || "").toLowerCase().indexOf(F.vendor.toLowerCase()) >= 0) && (F.trade === "all" || r.trade === F.trade) && (F.type === undefined || F.type === "all" || r.type === F.type); });
+  }
+  function verifyChip(r) { if (r._dup) return pill("bad", "중복 의심"); if (r.verify === "ok") return pill("ok", "확인 완료"); if (r.verify === "review") return pill("part", "검증 필요"); return pill("wait", "미검증"); }
+  function renderData(api) {
+    A = api; if (!DATASETS[ST.ds]) ST.ds = "l2"; var spec = DATASETS[ST.ds], d = adapterData(ST.ds, api), err = d && d.error, connected = d && !err, hasRows = connected && d.rows && d.rows.length;
+    var h = '<div class="du"><header class="du-head"><div><h1>데이터</h1><p>추가 데이터 5종 · 연결되면 이 화면이 그대로 채워집니다. 없는 값은 0 이 아니라 \'—\' 로 표시합니다.</p></div></header>';
+    h += '<div class="du-tabs" role="tablist">' + ORDER.map(function (id) { var s = DATASETS[id], on = id === ST.ds; return '<button role="tab" aria-selected="' + on + '" data-kact="dds" data-id="' + id + '"' + (on ? ' aria-current="true"' : "") + '><span class="ic">' + ic(s.icon) + "</span>" + esc(s.short) + "</button>"; }).join("") + "</div>";
+    var st = statusOf(ST.ds);
+    h += '<section class="du-card du-dhead"><div><h2>' + esc(spec.title) + "</h2><p>" + esc(spec.desc) + '</p><p class="src"><b>원본 출처</b> ' + esc(connected && d.source ? d.source : spec.source) + (connected && d.asOf ? " · 기준일 " + esc(d.asOf) : "") + "</p></div>" + pill(st === "connected" ? "ok" : st === "partial" ? "part" : "wait", st === "connected" ? "연결됨" : st === "partial" ? "일부 연결" : "데이터 연결 예정") + "</section>";
+    if (err) h += '<div class="ks-warn"><b>데이터를 표시하지 못했습니다.</b> ' + esc(d.error) + "</div>";
+    if (spec.examples) h += '<section class="du-card"><h3 class="du-h3">기록할 수 있는 행동 예시</h3><ul class="du-ex">' + spec.examples.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + '</ul><p class="du-hint">행동 유형과 운영 기준이 확정되면 반영합니다. 기록을 자동으로 만들지 않습니다.</p></section>';
+    /* 통계 */
+    h += '<div class="du-stats">' + spec.stats.map(function (s) { var raw = connected && d.stats ? d.stats[s[0]] : null, sub = raw && typeof raw === "object" ? raw.sub : "", v = raw && typeof raw === "object" ? raw.v : raw, fmt = s[2] === "원" ? api.won : s[2] === "%" ? api.pc : api.num; var r = dv(v, fmt); return '<div class="du-stat big' + (r.ok ? "" : " na") + '"><span class="l">' + esc(s[1]) + "</span><b>" + esc(r.t) + (r.ok && s[2] !== "원" && s[2] !== "%" ? "<small>" + esc(s[2]) + "</small>" : "") + "</b>" + (sub ? '<span class="s">' + esc(sub) + "</span>" : (r.ok ? "" : '<span class="s">데이터 연결 예정</span>')) + "</div>"; }).join("") + "</div>";
+    /* 필터 */
+    var rowsAll = hasRows ? d.rows.map(function (r) { var c = {}; for (var k in r) c[k] = r[k]; return c; }) : [];
+    var dupN = hasRows ? dedupe(rowsAll, spec.dedupe) : 0, rows = hasRows ? applyFilters(rowsAll) : [];
+    h += filtersBar(d, spec, !!hasRows, rowsAll);
+    /* 월별 + 분석 */
+    h += '<div class="du-dgrid"><section class="du-card wide"><header><h3>' + esc(spec.monthlyTitle) + "</h3>" + (connected && d.monthly && d.monthly.length ? "" : pending()) + "</header>" + (connected && d.monthly && d.monthly.length ? monthBars(d.monthly, ST.ds === "sales" ? api.won : api.num) : ghostMonths(ORDER.indexOf(ST.ds)) + '<div class="du-empty"><b>월별 데이터가 아직 연결되지 않았습니다</b><span>연결되면 월별 추이가 이 자리에 표시됩니다.</span></div>') + "</section>";
+    spec.breakdowns.forEach(function (b) {
+      var list = connected && d.breakdowns && d.breakdowns[b[0]] ? d.breakdowns[b[0]] : null, max = 0; if (list) list.forEach(function (x) { if (x.v > max) max = x.v; });
+      h += '<section class="du-card"><header><h3>' + esc(b[1]) + "</h3>" + (list ? "" : pending()) + "</header>" + (list ? '<ol class="du-rank">' + list.slice(0, 8).map(function (x) { return '<li><span class="n">' + esc(x.name) + '</span><i><u style="width:' + Math.max(3, Math.round(x.v / max * 100)) + '%"></u></i><b>' + esc(ST.ds === "sales" ? api.won(x.v) : api.num(x.v)) + "</b></li>"; }).join("") + "</ol>" : '<ol class="du-rank ghost" aria-hidden="true"><li><span class="n"></span><i><u style="width:70%"></u></i><b></b></li><li><span class="n"></span><i><u style="width:52%"></u></i><b></b></li><li><span class="n"></span><i><u style="width:36%"></u></i><b></b></li></ol><p class="du-hint">연결되면 상위 항목이 표시됩니다.</p>') + "</section>";
+    });
+    h += "</div>";
+    /* 검증 상태 + 상세 표 */
+    var okN = rows.filter(function (r) { return !r._dup && r.verify === "ok"; }).length, revN = rows.filter(function (r) { return !r._dup && r.verify === "review"; }).length, unN = rows.filter(function (r) { return !r._dup && r.verify !== "ok" && r.verify !== "review"; }).length;
+    h += '<section class="du-card"><header><h3>상세 목록</h3><div class="du-vs">' + (hasRows ? pill("ok", "확인 완료 " + okN) + pill("part", "검증 필요 " + revN) + pill("wait", "미검증 " + unN) + pill(dupN ? "bad" : "wait", "중복 의심 " + dupN) : pill("wait", "검증 상태 — 데이터 연결 예정")) + "</div></header>";
+    var PER = 25, pages = Math.max(1, Math.ceil(rows.length / PER)); if (ST.page >= pages) ST.page = pages - 1; if (ST.page < 0) ST.page = 0;
+    h += '<div class="du-tw"><table class="du-tbl"><thead><tr>' + spec.cols.map(function (c) { return "<th>" + esc(c[1]) + "</th>"; }).join("") + "<th>검증</th></tr></thead><tbody>";
+    if (hasRows) rows.slice(ST.page * PER, ST.page * PER + PER).forEach(function (r) { h += "<tr" + (r._dup ? ' class="dup"' : "") + ">" + spec.cols.map(function (c) { var v = r[c[0]]; var t = c[0] === "amount" ? dv(v, api.won).t : v == null || v === "" ? "—" : String(v); return '<td class="' + (c[0] === "amount" ? "r" : "") + '" data-l="' + esc(c[1]) + '">' + esc(t) + "</td>"; }).join("") + '<td data-l="검증">' + verifyChip(r) + "</td></tr>"; });
+    else h += '<tr><td class="empty" colspan="' + (spec.cols.length + 1) + '"><b>데이터 연결 예정</b><span>' + esc(spec.title) + " 데이터가 구글시트에 반영되면 이 표에 행이 표시됩니다. 기록은 자동으로 만들지 않습니다.</span></td></tr>";
+    h += "</tbody></table></div>";
+    h += '<div class="du-pg"><span>' + (hasRows ? api.num(rows.length) + "건" + (rows.length !== rowsAll.length ? " (필터 적용)" : "") : "0건") + '</span><span class="sp"></span><button class="btn ghost" data-kact="dpg" data-id="-1"' + (hasRows && ST.page > 0 ? "" : " disabled") + '>이전</button><span>' + (ST.page + 1) + " / " + pages + '</span><button class="btn ghost" data-kact="dpg" data-id="1"' + (hasRows && ST.page < pages - 1 ? "" : " disabled") + '>다음</button></div></section>';
+    h += '<p class="du-note">같은 업체·현장·활동(' + esc(spec.dedupe.map(function (k) { var c = spec.cols.filter(function (x) { return x[0] === k; })[0]; return c ? c[1] : k; }).join(" · ")) + ')이 두 번 들어오면 \'중복 의심\'으로 표시하고 집계 건수에서 제외합니다. 각 행에는 검증 상태(확인 완료·검증 필요·미검증)가 표시됩니다.</p>';
+    return h + "</div>";
+  }
+
+  /* ---------- 상호작용 ---------- */
+  U.render = render; U.renderData = renderData; U.connect = function (id, fn) { ADAPTERS[id] = fn; };
+  U.datasets = DATASETS; U.state = ST;
+  U.handle = function (a, el, id, api, e) {
+    if (a.charAt(0) !== "d") return false; A = api;
+    if (a === "dgo") { if (id === "growth-none") return true; ST.ds = id; ST.page = 0; api.V.view = "data"; api.V.page = {}; api.repaint(false); try { window.scrollTo(0, 0); } catch (x) {} return true; }
+    if (a === "dds") { ST.ds = id; ST.page = 0; ST.F = { year: "all", month: "all", vendor: "", trade: "all" }; api.repaint(true); return true; }
+    if (a === "dpg") { ST.page += Number(id) || 0; api.repaint(true); return true; }
+    return false;
+  };
+  U.change = function (a, t, api) {
+    A = api; if (a === "dfil") { ST.F[t.getAttribute("data-id")] = t.value; ST.page = 0; api.repaint(true); return true; }
+    if (a === "dfilv") { ST.F.vendor = String(t.value || "").trim(); ST.page = 0; api.repaint(true); return true; }
+    return false;
+  };
+})();
+
+</script>
+<script>
+/* ============================================================
    통합 KPI 첫 화면 — 구글시트(B2B_통합데이터 v8 이후) 탭을 그대로 읽어 보여준다
    · 데이터: window.B2BSheet (내장 "저장된 데이터" / 구글시트 실시간)
    · 모든 KPI 카드는 클릭 → 드릴다운(근거 목록): 해당 탭·필터 규칙 · 검색 · 정렬 · 연도 · 엑셀(CSV) · 카드 ↔ 목록 합계 대조
@@ -1958,91 +2244,10 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     return h + "</div>" + diagCard();
   }
 
-  /* ============================================================
-     대시보드(첫 화면) — 화면 구조 정리: 핵심 KPI 3 → 주요 성과 그래프 → 상세 분석
-     · 데이터는 1.통합KPI · 18.선행지표요약 탭 값만 읽는다(기존 계산·동기화 코드 변경 없음). 값이 없으면 0 이 아니라 '—'/'데이터 연결 예정'
-     ============================================================ */
-  function dbIc(n) {
-    var p = { user: '<path d="M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1"/><circle cx="9.5" cy="7" r="3.5"/><path d="M19 8v6M16 11h6"/>', repeat: '<path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>', flow: '<circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="12" r="2.5"/><path d="M8 12h8M13 8l4 4-4 4"/>', biz: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>', chat: '<path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z"/>', award: '<circle cx="12" cy="9" r="6"/><path d="M8.5 14.5L7 22l5-3 5 3-1.5-7.5"/>', box: '<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>', cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>' }[n] || "";
-    return '<svg class="db-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + p + "</svg>";
-  }
-  function dbVal(v, fmt) {            /* 숫자만 값으로, 그 밖의 문구(미확인·데이터 없음·모수 없음)는 0 으로 바꾸지 않고 그대로 '값 없음' 상태로 */
-    if (isNum(v)) return { ok: true, t: fmt ? fmt(v) : String(v) };
-    var t = v == null || v === "" ? "—" : String(v); return { ok: false, t: t };
-  }
-  function dbKpi(o) {
-    var pend = !o.ok;
-    return '<article class="db-kpi ' + o.cls + (pend ? " pend" : "") + '"><div class="db-kpi-top"><span class="db-ic">' + dbIc(o.icon) + '</span><h3 class="db-kl">' + esc(o.label) + '</h3><span class="db-badge ' + (pend ? "wait" : "ok") + '">' + esc(o.badge) + "</span></div>" +
-      '<div class="db-kv' + (pend ? " na" : "") + '">' + (pend ? "—" : esc(o.value)) + "</div>" +
-      '<p class="db-kd">' + esc(o.def) + "</p>" + (o.foot ? '<p class="db-kf">' + o.foot + "</p>" : "") + "</article>";
-  }
-  function dbBars(o) {
-    var max = 0; o.series.forEach(function (s) { s.vals.forEach(function (v) { if (isNum(v) && v > max) max = v; }); });
-    var h = '<div class="db-chart"><div class="db-ch-h"><b>' + esc(o.title) + "</b>" + (o.sub ? '<span class="mini">' + esc(o.sub) + "</span>" : "") + '</div><div class="db-plot" style="--n:' + o.cats.length + '">';
-    o.cats.forEach(function (c, i) {
-      h += '<div class="db-col"><div class="db-grp">';
-      o.series.forEach(function (s) { var v = s.vals[i]; if (isNum(v)) h += '<i class="db-b ' + s.cls + '" style="height:' + Math.max(3, Math.round(v / max * 100)) + '%" title="' + esc(c.l + " · " + s.name + " " + s.fmt(v)) + '"></i>'; else h += '<i class="db-b na" title="' + esc(c.l + " · " + s.name + " " + (v == null ? "—" : v)) + '"></i>'; });
-      h += '</div><div class="db-y' + (c.cur ? " cur" : "") + '">' + esc(c.l) + '</div><div class="db-vals">';
-      o.series.forEach(function (s) { var v = s.vals[i]; h += '<span class="' + (isNum(v) ? "" : "na") + '"><i class="db-dot ' + s.cls + '"></i>' + esc(isNum(v) ? s.fmt(v) : (v == null || v === "" ? "—" : String(v))) + "</span>"; });
-      h += "</div></div>";
-    });
-    h += "</div>";
-    if (o.series.length > 1) h += '<div class="db-lg">' + o.series.map(function (s) { return '<span><i class="db-dot ' + s.cls + '"></i>' + esc(s.name) + "</span>"; }).join("") + "</div>";
-    return h + (o.foot ? '<p class="db-foot">' + esc(o.foot) + "</p>" : "") + "</div>";
-  }
-  function dbEmptyMonthly() {
-    var m = ""; for (var i = 1; i <= 12; i++) m += '<div class="db-col"><div class="db-grp"><i class="db-b ghost" style="height:' + (18 + (i * 37) % 46) + '%"></i></div><div class="db-y">' + i + "월</div></div>";
-    return '<div class="db-chart db-empty"><div class="db-ch-h"><b>월별 추이</b><span class="db-badge wait">데이터 연결 예정</span></div><div class="db-plot" style="--n:12" aria-hidden="true">' + m + '</div><div class="db-empty-msg"><b>월별 데이터가 아직 연결되지 않았습니다</b><span>연결되면 월별 공고·낙찰·매출 추이가 이 자리에 표시됩니다. 임의 수치는 넣지 않습니다.</span></div></div>';
-  }
-  function dbStat(label, v, sub, fmt) { var r = dbVal(v, fmt); return '<div class="db-stat' + (r.ok ? "" : " na") + '"><span class="l">' + esc(label) + '</span><b>' + esc(r.t) + "</b>" + (sub ? '<span class="s">' + sub + "</span>" : "") + "</div>"; }
-  function dbSec(id, ic, title, sub, body, link) {
-    return '<section class="db-sec" id="' + id + '"><header class="db-sec-h"><span class="db-ic sm">' + dbIc(ic) + "</span><div><h2>" + esc(title) + "</h2>" + (sub ? '<p class="mini">' + sub + "</p>" : "") + "</div>" + (link ? '<button class="btn ghost" data-kact="view" data-id="' + link[0] + '">' + esc(link[1]) + " →</button>" : "") + "</header>" + body + "</section>";
-  }
-  function dash() {
-    var ys = years(); if (!ys.length) return "";
-    var last = ys[ys.length - 1], kL = kpiRow(last) || {}, asOf = String(kL["기준"] || "").replace(/^~/, "");
-    var cats = ys.map(function (y) { return { l: y + (y === last ? "*" : ""), cur: y === last }; });
-    var col = function (c) { return ys.map(function (y) { return kpiVal(y, c); }); };
-    var L = leading("[공식] L2→L3 전환율"), Lc = leading("[공식] L3 전환 확정"), L2 = leading("L2 건수");
-    var okL = L && isNum(L["값"]);
-    var h = '<div class="db">';
-    h += '<header class="db-head"><div><h1>B2B 업무 성과 대시보드</h1><p class="mini">' + esc(ys[0]) + "~" + esc(last) + "년 · " + esc(last) + "년은 " + esc(asOf || "기준일") + "까지 누계(*) · 값이 없는 항목은 0 이 아니라 '—' 로 표시</p></div></header>";
-    /* 1) 핵심 KPI 3 */
-    h += '<div class="db-kpis">' +
-      dbKpi({ cls: "k1", icon: "user", label: "신규 업체 사용률", ok: false, badge: "데이터 연결 예정", def: "협약 체결 후 1년 이내 L3 활동 여부", foot: "신규 업체 = 협약 체결 1년 이내 업체" }) +
-      dbKpi({ cls: "k2", icon: "repeat", label: "재사용률", ok: false, badge: "데이터 연결 예정", def: "기존·신규 업체 전체 · 첫 L3 이후 다른 아파트의 L3 재발생 여부", foot: "기존·신규 업체 전체 기준" }) +
-      dbKpi({ cls: "k3", icon: "flow", label: "L2 → L3 전환률", ok: okL, value: okL ? pc(L["값"]) : "", badge: okL ? "시트 연결됨" : "데이터 연결 예정", def: "영업보고 이후 L3 활동으로 이어진 비율", foot: okL ? "현재 시트 기준값" + (Lc && L2 && isNum(Lc["값"]) && isNum(L2["값"]) ? " · " + num(Lc["값"]) + " ÷ " + num(L2["값"]) : "") + ' · <span class="warnt">정의 정리 예정</span>' : "시트에서 값을 읽지 못했습니다" }) + "</div>";
-    /* 2) 주요 성과 · 월별·연도별 추이 */
-    h += '<div class="db-sec-t"><h2>주요 성과</h2><span class="mini">연도별 추이 · 막대 아래 숫자가 값입니다</span></div><div class="db-grid">' +
-      dbBars({ title: "POUR 공고·낙찰", sub: "건수", cats: cats, series: [{ name: "POUR 반영 공고", cls: "c1", vals: col("POUR반영공고_건수"), fmt: num }, { name: "POUR 낙찰", cls: "c2", vals: col("POUR낙찰_건수"), fmt: num }], foot: "2022~2024는 POUR 공고만, 2025부터 전체 공고 중 자사 반영 공고(모집단 다름)" }) +
-      dbBars({ title: "낙찰금액", sub: "VAT 미확인", cats: cats, series: [{ name: "낙찰금액", cls: "c3", vals: col("POUR낙찰금액_VAT미확인"), fmt: function (v) { return won(v); } }] }) +
-      dbBars({ title: "자재 매출", sub: "전체 vs 메인자재 순매출", cats: cats, series: [{ name: "전체 자재", cls: "c1", vals: col("전체자재순매출"), fmt: function (v) { return won(v); } }, { name: "메인자재", cls: "c4", vals: col("메인자재순매출"), fmt: function (v) { return won(v); } }], foot: "메인자재는 2022~2023 품목명 검증 전이라 '미확인'" }) +
-      dbEmptyMonthly() + "</div>";
-    /* 3) 상세 분석 */
-    h += '<div class="db-sec-t"><h2>상세 분석</h2></div>';
-    /* 업체 현황 */
-    var tot = leading("전체 협력사"), inact = leading("장기 무활동"), none = leading("활동 이력 없음"), core = leading("핵심 협력사 수"), coreI = leading("핵심 협력사 중"), outer = leading("협력사 외 활동"), nu = leading("신규 협력사 활성화율");
-    var a = inact && isNum(inact["값"]) ? inact["값"] : null, nb = none && isNum(none["값"]) ? none["값"] : null, tv = tot && isNum(tot["값"]) ? tot["값"] : null;
-    var normal = inact && inact["비고"] ? Number(String(inact["비고"]).replace(/[^0-9]/g, "")) : null; if (!isNum(normal) || !normal) normal = null;
-    var seg = normal != null && a != null && nb != null && tv != null && normal + a + nb === tv ? [["정상 활동", normal, "c2"], ["장기 무활동(90일+)", a, "c3"], ["활동 이력 없음", nb, "c5"]] : null;
-    var bar = seg ? '<div class="db-stack" role="img" aria-label="협력사 활동 상태">' + seg.map(function (x) { return '<i class="' + x[2] + '" style="flex:' + x[1] + '" title="' + esc(x[0] + " " + num(x[1])) + '곳"></i>'; }).join("") + '</div><div class="db-lg">' + seg.map(function (x) { return '<span><i class="db-dot ' + x[2] + '"></i>' + esc(x[0]) + " <b>" + num(x[1]) + "</b></span>"; }).join("") + "</div>" : '<p class="mini">활동 상태 구성은 시트 값이 맞지 않아 표시하지 않습니다(데이터 확인 필요).</p>';
-    h += dbSec("db-vendor", "biz", "업체 현황", "B2B 마스터 기준 · 기준일 " + esc(tot && tot["기준"] ? String(tot["기준"]).replace(/^기준일\s*/, "") : "—"),
-      '<div class="db-stats">' + dbStat("전체 협력사", tv, "B2B 마스터", num) + dbStat("핵심 협력사", core ? core["값"] : null, "2025 낙찰 3건 이상(임시 정의)", num) + dbStat("핵심 중 장기 무활동", coreI ? coreI["값"] : null, "", num) + dbStat("협력사 외 활동 업체", outer ? outer["값"] : null, "마스터에 없는 업체", num) + dbStat("신규 협력사 활성화율", nu ? nu["값"] : null, nu && nu["비고"] ? esc(nu["비고"]) + " · 별도 정의" : "", pc) + "</div>" + bar);
-    /* 기술문의·공법설명회·컨설팅 */
-    var rows = [["기술자문 문의", "기술자문문의_건수"], ["컨설팅 요청", "컨설팅요청_건수"], ["공법설명회", "공법설명회_건수"], ["샘플·카탈로그", "샘플·카탈로그_건수"], ["기타 문의", "기타문의_건수"], ["영업활동 업체 수", "영업활동_업체수"]];
-    var pYear = ys[ys.length - 2], mx = 0; rows.forEach(function (r) { var v = kpiVal(last, r[1]); if (isNum(v) && v > mx) mx = v; });
-    h += dbSec("db-inq", "chat", "기술문의 · 공법설명회 · 컨설팅 현황", esc(last) + "년 " + esc(asOf) + " 누계" + (pYear ? " · " + esc(pYear) + "년 비교" : ""),
-      '<div class="db-hbars">' + rows.map(function (r) { var v = kpiVal(last, r[1]), p = pYear ? kpiVal(pYear, r[1]) : null; return '<div class="db-hb"><span class="l">' + esc(r[0]) + '</span><div class="trk">' + (isNum(v) ? '<i style="width:' + Math.max(2, Math.round(v / mx * 100)) + '%"></i>' : "") + '</div><b>' + esc(dbVal(v, num).t) + '</b><span class="p">' + esc(pYear || "") + ' ' + esc(dbVal(p, num).t) + "</span></div>"; }).join("") + '</div><p class="db-foot">2022~2024년은 플랫폼 기록이 없어 값이 없습니다(데이터 없음). ' + esc(pYear || "") + '년은 기록 시작(2025-06-24) 이후 값입니다.</p>', ["growth", "성장 분석"]);
-    /* 연도별 공고·낙찰 현황 */
-    h += dbSec("db-award", "award", "연도별 공고 · 낙찰 현황", "POUR 공고·낙찰 기준",
-      '<div class="db-years">' + ys.map(function (y) { var k = kpiRow(y) || {}; return '<div class="db-yc' + (y === last ? " cur" : "") + '"><h4>' + esc(y) + (y === last ? "<small>" + esc(asOf) + "까지</small>" : "") + "</h4>" + dbStat("POUR 반영 공고", k["POUR반영공고_건수"], "", num) + dbStat("POUR 낙찰", k["POUR낙찰_건수"], "", num) + dbStat("낙찰금액", k["POUR낙찰금액_VAT미확인"], "VAT 미확인", function (v) { return won(v); }) + dbStat("낙찰 시공사", k["낙찰시공사수"], "곳(표기 기준)", num) + dbStat("전체 공고", k["전체공고_건수"], "", num) + "</div>"; }).join("") + "</div>", ["growth", "성장 분석"]);
-    /* 메인자재 판매·매출 */
-    h += dbSec("db-main", "box", "메인자재 판매 · 매출 현황", "전체 자재 순매출과 메인자재(우레탄·페인트·에폭시) 기준",
-      '<div class="db-years">' + ys.map(function (y) { var k = kpiRow(y) || {}; return '<div class="db-yc' + (y === last ? " cur" : "") + '"><h4>' + esc(y) + (y === last ? "<small>" + esc(asOf) + "까지</small>" : "") + "</h4>" + dbStat("전체 자재 순매출", k["전체자재순매출"], "", function (v) { return won(v); }) + dbStat("메인자재 순매출", k["메인자재순매출"], "", function (v) { return won(v); }) + dbStat("메인 비중", k["메인비중"], "", pc) + dbStat("메인 구매 거래처", k["메인구매거래처수"], "곳", num) + "</div>"; }).join("") + "</div>", ["growth", "성장 분석"]);
-    h += '<p class="db-note">증감·동일기간 비교·공종별 집계·품목별 매출은 <a class="vlink" data-kact="view" data-id="growth">성장 분석</a>에서 볼 수 있습니다. 데이터는 구글시트(25개 탭)에서 자동 집계된 값이며 시공사·현장·거래 명세는 포함하지 않습니다.</p>';
-    return h + "</div>";
-  }
-  function nav() { var items = pubWanted() ? [["dash", "대시보드"], ["growth", "성장 분석"], ["link", "상세 보기(로그인)"]] : [["dash", "대시보드"], ["growth", "성장 분석"], ["home", "요약(근거 목록)"], ["sales", "매출·원문"], ["awards", "낙찰"], ["vendors", "시공사"], ["activity", "영업활동"], ["leading", "선행지표"], ["link", "연결 설정"]]; return '<div class="ks-nav">' + items.map(function (x) { return '<button data-kact="view" data-id="' + x[0] + '"' + (V.view === x[0] ? ' aria-current="true"' : "") + ">" + x[1] + "</button>"; }).join("") + "</div>"; }
+  /* 대시보드·데이터 화면은 dashboard-ui.js(window.B2BDashUI)가 그린다 — 이 파일은 데이터 읽기 도구(API)만 넘긴다 */
+  function dash() { var U = window.B2BDashUI; return U ? U.render(API) : '<div class="card"><div class="ks-warn">대시보드 모듈을 불러오지 못했습니다.</div></div>'; }
+  function dataView() { var U = window.B2BDashUI; return U ? U.renderData(API) : '<div class="card"><div class="ks-warn">데이터 화면 모듈을 불러오지 못했습니다.</div></div>'; }
+  function nav() { var items = pubWanted() ? [["dash", "대시보드"], ["growth", "성장 분석"], ["data", "데이터"], ["link", "상세 보기(로그인)"]] : [["dash", "대시보드"], ["growth", "성장 분석"], ["data", "데이터"], ["home", "요약(근거 목록)"], ["sales", "매출·원문"], ["awards", "낙찰"], ["vendors", "시공사"], ["activity", "영업활동"], ["leading", "선행지표"], ["link", "연결 설정"]]; return '<div class="ks-nav">' + items.map(function (x) { return '<button data-kact="view" data-id="' + x[0] + '"' + (V.view === x[0] ? ' aria-current="true"' : "") + ">" + x[1] + "</button>"; }).join("") + "</div>"; }
   function yearChips(cur, act) { return '<div class="ks-chips">' + years().map(function (y) { return '<button data-kact="' + act + '" data-id="' + y + '"' + (cur === y ? ' aria-current="true"' : "") + ">" + y + (y === "2026" ? " (~10/20)" : "") + "</button>"; }).join("") + "</div>"; }
 
   /* ---------- 팀장 핵심 지표 6 (최신 연도 · 전년 동일기간 대비, 1.통합KPI 탭 값만 사용) ---------- */
@@ -2345,21 +2550,22 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     if (!S.state.ready) return '<div class="kp ks"><div class="card"><div class="loading">' + (S.state.decodeError ? "데이터를 열 수 없습니다: " + esc(S.state.decodeError) : "저장된 데이터 여는 중…") + "</div></div></div>";
     var ready = has("1.통합KPI");
     if (!ready && V.view !== "link") { V.detail = null; V.integrity = null; return '<div class="kp ks">' + statusBar() + nav() + (pubWanted() ? pubWaiting() : waiting()) + "</div>"; }
-    if (isPub() && !/^(dash|growth|link)$/.test(V.view)) V.view = "dash";
-    var body = V.view === "dash" ? dash() : V.view === "growth" ? growthBody() : V.view === "home" ? home() : V.view === "sales" ? sales() : V.view === "awards" ? awards() : V.view === "vendors" ? vendors() : V.view === "activity" ? activity() : V.view === "leading" ? leadingView() : link();
+    if (isPub() && !/^(dash|growth|data|link)$/.test(V.view)) V.view = "dash";
+    var body = V.view === "dash" ? dash() : V.view === "data" ? dataView() : V.view === "growth" ? growthBody() : V.view === "home" ? home() : V.view === "sales" ? sales() : V.view === "awards" ? awards() : V.view === "vendors" ? vendors() : V.view === "activity" ? activity() : V.view === "leading" ? leadingView() : link();
     return '<div class="kp ks' + (V.view === "dash" ? ' is-dash' : '') + '">' + statusBar() + nav() + body + detailModal() + integrityModal() + "</div>";
   }
   /* 성장 분석 모듈(growth-page.js)에 넘기는 공용 도구 */
-  var API = { S: S, V: V, esc: esc, won: won, num: num, hhmm: hhmm, has: has, objs: objs, csv: csv, ledger: function () { return ledgerRows; }, needLedger: needLedger, repaint: function (soft) { if (repaintRef) repaintRef(!!soft); }, goOldVendor: function (id, name) { goVendor(id, name); }, setView: function (v) { V.view = v; if (repaintRef) repaintRef(false); } };
+  var API = { years: years, kpiRow: kpiRow, kpiVal: kpiVal, leading: leading, pc: pc, isNum: isNum, S: S, V: V, esc: esc, won: won, num: num, hhmm: hhmm, has: has, objs: objs, csv: csv, ledger: function () { return ledgerRows; }, needLedger: needLedger, repaint: function (soft) { if (repaintRef) repaintRef(!!soft); }, goOldVendor: function (id, name) { goVendor(id, name); }, setView: function (v) { V.view = v; if (repaintRef) repaintRef(false); } };
   function growthBody() { var GV = window.B2BGrowthView; if (!GV || !window.B2BGrowth) return '<div class="card"><div class="ks-warn">성장 분석 모듈을 불러오지 못했습니다.</div></div>'; return GV.render(API); }
   function goVendor(id, name) { V.detail = null; V.view = "vendors"; V.page = {}; if (id) { V.vendor = id; V.q = ""; } else { V.vendor = null; V.q = name || ""; } }
   function after(repaint) {
     repaintRef = repaint; var root = document.querySelector(".ks"); if (!root) return;
     root.addEventListener("keydown", function (e) { var a = e.target.getAttribute("data-kact"); var GVk = window.B2BGrowthView; if (GVk && GVk.key && GVk.key(a, e, API)) return; if (a === "q" && e.key === "Enter") { V.q = e.target.value.trim(); V.page = {}; repaint(true); } if (a === "dq" && e.key === "Enter") { V.detail.q = e.target.value.trim(); V.page["detail"] = 0; repaint(true); } if (a === "detail" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openDetail(e.target.getAttribute("data-id")); repaint(true); } if (e.key === "Escape" && (V.detail || V.integrity)) { V.detail = null; V.integrity = null; repaint(true); } });
     root.addEventListener("input", function (e) { var GVi = window.B2BGrowthView; if (GVi && GVi.input && GVi.input(e.target.getAttribute("data-kact"), e, API)) return; if (/^ks-(ep|key|sid|cid)$/.test(e.target.id)) { V.draft = Object.assign({}, S.settings() || {}, V.draft || {}); V.draft.mode = V.draft.mode || (S.settings() || {}).mode || "google"; var g = function (id) { var el = document.getElementById(id); return el ? el.value : (V.draft[id === "ks-ep" ? "endpoint" : id === "ks-key" ? "key" : id === "ks-sid" ? "sheetId" : "clientId"] || ""); }; V.draft.endpoint = g("ks-ep"); V.draft.key = g("ks-key"); V.draft.sheetId = g("ks-sid"); V.draft.clientId = g("ks-cid"); return; } var a = e.target.getAttribute("data-kact"); if (a === "q" && !e.target.value) { V.q = ""; V.page = {}; repaint(true); } if (a === "dq" && !e.target.value) { V.detail.q = ""; repaint(true); } });
-    root.addEventListener("change", function (e) { var a = e.target.getAttribute("data-kact"); if (!a) return; var GVc = window.B2BGrowthView; if (GVc && GVc.change && GVc.change(a, e.target, API)) return; if (a === "lyear") V.ledgerYear = e.target.value; if (a === "lkind") V.ledgerKind = e.target.value; if (a === "lmain") V.ledgerMain = e.target.value; if (a === "atrade") V.awardTrade = e.target.value; if (/^(lyear|lkind|lmain|atrade)$/.test(a)) { V.page = {}; repaint(true); } });
+    root.addEventListener("change", function (e) { var a = e.target.getAttribute("data-kact"); if (!a) return; var DUc = window.B2BDashUI; if (DUc && DUc.change && DUc.change(a, e.target, API)) return; var GVc = window.B2BGrowthView; if (GVc && GVc.change && GVc.change(a, e.target, API)) return; if (a === "lyear") V.ledgerYear = e.target.value; if (a === "lkind") V.ledgerKind = e.target.value; if (a === "lmain") V.ledgerMain = e.target.value; if (a === "atrade") V.awardTrade = e.target.value; if (/^(lyear|lkind|lmain|atrade)$/.test(a)) { V.page = {}; repaint(true); } });
     root.addEventListener("click", function (e) {
       var el = e.target.closest("[data-kact]"); if (!el) return; var a = el.getAttribute("data-kact"), id = el.getAttribute("data-id");
+      var DUh = window.B2BDashUI; if (DUh && DUh.handle && DUh.handle(a, el, id, API, e)) return;
       var GVh = window.B2BGrowthView; if (GVh && GVh.handle && GVh.handle(a, el, id, API, e)) return;
       if (a === "q" || a === "dq") return;
       if (a === "dclose-bg") { if (e.target === el) { V.detail = null; repaint(true); } return; }
