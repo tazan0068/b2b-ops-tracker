@@ -1,0 +1,223 @@
+/* ============================================================
+   UI 테마 리프레시 (feature/ui-theme-refresh) — 2026-10-22
+   · 블루 계열 SaaS 대시보드 스타일 · CSS 전용 "덮어쓰기 레이어"
+   · 구조(HTML)·데이터·JS·KPI 계산은 건드리지 않는다. 기존 선택자를 뒤에서 재정의만 한다.
+   · 이 파일과 index.html <style> 끝부분(같은 제목 블록)은 항상 동일 내용으로 유지
+   · 토큰: 블루 --brand / 하늘 --brand-2 · 페이지 배경 --page · 카드 그림자 --sh-card · 그라데이션 --grad(CTA·활성) --grad-soft(틴트)
+   ============================================================ */
+:root{
+  --ink:#16233B; --brand:#2F6FDE; --brand-2:#5FA8F0; --sub:#94A3B8;
+  --surf:#F4F7FB; --tint:#E8F0FD; --peach:#DCE8FB; --bg:#FFFFFF;
+  --page:#F3F6FB;
+  --text-2:#7C8AA3; --text-3:#5E6B82; --line:#E3E9F2; --line-2:#EEF2F7;
+  --ok:#0E7C66;   --ok-bg:#E3F6F1;
+  --warn:#B45309; --warn-bg:#FFF3DC;
+  --bad:#B42318;  --bad-bg:#FDEBEA;
+  --na:#64748B;   --na-bg:#F1F5F9;
+  --r2:#BFD3F5; --r3:#8FB0EA; --r4:#4F86E8; --r5:#2F6FDE;
+  --sh:0 1px 2px rgba(16,24,40,.04);
+  --sh-card:0 1px 2px rgba(16,24,40,.04),0 10px 28px -14px rgba(16,24,40,.14);
+  --sh-pop:0 12px 32px -12px rgba(16,24,40,.28);
+  --grad:linear-gradient(135deg,#2F6FDE 0%,#4F86E8 60%,#5FA8F0 100%);
+  --grad-soft:linear-gradient(180deg,#F7FAFF 0%,#E8F0FD 100%);
+  --focus:0 0 0 3px rgba(47,111,222,.18);
+  --acc-line:#B7CBEB;
+  --rad:14px; --rad-s:9px;
+}
+body{background:var(--page)}
+.main{background:var(--page)}
+a{color:var(--brand)}
+:focus-visible{outline-color:var(--brand)}
+
+/* ---------- 상단 네비 : 흰 배경 + 세그먼트형 탭 ---------- */
+.topbar{background:rgba(255,255,255,.94);color:var(--ink);border-bottom:1px solid var(--line);
+        box-shadow:0 6px 20px -14px rgba(16,24,40,.22);
+        -webkit-backdrop-filter:saturate(1.3) blur(8px);backdrop-filter:saturate(1.3) blur(8px)}
+.tb-in{gap:18px;align-items:center;min-height:60px}
+.tb-brand{padding:10px 0}
+.tb-brand .mk{background:var(--grad);color:#fff;border-radius:10px;box-shadow:0 5px 12px -5px rgba(47,111,222,.6)}
+.tb-brand .nm{color:var(--ink)}
+.tb-brand .sb{color:var(--text-2)}
+.tabs{align-self:center;flex:0 1 auto;min-width:0;gap:2px;padding:4px;background:var(--surf);
+      border:1px solid var(--line);border-radius:12px}
+.tabs button{flex:0 0 auto;padding:0 14px;min-height:36px;font-size:13.5px;font-weight:700;color:var(--text-3);
+             border-bottom:0;border-radius:9px;transition:background .15s,color .15s,box-shadow .15s}
+.tabs button .ic{font-size:11px;opacity:.6}
+.tabs button:hover{color:var(--brand);background:rgba(255,255,255,.8)}
+.tabs button[aria-current="page"]{color:var(--brand);font-weight:800;background:#fff;border-bottom:0;
+    box-shadow:0 1px 2px rgba(16,24,40,.06),0 4px 12px -6px rgba(47,111,222,.4),inset 0 -2px 0 var(--brand)}
+.tabs button[aria-current="page"] .ic{color:var(--brand);opacity:.9}
+.tb-r{margin-left:auto;color:var(--text-3);font-weight:600;background:var(--surf);border:1px solid var(--line);
+      border-radius:100px;padding:5px 12px 5px 10px}
+.tb-r .num{color:var(--ink)}
+.dot{background:#10B981;box-shadow:0 0 0 3px rgba(16,185,129,.16)}
+.main{min-height:calc(100vh - 61px)}
+@media (max-width:860px){
+  .tb-in{gap:10px;min-height:54px}
+  .tabs{padding:3px;border-radius:11px}
+  .tabs button{padding:0 11px;min-height:32px;font-size:12.5px;border-radius:8px}
+}
+
+/* ---------- 통합 KPI 내부 탭(ks-nav) : 세그먼트형 · 칩 통일 ---------- */
+.ks-nav{display:inline-flex;flex-wrap:wrap;gap:2px;padding:4px;background:#fff;border:1px solid var(--line);
+        border-radius:12px;box-shadow:var(--sh);max-width:100%}
+.ks-nav button{border:1px solid transparent;border-radius:9px;background:transparent;color:var(--text-3);
+               padding:7px 13px;min-height:34px;font-size:12.5px;transition:background .15s,color .15s}
+.ks-nav button:hover{background:var(--surf);color:var(--brand)}
+.ks-nav button[aria-current="true"]{background:var(--grad-soft);color:var(--brand);border-color:#C9DBF8;
+    box-shadow:inset 0 -2px 0 var(--brand),0 1px 2px rgba(16,24,40,.05)}
+.ks-chips button,.gw-menu button,.op-tg,.op-rtab,.du-period .pf button{border-color:var(--line);background:#fff;color:var(--text-3);transition:background .15s,border-color .15s,color .15s}
+.ks-chips button:hover,.gw-menu button:hover,.op-tg:hover,.op-rtab:hover,.du-period .pf button:hover{border-color:var(--acc-line);color:var(--brand);background:#F7FAFF}
+.ks-chips button[aria-current="true"],.op-tg.on,.op-rtab[aria-pressed="true"],.du-period .pf button.on{
+    background:var(--tint);color:var(--brand);border-color:var(--acc-line);box-shadow:inset 0 0 0 1px rgba(47,111,222,.12)}
+.du-tabs button{border-color:var(--line);color:var(--text-3)}
+.du-tabs button:hover{border-color:var(--acc-line);color:var(--brand);background:#F7FAFF}
+.du-tabs button[aria-current="true"]{background:var(--grad);border-color:transparent;color:#fff;box-shadow:0 4px 12px -6px rgba(47,111,222,.6)}
+.fg{background:var(--surf);border-color:var(--line);border-radius:10px;padding:3px}
+.fg button{border-radius:7px}
+.fg button[aria-pressed="true"]{color:var(--brand);box-shadow:0 1px 2px rgba(16,24,40,.08)}
+
+/* ---------- 카드 : 14px 라운드 · 얕은 그림자 · 얇은 보더 ---------- */
+.card,.du-card,.gw-chart,.op-reco,.du-routes,.du-filters,.wkrow,.bcol,.pgcard,.au,.tt,.kt,.strip,.goal,.mmwrap,.tblwrap,.du-tw{
+    border-color:var(--line);border-radius:var(--rad);box-shadow:var(--sh-card)}
+.tile,.gw-st,.ks-ch,.op-k,.du-dcard,.du-path,.du-mc,.du-stats .du-stat,.lk,.austrip .b,.gp,.mcard,.op-rc,.du-rt{
+    border-color:var(--line);border-radius:12px;background:#fff;box-shadow:var(--sh)}
+.du-kpi{border-color:var(--line);border-radius:18px;box-shadow:var(--sh-card)}
+.card-h h2{font-size:15.5px;letter-spacing:-.015em;color:var(--ink)}
+.card-h .badge{background:var(--tint);color:var(--brand)}
+.card-h .rt{border-radius:8px}
+.ks .card.core6{border-color:#C9DBF8;background:linear-gradient(180deg,#EEF4FE 0%,#fff 64%)}
+.tile.hero{background:var(--grad-soft)}
+.ks .tile[data-kact="detail"]:hover,.gw-tile:hover,.du-dcard:hover,.du-dcard:focus-visible,.du-path:hover,.du-mc:hover{
+    border-color:var(--acc-line);box-shadow:0 8px 20px -10px rgba(47,111,222,.32)}
+.strip .grow{border-left-color:var(--brand);background:var(--grad-soft)}
+.wk-h{border-left-color:var(--brand);background:#F7FAFF}
+.goal{border-left-color:var(--brand);background:var(--grad-soft)}
+.austrip .b.hi{border-left-color:var(--brand);background:var(--grad-soft)}
+.pgcard.hot{border-color:var(--acc-line);box-shadow:inset 3px 0 0 var(--brand),var(--sh-card)}
+.pg-h{background:#F7FAFF}
+.pg-h .id{background:var(--grad);border-radius:8px}
+.bhead,.bwho,.ef,.rt-block,.pf-body,.tt-d,.kt-d,.btk-d,.au-d{background:#F7FAFF}
+.rt-row:hover{background:var(--tint)}
+.mm .n-rt{background:var(--tint);border-color:var(--acc-line)}
+.mm .n-prog{background:var(--brand);border-color:var(--brand)}
+.tt-r.k-todo,.btk.k-todo,.mm .k-todo{border-left-color:#8FB0EA}
+.editbtn.on{background:var(--tint);color:var(--brand);border-color:var(--acc-line)}
+.ef-l .miss{background:var(--warn-bg);color:var(--warn)}
+
+/* ---------- KPI 카드(du-) : 토큰 통일 · 아이콘 그라데이션 ---------- */
+.du{--du-ink:#16233B;--du-sub:#64748B;--du-line:#E3E9F2;--du-bg:#F3F6FB;--du-blue:#2F6FDE;--du-teal:#0EA5A0;--du-navy:#3B5FA8;--du-mute:#CBD5E1;--du-radius:14px}
+.du-kpi::before{background:linear-gradient(90deg,var(--acc) 0%,var(--acc) 55%,var(--tint) 100%)}
+.du-kpi .ic{background:linear-gradient(135deg,var(--tint),#fff);box-shadow:inset 0 0 0 1px rgba(47,111,222,.10)}
+.du-kpi .val{letter-spacing:-1.2px}
+.du-kpi .yoy,.du-kpi .trend,.du-kpi .refs,.du-rate,.du-mc .mt{border-top-color:var(--line-2)}
+.du-dcard .ic{background:linear-gradient(135deg,#E8F0FD,#F7FAFF);color:var(--du-blue)}
+.du-period{background:linear-gradient(135deg,#E9F1FF,#F7FAFF);border-color:#CFE0FB;border-radius:var(--rad)}
+.du-period .pi{box-shadow:var(--sh)}
+.op-period{background:var(--grad-soft);border-color:#CFE0FB;border-radius:12px}
+.du-flow .n,.du-funnel .fn,.du-path .pn span,.du-kpi .parts span,.du-mg span{background:#F5F8FD;border-color:#E3EAF5}
+.du-empty,.gw-priv{border-color:#CBD8EA;background:#F8FAFD;border-radius:12px}
+.gw-st .n{background:var(--grad)}
+.gw-head{padding-top:10px}
+
+/* ---------- 버튼 : CTA 그라데이션 · 고스트 통일 ---------- */
+.btn{background:var(--grad);border-radius:var(--rad-s);
+     box-shadow:0 1px 2px rgba(16,24,40,.08),0 6px 14px -8px rgba(47,111,222,.6);
+     transition:filter .15s,box-shadow .15s,transform .05s,background .15s,border-color .15s}
+.btn:hover{background:var(--grad);filter:brightness(.94);box-shadow:0 2px 4px rgba(16,24,40,.08),0 8px 18px -8px rgba(47,111,222,.65)}
+.btn:active{transform:translateY(1px)}
+.btn.ghost{background:#fff;color:var(--brand);border:1px solid var(--line);box-shadow:var(--sh)}
+.btn.ghost:hover{background:#F7FAFF;border-color:var(--acc-line);filter:none}
+.btn.warnb{background:#fff;color:var(--bad);border-color:#F3C2C2;box-shadow:var(--sh)}
+.btn.warnb:hover{background:var(--bad-bg);filter:none}
+.mini,.editbtn,.prbtn,.card-h .rt,.strip .grow .jump,.lk .go,.au-lk,.ks .pg button,.ks-modal .hd .x,.disc summary{
+    border-radius:8px;border-color:var(--line);background:#fff;transition:background .15s,border-color .15s}
+.mini:hover,.editbtn:hover,.prbtn:hover,.card-h .rt:hover,.strip .grow .jump:hover,.lk .go:hover,.au-lk:hover,.ks .pg button:hover,.ks-modal .hd .x:hover{
+    background:#F7FAFF;border-color:var(--acc-line)}
+.mini.danger{color:var(--bad);border-color:#F3C2C2}
+.mini.danger:hover{background:var(--bad-bg);border-color:#F3C2C2}
+.prmenu{border-radius:10px;box-shadow:var(--sh-pop)}
+
+/* ---------- 입력 · 셀렉트 : 라운드 · hover/focus 링 ---------- */
+input[type=text],input[type=url],input[type=number],select,textarea,
+.fsearch input,.fsel,.ef-i,input[type=number].ef-n,.rt-cy,
+.ks-tools input,.ks-tools select,.ks .form input,.gw-defs input,.gw-defs select,.gw-defs textarea,
+.du-filters select,.du-filters input,.op-q,.op-sel,.op-rc select,.op-rpar select{
+    border-color:var(--line);border-radius:var(--rad-s);background:#fff;transition:border-color .15s,box-shadow .15s}
+input[type=text]:hover,input[type=url]:hover,input[type=number]:hover,select:hover,textarea:hover{border-color:var(--acc-line)}
+input:focus,select:focus,textarea:focus,
+.fsearch input:focus,.ef-i:focus,.ks-tools input:focus,.ks-tools select:focus,.ks .form input:focus,
+.gw-defs input:focus,.gw-defs select:focus,.gw-defs textarea:focus,.du-filters select:focus,.du-filters input:focus,.op-q:focus,.op-sel:focus{
+    outline:none;border-color:var(--brand);box-shadow:var(--focus)}
+input.dirty,select.dirty{background:#FFF8E8;border-color:var(--warn)}
+.du-filters{background:#fff}
+.du-filters .f span{color:var(--text-3)}
+
+/* ---------- 표 : 헤더 위계 · 행 hover ---------- */
+th,.ks th,.gw-t th,.du-tbl th,.op-t th,.du-rt2 th,.tt-h,.kt-h,.au-h{
+    background:#F4F7FC;color:#4A5B7A;font-weight:800;font-size:11px;letter-spacing:.02em}
+.gw-flowt th:first-child{background:#F4F7FC}
+th,td{border-bottom-color:var(--line-2)}
+.ks th,.ks td,.gw-t th,.gw-t td{border-bottom-color:var(--line-2)}
+tbody tr:hover td,.ks tr[data-kact]:hover td{background:#F5F9FF}
+.tt-r:hover,.kt-r:hover,.au-r:hover,.bgrp:hover,.btk:hover,.pf-h:hover,.tt-r.on,.kt-r.on,.au-r.on,.bgrp.on,.btk.on,.pf-h.on{background:#F7FAFF}
+.tt-r,.kt-r,.au-r,.bgrp{border-top-color:var(--line-2)}
+.op-t th{background:#F4F7FC}
+.op-t td{border-bottom-color:var(--line-2)}
+.du-tbl th{background:#F4F7FC}
+.ks-modal .tfoot td{background:#F4F7FC}
+@media (max-width:640px){
+  .gw-t:not(.gw-flowt) tr,.du-tbl tr,.du-rt2 tr{border-color:var(--line);box-shadow:var(--sh)}
+}
+@media (max-width:1279px){ .op-t tr{border-color:var(--line);box-shadow:var(--sh)} }
+
+/* ---------- 상태 배지 : 5색 통일 (긍정 민트 · 주의 앰버 · 위험 레드 · 보조 블루 · 비활성 회색) ---------- */
+.chip{font-weight:800}
+.c-ok,.s-run{border-color:#BFE5D6}.c-warn,.s-dev{border-color:#F4D79A}.c-bad,.s-off{border-color:#F3C2C2}
+.ks .st{background:var(--tint);color:var(--brand)}
+.ks .st.ok,.gw-d.up,.gw-a.up,.gw-tr.ok,.gw-pubtag,.ks-modal .chk.ok,.du-pill.ok,.op-chip.ok{background:#E3F6F1;color:#0B7A6E}
+.ks .st.rev,.gw-tr.cand,.gw-tr.short,.du-pill.rev,.op-chip.warn,.ks .card-h .badge.rev{background:#FFF3DC;color:#9A5B00}
+.ks .st.bad,.gw-d.dn,.gw-a.dn,.ks-modal .chk.bad,.du-pill.bad,.op-chip.bad{background:#FDEBEA;color:#B42318}
+.ks .st.na,.gw-d.fl,.gw-d.na,.gw-a.fl,.gw-a.na,.gw-tr.na,.ks-modal .chk.na,.op-chip.na{background:#F1F5F9;color:#64748B}
+.du-pill.part{background:var(--tint);color:var(--brand)}
+.op-chip.ok{border-color:#BFE5D6}.op-chip.warn{border-color:#F4D79A}.op-chip.bad{border-color:#F3C2C2}.op-chip.na{border-color:#DCE3EE}
+.ks-src{box-shadow:var(--sh)}
+.ks-src.live{color:#0B7A6E;background:#E3F6F1;border-color:#BFE5D6}
+.ks-src.embedded{color:var(--brand);background:var(--tint);border-color:#C9DBF8}
+.ks-src.fallback{background:#FDEBEA;border-color:#F3C2C2}
+.ks-src.none{background:#FFF3DC;border-color:#F4D79A}
+.ks-warn{border-color:#F3C2C2;background:#FDF2F1;border-radius:10px}
+.op-note{border-radius:12px}
+.note{border-left-color:var(--brand);border-radius:0 10px 10px 0;background:#F7FAFF}
+
+/* ---------- 차트 : 테마 팔레트 통일 (블루 · 민트 · 앰버 · 퍼플) ---------- */
+.gw-svg .gw-ax{stroke:var(--line)}
+.gw-svg .gw-b.c1{fill:var(--brand)}.gw-svg .gw-b.c2{fill:#14B8A6}.gw-svg .gw-b.c3{fill:#F5A524}.gw-svg .gw-b.c4{fill:#8B6CEF}
+.gw-svg .gw-ln.c2,.gw-svg .gw-pt.c2{stroke:#14B8A6;fill:#14B8A6}
+.gw-svg .gw-ln.c3,.gw-svg .gw-pt.c3{stroke:#F5A524;fill:#F5A524}
+.gw-svg .gw-ln.c4,.gw-svg .gw-pt.c4{stroke:#8B6CEF;fill:#8B6CEF}
+.sw.c1{background:var(--brand)}.sw.c2{background:#14B8A6}.sw.c3{background:#F5A524}.sw.c4{background:#8B6CEF}
+.gw-svg .gw-sel{fill:#EEF4FE}
+.gw-svg .gw-hit:hover{fill:rgba(47,111,222,.07)}
+.ks-ch .b .bar{background:linear-gradient(180deg,#5FA8F0,#2F6FDE);border-radius:5px 5px 0 0}
+.ks-ch .b .y{border-top-color:var(--line-2)}
+.du-mini i{background:#C7D9F7}
+.du-mini i.cur{background:linear-gradient(180deg,#5FA8F0,#2F6FDE)}
+.du-rank u{background:linear-gradient(90deg,#14B8A6,#0EA5A0)}
+.fbar{background:var(--tint)}
+.mb,.meter,.ks .ks-pbar{background:var(--tint)}
+
+/* ---------- 모달 · 토스트 · 기타 ---------- */
+.ks-modal{background:rgba(22,35,59,.42)}
+.ks-modal .box{border-radius:16px;box-shadow:var(--sh-pop)}
+.ks-modal .hd{border-bottom-color:var(--line)}
+.toast{box-shadow:var(--sh-pop)}
+.disc summary{border-radius:9px}
+.disc[open] summary{border-radius:9px 9px 0 0}
+.disc .body{border-radius:0 0 9px 9px}
+.legend{color:var(--text-3)}
+
+/* ---------- 타이포그래피 위계 ---------- */
+.phead h1,.du-head h1,.gw-h1,.op-head h2,.du-dhead h2{color:var(--ink);letter-spacing:-.02em}
+.phead .hs,.du-head p,.gw-per,.op-head p{color:var(--text-3)}
+.du-t h2,.du-card>header h3,.gw-chart .t,.du-rt-h h3{color:var(--ink)}
