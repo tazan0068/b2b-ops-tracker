@@ -24,7 +24,7 @@
     sync: { status: "idle", lastOkAt: null, lastAttemptAt: null, nextAt: null, message: "", stale: false, changed: null, fingerprint: "", ledgerCount: null, issues: { missingTabs: [], badTabs: [] }, consistency: [], expiredSince: null, silentBlocked: false, interval: interval, progress: null, lastError: null, startedAt: null } };
   var embedded = null; var listeners = []; var gisReady = null; var timer = null; var syncing = null;
   var DEFAULT_TABS = ["1.통합KPI", "2.시공사마스터", "4.메인자재구매현황", "5.POUR공고낙찰", "5b.POUR반영공고", "6.타사공법낙찰", "7.기술자문문의", "7b.플랫폼가입현황", "8.컨설팅요청", "8b.컨설팅발행이력", "9.샘플카탈로그요청", "10.공법설명회이력", "11.기타문의답변", "12.거래처연결검토", "13.데이터검증변경이력", "14.판매원문차이검증", "15.마스터대조", "16.L2L3전환", "16b.L2L3시공사별", "16c.L2L3판정집계", "16d.L2L3검토이력", "17.장기무활동", "18.선행지표요약", "19.업체명정규화"];
-  var EXTRA_TABS = ["21.잔디등_L3활동", "22.영업보고", "23.경로전환_시공사별", "24.경로전환_조합"];   /* 선택 탭: 있으면 읽고 없으면 건너뜀 */
+  var EXTRA_TABS = ["21.잔디등_L3활동", "22.영업보고", "23.경로전환_시공사별", "24.경로전환_조합", "25.경로전환_현장별"];   /* 선택 탭: 있으면 읽고 없으면 건너뜀 */
   function readTabs() { return expectedTabs().concat(EXTRA_TABS); }
   function expectedTabs() { return SCHEMA ? Object.keys(SCHEMA) : DEFAULT_TABS.concat([LEDGER]); }
   function err(code, msg) { var e = new Error(msg); e.code = code; return e; }

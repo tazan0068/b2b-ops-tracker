@@ -1256,7 +1256,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     sync: { status: "idle", lastOkAt: null, lastAttemptAt: null, nextAt: null, message: "", stale: false, changed: null, fingerprint: "", ledgerCount: null, issues: { missingTabs: [], badTabs: [] }, consistency: [], expiredSince: null, silentBlocked: false, interval: interval, progress: null, lastError: null, startedAt: null } };
   var embedded = null; var listeners = []; var gisReady = null; var timer = null; var syncing = null;
   var DEFAULT_TABS = ["1.통합KPI", "2.시공사마스터", "4.메인자재구매현황", "5.POUR공고낙찰", "5b.POUR반영공고", "6.타사공법낙찰", "7.기술자문문의", "7b.플랫폼가입현황", "8.컨설팅요청", "8b.컨설팅발행이력", "9.샘플카탈로그요청", "10.공법설명회이력", "11.기타문의답변", "12.거래처연결검토", "13.데이터검증변경이력", "14.판매원문차이검증", "15.마스터대조", "16.L2L3전환", "16b.L2L3시공사별", "16c.L2L3판정집계", "16d.L2L3검토이력", "17.장기무활동", "18.선행지표요약", "19.업체명정규화"];
-  var EXTRA_TABS = ["21.잔디등_L3활동", "22.영업보고", "23.경로전환_시공사별", "24.경로전환_조합"];   /* 선택 탭: 있으면 읽고 없으면 건너뜀 */
+  var EXTRA_TABS = ["21.잔디등_L3활동", "22.영업보고", "23.경로전환_시공사별", "24.경로전환_조합", "25.경로전환_현장별"];   /* 선택 탭: 있으면 읽고 없으면 건너뜀 */
   function readTabs() { return expectedTabs().concat(EXTRA_TABS); }
   function expectedTabs() { return SCHEMA ? Object.keys(SCHEMA) : DEFAULT_TABS.concat([LEDGER]); }
   function err(code, msg) { var e = new Error(msg); e.code = code; return e; }
@@ -2654,7 +2654,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
       v.acts.push(a); if (!v.firstContact || dt < v.firstContact) v.firstContact = dt; tradeRows.push({ dt: dt, id: id, trade: a.trade });
     });
     /* 23.경로전환_시공사별: 업체×현장×공종 조합 기준 L3 → L4 도달(영업보고 원천이 없으면 경로 미확정) */
-    var PV = {}; O("23.경로전환_시공사별").forEach(function (r) { var id = r["통합ID"]; if (!id) return; var n = function (k) { var x = Number(r[k]); return isFinite(x) ? x : 0; }; PV[id] = { n: n("조합 수(업체×현장×공종)"), l2: n("L2 건수"), l3: n("L3 건수"), pub: n("L4 공고 도달 조합"), win: n("L4 낙찰 도달 조합(누구든)"), winSame: n("같은 업체 낙찰 조합"), text: r["경로 구분(조합 수)"] || "" }; });
+    var PV = {}; O("23.경로전환_시공사별").forEach(function (r) { var id = r["통합ID"]; if (!id) return; var n = function (k) { var x = Number(r[k]); return isFinite(x) ? x : 0; }; PV[id] = { n: n("조합 수(업체×현장×공종)"), l2: n("L2 건수"), l3: n("L3 건수"), pub: n("L4 공고 도달 조합"), win: n("L4 낙찰 도달 조합(누구든)"), winSame: n("같은 업체 낙찰 조합"), text: r["경로 구분(조합 수)"] || "", a: n("L2 선행 조합(현장 단위·A)"), b: n("L2 기록 없는 조합(B)"), lead: n("L3 선행(L2 나중) 조합"), text2: r["경로 구분(L2 반영, 조합 수)"] || "" }; });
     /* 낙찰(5) · 반영공고(5b) */
     var awardsAll = O("5.POUR공고낙찰");
     awardsAll.forEach(function (r) { var id = r["통합ID"]; var v = id ? vend(id, r["낙찰시공사"]) : null; var dt = ymd(r["공고일"]); if (!v || !dt) return; v.awards.push({ dt: dt, site: r["현장명"] || "", trade: r["공종그룹"] || "", amt: isNum(r["낙찰금액"]) ? r["낙찰금액"] : null }); });
@@ -2675,7 +2675,8 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
       var winAw = v.awards.filter(function (a) { return a.dt >= START && a.dt <= asOf; });
       var pastAw = v.awards.filter(function (a) { return a.dt < START; });
       var stage = v.l3.length ? "L3" : "확인 필요";
-      var entry = !v.l3.length ? "—" : hasL2Source ? "확인 필요" : "경로 확인 필요";
+      var pth = PV[id] || null;
+      var entry = !v.l3.length ? "—" : !hasL2Source ? "경로 확인 필요" : pth && pth.a > 0 ? "L2 경유 있음" : "L2 기록 없음";   /* L2 기록이 없다는 이유로 '직접 진입'을 확정하지 않는다 */
       var d = (v.verdict === "정상") ? "활성" : v.verdict === "장기 무활동" ? "이탈 위험" : v.verdict === "활동 이력 없음" ? "활동 이력 없음" : "확인 필요";
       var mgmt = d; if (d === "활성" && old[id] && old[id]["미전환"] > 0 && !(old[id]["L3전환_확정"] > 0)) mgmt = "전환 관리";
       /* 낙찰 후 구매: 연 단위 순매출(4탭) — 낙찰 연도 이후 구매 확인 여부(연결 후보) */
@@ -2702,11 +2703,24 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     var mc = {}; O("7.기술자문문의").forEach(function (r) { var m = ymd(r["접수일자"]).slice(0, 7); if (m) mc[m] = (mc[m] || 0) + 1; });
     var reliable = Object.keys(mc).sort().filter(function (m) { return mc[m] >= 20; })[0] || "";
     var reliableFrom = reliable ? reliable + "-01" : "";
+    /* 22.영업보고 · 25.경로전환_현장별: 현장×공종 단위 L2(잔디 영업보고) → L3 → L4 (업체는 L3 쪽 업체로만 붙인다) */
+    var L2R = O("22.영업보고"), yes = function (x) { return x === "Y"; };
+    var SPR = O("25.경로전환_현장별").map(function (r) { return { site: r["현장ID"], name: r["현장명"] || r["현장ID"], trade: r["공종그룹"] || "", l2: ymd(r["첫 L2일"]), l2Last: ymd(r["최근 L2일"]), n2: Number(r["L2 건수"]) || 0, per: r["구분(분석기간)"] || "", link: r["현장 연결"] || "", path: r["경로 구분"] || "", l3: ymd(r["첫 L3일(L2 이후)"]), n3: Number(r["L3 건수(L2 이후)"]) || 0, vend: r["L3 업체명"] || "", l3in: yes(r["L2→L3 365일 내"]), obs2: yes(r["L2 관측 완료(365일)"]), obs4: yes(r["L4 관측 완료(365일)"]), pub: yes(r["L4 공고 도달(365일)"]), pubDt: ymd(r["첫 공고일"]), win: yes(r["L4 낙찰 도달"]), winV: r["낙찰 업체명"] || "" }; });
+    function l2agg(rs) {
+      var obs = rs.filter(function (r) { return r.obs2; }), A = rs.filter(function (r) { return r.path === "A L2→L3"; }), aO = A.filter(function (r) { return r.obs4; });
+      return { n: rs.length, reports: rs.reduce(function (s, r) { return s + r.n2; }, 0), obs: obs.length, l3: obs.filter(function (r) { return r.l3in; }).length, aN: A.length, aObs: aO.length, aPub: aO.filter(function (r) { return r.pub; }).length, aWin: aO.filter(function (r) { return r.win; }).length,
+        direct: obs.filter(function (r) { return r.path.charAt(0) === "C"; }).length, only: obs.filter(function (r) { return r.path.charAt(0) === "D"; }).length, lead: rs.filter(function (r) { return r.path.indexOf("L3 선행") === 0; }).length };
+    }
+    var okRows = SPR.filter(function (r) { return r.link === "확정"; }), mo = {};
+    okRows.forEach(function (r) { var k = r.l2.slice(0, 7); (mo[k] = mo[k] || []).push(r); });
+    var l2 = { has: SPR.length > 0, hasReports: L2R.length > 0, reports: L2R.length, rows: SPR, first: L2R.length ? L2R.map(function (r) { return ymd(r["보고일"]); }).sort()[0] : "", last: L2R.length ? L2R.map(function (r) { return ymd(r["보고일"]); }).sort().slice(-1)[0] : "",
+      all: l2agg(okRows), win: l2agg(okRows.filter(function (r) { return r.per.indexOf("분석기간") === 0; })), past: l2agg(okRows.filter(function (r) { return r.per.indexOf("과거") === 0; })), review: l2agg(SPR.filter(function (r) { return r.link !== "확정"; })),
+      months: Object.keys(mo).sort().reverse().map(function (k) { var a = l2agg(mo[k]); a.month = k; return a; }) };
     /* 요약 */
     var l3v = rows.filter(function (r) { return r.l3n > 0; }), awv = rows.filter(function (r) { return r.awardN > 0; });
     var S = { asOf: asOf, start: START, hasL2Source: hasL2Source, reliableFrom: reliableFrom,
       managed: managed.length, active: managed.filter(function (r) { return r.verdict === "정상"; }).length, dormant: managed.filter(function (r) { return r.verdict === "장기 무활동"; }).length, noHistory: managed.filter(function (r) { return r.verdict === "활동 이력 없음"; }).length,
-      l3Vendors: l3v.length, l3VendorsManaged: l3v.filter(function (r) { return r.managed; }).length, pathUnknown: rows.filter(function (r) { return r.entry === "경로 확인 필요"; }).length, direct: rows.filter(function (r) { return r.entry === "직접진입"; }).length,
+      l3Vendors: l3v.length, l3VendorsManaged: l3v.filter(function (r) { return r.managed; }).length, pathUnknown: rows.filter(function (r) { return r.entry === "경로 확인 필요" || r.entry === "L2 기록 없음"; }).length, viaL2: rows.filter(function (r) { return r.entry === "L2 경유 있음"; }).length, direct: rows.filter(function (r) { return r.entry === "직접진입"; }).length,
       awardVendors: awv.length, l3AndAward: rows.filter(function (r) { return r.l3n > 0 && r.awardN > 0; }).length,
       buyCand: awv.filter(function (r) { return r.buyState === "구매 연결 후보"; }).length, buyMissing: awv.filter(function (r) { return r.buyState === "낙찰 후 구매 미확인"; }).length, buyObserving: awv.filter(function (r) { return r.buyState === "관찰 중"; }).length,
       mou: rows.filter(function (r) { return r.mou; }).length, mouNone: managed.filter(function (r) { return !r.mou; }).length, mouInWindow: rows.filter(function (r) { return r.mou && r.mou >= START; }).length,
@@ -2747,7 +2761,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     recs.forEach(function (x) { var r = rowBy[x.id]; if (r) { r.reasons = r.reasons || []; r.reasons.push({ type: x.type, label: RL[x.type][0], kind: RL[x.type][1] }); } });
     S.mgmtUnique = rows.filter(function (r) { return r.managed && r.reasons && r.reasons.length; }).length; S.mgmtMulti = rows.filter(function (r) { return r.managed && r.reasons && r.reasons.length > 1; }).length;
     S.recCounts = { A: recBy.A.length, B: recBy.B.length, C: recBy.C.length, D: recBy.D.length, E: recBy.E.length, F: recBy.F.length };
-    return { start: START, asOf: asOf, obsDays: obsDays, fupDays: fupDays, summary: S, rows: rows, rowBy: rowBy, lead: { core: L1, trades: trades, mons: mons, tradesComparable: comparable3, awardTrades: awTrade }, recs: recBy };
+    return { start: START, asOf: asOf, obsDays: obsDays, fupDays: fupDays, summary: S, rows: rows, rowBy: rowBy, l2: l2, lead: { core: L1, trades: trades, mons: mons, tradesComparable: comparable3, awardTrades: awTrade }, recs: recBy };
   }
   root.B2BOps = { START: START, build: build, OBS_DAYS_DEFAULT: OBS_DAYS_DEFAULT, FUP_DAYS_DEFAULT: FUP_DAYS_DEFAULT };
   if (typeof module !== "undefined" && module.exports) module.exports = root.B2BOps;
@@ -2764,7 +2778,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
 (function () {
   "use strict";
   var A = null, cache = { key: "", m: null };
-  var St = { q: "", stage: "all", act: "all", path: "all", nobuy: false, sort: "last", scope: "managed", page: 0, obs: 180, fup: 14 };
+  var St = { l2v: "month", l2q: "", l2p: "all", l2per: "all", l2pg: 0, q: "", stage: "all", act: "all", path: "all", nobuy: false, sort: "last", scope: "managed", page: 0, obs: 180, fup: 14 };
   var PER = 20;
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function isNum(v) { return typeof v === "number" && isFinite(v); }
@@ -2793,7 +2807,8 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
       if (q && (r.name + " " + r.id).toLowerCase().indexOf(q) < 0) return false;
       if (St.stage !== "all" && r.stage !== St.stage) return false;
       if (St.act !== "all" && r.mgmt !== St.act) return false;
-      if (St.path === "unknown" && r.entry !== "경로 확인 필요") return false;
+      if (St.path === "unknown" && r.entry !== "경로 확인 필요" && r.entry !== "L2 기록 없음") return false;
+      if (St.path === "via" && r.entry !== "L2 경유 있음") return false;
       if (St.path === "direct" && r.entry !== "직접진입") return false;
       if (St.nobuy && r.buyState !== "낙찰 후 구매 미확인") return false;
       return true;
@@ -2804,7 +2819,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   function statusChip(r) { var k = r.mgmt === "활성" ? "ok" : r.mgmt === "전환 관리" ? "warn" : r.mgmt === "이탈 위험" ? "bad" : "na"; return chip(k, r.mgmt); }
   function pathCell(r) {                                                                   /* 업체×현장×공종 조합 기준 · L2 원천이 없으면 경로 미확정 */
     var p = r.path; if (!p || !p.n) return '<span class="op-mut">조합 없음</span><span class="op-sub">업체·현장·공종 연결 확정 L3 없음</span>';
-    return esc("공고 " + p.pub + "/" + p.n + " · 낙찰 " + p.win + "/" + p.n) + '<span class="op-sub">' + esc((p.l2 ? "L2 " + p.l2 + "건 · " : "L2 기록 없음 · ") + p.text) + "</span>";
+    return esc("공고 " + p.pub + "/" + p.n + " · 낙찰 " + p.win + "/" + p.n) + '<span class="op-sub">' + esc(p.text2 ? "현장 L2 반영 · " + p.text2 : (p.l2 ? "L2 " + p.l2 + "건 · " : "L2 기록 없음 · ") + p.text) + "</span>";
   }
   function buyChip(r) { var k = r.buyState === "구매 연결 후보" ? "ok" : r.buyState === "낙찰 후 구매 미확인" ? "bad" : r.buyState === "관찰 중" ? "warn" : "na"; return r.buyState === "해당 없음" ? '<span class="op-mut">—</span>' : chip(k, r.buyState); }
   function nextOf(m, id) { var out = []; ["A", "B", "C", "D", "E", "F"].forEach(function (k) { m.recs[k].forEach(function (x) { if (x.id === id && out.length < 2) out.push(x.next); }); }); return out; }
@@ -2816,7 +2831,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
       var nx = nextOf(m, r.id), rs = r.reasons || [];
       h += "<tr><td data-l=\"시공사\"><b>" + esc(r.name) + "</b><span class=\"op-sub\">" + esc(r.id) + (r.core ? " · 핵심(임시)" : "") + (r.managed ? "" : " · 협력사 외") + "</span></td>" +
         "<td data-l=\"협약\">" + (r.mou ? esc(r.mou) : '<span class="op-mut">협약일 미확인</span>') + "</td>" +
-        "<td data-l=\"단계 · 진입\">" + (r.stage === "L3" ? chip("ok", "L3") : chip("na", "확인 필요")) + (r.entry === "—" ? "" : " " + chip(r.entry === "경로 확인 필요" ? "warn" : "ok", r.entry)) + "</td>" +
+        "<td data-l=\"단계 · 진입\">" + (r.stage === "L3" ? chip("ok", "L3") : chip("na", "확인 필요")) + (r.entry === "—" ? "" : " " + chip(r.entry === "경로 확인 필요" || r.entry === "L2 기록 없음" ? "warn" : "ok", r.entry)) + "</td>" +
         "<td data-l=\"최근 활동\">" + (r.lastActDt ? esc(r.lastActDt) + '<span class="op-sub">' + esc(r.lastActType || "") + "</span>" : '<span class="op-mut">활동 이력 없음</span>') + "</td>" +
         "<td data-l=\"기술지원(L3)\">" + (r.l3n ? esc(r.l3n + "건 · 현장 " + r.sites + "곳") + '<span class="op-sub">' + esc(r.types.join(" · ")) + "</span>" : '<span class="op-mut">기간 내 없음</span>') + (r.preN ? '<span class="op-sub">기준일 이전 ' + r.preN + "건 보존</span>" : "") + "</td>" +
         "<td data-l=\"공법 활동\">" + (r.trades.length ? esc(r.trades.slice(0, 2).join(" · ")) + (r.trades.length > 2 ? ' <span class="op-sub">외 ' + (r.trades.length - 2) + "</span>" : "") : '<span class="op-mut">' + (r.l3n ? "공법 미분류" : "—") + "</span>") + "</td>" +
@@ -2831,6 +2846,45 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     h += '<div class="op-pg"><button class="btn ghost" data-kact="opg" data-id="prev"' + (St.page <= 0 ? " disabled" : "") + '>이전</button><span>' + (rows.length ? from + 1 : 0) + "–" + Math.min(from + PER, rows.length) + " / " + rows.length + '곳</span><button class="btn ghost" data-kact="opg" data-id="next"' + (St.page >= pages - 1 ? " disabled" : "") + ">다음</button></div>";
     return h;
   }
+  /* ---------- L2 → L3 → L4 전환 현황 (월별 · 현장별 · 시공사별) ---------- */
+  function pc(n, d) { return d ? (Math.round(n / d * 1000) / 10).toFixed(1) + "%" : "—"; }
+  function l2Cards(L) {
+    var a = L.all; return '<div class="op-sum">' + [["L2 현장×공종(확정 연결)", a.n.toLocaleString("ko-KR") + " (보고 " + a.reports.toLocaleString("ko-KR") + "건)"], ["L2 → L3 (365일)", a.l3 + "/" + a.obs + " · " + pc(a.l3, a.obs)], ["L3 → L4 공고 (L2 경유)", a.aPub + "/" + a.aObs + " · " + pc(a.aPub, a.aObs)], ["L2 → L4 직행(L3 없음)", a.direct + "/" + a.obs + " · " + pc(a.direct, a.obs)]].map(function (x) { return '<div class="op-k"><span>' + esc(x[0]) + "</span><b style=\"font-size:16px\">" + esc(x[1]) + "</b></div>"; }).join("") + "</div>";
+  }
+  function l2MonthTable(L) {
+    var h = '<div class="op-tw"><table class="op-t"><thead><tr><th>첫 L2 월</th><th>L2 현장×공종</th><th>365일 관측 완료</th><th>L2 → L3</th><th>L3 → L4 공고(L2 경유)</th><th>L2 → L4 직행</th><th>L2만</th></tr></thead><tbody>';
+    L.months.forEach(function (x) { var mk = x.month === "2025-06" ? " · 6/24 이전 포함" : ""; h += "<tr><td data-l=\"첫 L2 월\"><b>" + esc(x.month) + "</b>" + (x.month < "2025-06" ? '<span class="op-sub">분석 시작 전 · 비교용</span>' : mk ? '<span class="op-sub">' + esc(mk.slice(3)) + "</span>" : "") + "</td><td data-l=\"L2 현장×공종\">" + x.n + '<span class="op-sub">보고 ' + x.reports + "건</span></td><td data-l=\"관측 완료\">" + x.obs + "</td><td data-l=\"L2 → L3\">" + (x.obs ? x.l3 + "/" + x.obs + " · " + pc(x.l3, x.obs) : '<span class="op-mut">관측 중</span>') + "</td><td data-l=\"L3 → L4\">" + (x.aObs ? x.aPub + "/" + x.aObs + " · " + pc(x.aPub, x.aObs) : '<span class="op-mut">관측 중</span>') + "</td><td data-l=\"L2 → L4 직행\">" + (x.obs ? x.direct + "/" + x.obs : '<span class="op-mut">—</span>') + "</td><td data-l=\"L2만\">" + (x.obs ? x.only : "—") + "</td></tr>"; });
+    return h + "</tbody></table></div>";
+  }
+  function l2SiteRows(L) {
+    var q = St.l2q.toLowerCase();
+    return L.rows.filter(function (r) { if (St.l2per === "win" && r.per.indexOf("분석기간") !== 0) return false; if (St.l2per === "past" && r.per.indexOf("과거") !== 0) return false; if (St.l2per === "review" && r.link === "확정") return false; if (St.l2per !== "review" && St.l2per !== "all" && r.link !== "확정") return false;
+      if (St.l2p !== "all" && r.path.charAt(0) !== St.l2p) return false; if (q && (r.name + " " + r.trade + " " + r.vend + " " + r.winV).toLowerCase().indexOf(q) < 0) return false; return true; });
+  }
+  function l2SiteTable(L) {
+    var rs = l2SiteRows(L), pages = Math.max(1, Math.ceil(rs.length / PER)); if (St.l2pg >= pages) St.l2pg = pages - 1; var from = St.l2pg * PER, part = rs.slice(from, from + PER);
+    var h = '<div class="op-filters"><input class="op-q" type="search" placeholder="현장·공종·업체 검색 (Enter)" value="' + esc(St.l2q) + '" data-kact="ol2q">' + sel("l2per", [["all", "분석기간+과거(확정 연결)"], ["win", "분석기간 내(2025-06-24~)"], ["past", "과거 비교용"], ["review", "현장 연결 불명확(검토)"]], St.l2per) + sel("l2p", [["all", "전체 경로"], ["A", "L2 → L3 (→L4)"], ["C", "L2 → L4 직행"], ["D", "L2만"], ["L", "L3 선행"]], St.l2p) + '<button class="btn ghost" data-kact="ol2csv">현장별 CSV</button></div>';
+    h += '<div class="op-tw"><table class="op-t"><thead><tr><th>현장 · 공종</th><th>첫 L2</th><th>경로</th><th>L3 (L2 이후)</th><th>L4 공고</th><th>낙찰</th></tr></thead><tbody>';
+    if (!part.length) h += '<tr><td colspan="6" class="op-empty">조건에 맞는 현장이 없습니다</td></tr>';
+    part.forEach(function (r) { h += "<tr><td data-l=\"현장 · 공종\"><b>" + esc(r.name) + '</b><span class="op-sub">' + esc(r.trade) + " · " + esc(r.site) + (r.link === "확정" ? "" : " · 현장 연결 검토") + "</span></td><td data-l=\"첫 L2\">" + esc(r.l2) + '<span class="op-sub">보고 ' + r.n2 + "건" + (r.per.indexOf("과거") === 0 ? " · 과거" : "") + "</span></td><td data-l=\"경로\">" + esc(r.path) + (r.obs2 ? "" : '<span class="op-sub">365일 관측 중</span>') + "</td><td data-l=\"L3\">" + (r.l3 ? esc(r.l3) + '<span class="op-sub">' + r.n3 + "건" + (r.vend ? " · " + esc(r.vend.length > 40 ? r.vend.slice(0, 40) + "…" : r.vend) : "") + "</span>" : '<span class="op-mut">—</span>') + "</td><td data-l=\"L4 공고\">" + (r.pub ? esc(r.pubDt || "Y") : r.obs4 ? '<span class="op-mut">없음</span>' : '<span class="op-mut">관측 중</span>') + "</td><td data-l=\"낙찰\">" + (r.win ? esc(r.winV || "Y") : '<span class="op-mut">—</span>') + "</td></tr>"; });
+    h += "</tbody></table></div>" + '<div class="op-pg"><button class="btn ghost" data-kact="ol2pg" data-id="prev"' + (St.l2pg <= 0 ? " disabled" : "") + '>이전</button><span>' + (rs.length ? from + 1 : 0) + "–" + Math.min(from + PER, rs.length) + " / " + rs.length + '곳</span><button class="btn ghost" data-kact="ol2pg" data-id="next"' + (St.l2pg >= pages - 1 ? " disabled" : "") + ">다음</button></div>";
+    return h;
+  }
+  function l2VendorTable(m) {
+    var rs = m.rows.filter(function (r) { return r.path && r.path.n > 0; }).sort(function (a, b) { return b.path.a - a.path.a || b.path.pub - a.path.pub || b.path.n - a.path.n; }).slice(0, 60);
+    var h = '<div class="op-tw"><table class="op-t"><thead><tr><th>시공사</th><th>L3 조합</th><th>L2 선행(A)</th><th>L2 기록 없음(B)</th><th>L4 공고</th><th>낙찰</th></tr></thead><tbody>';
+    rs.forEach(function (r) { var p = r.path; h += "<tr><td data-l=\"시공사\"><b>" + esc(r.name) + '</b><span class="op-sub">' + esc(r.id) + "</span></td><td data-l=\"L3 조합\">" + p.n + "</td><td data-l=\"L2 선행\">" + p.a + " · " + pc(p.a, p.n) + "</td><td data-l=\"L2 기록 없음\">" + p.b + "</td><td data-l=\"L4 공고\">" + p.pub + "/" + p.n + "</td><td data-l=\"낙찰\">" + p.win + "/" + p.n + "</td></tr>"; });
+    return h + "</tbody></table></div>" + '<p class="op-foot">L2 선행 비율이 높은 순 상위 60곳 · 시공사 전체는 아래 표의 "경로 전환" 열과 CSV에서 봅니다. L2 보고는 업체를 적지 않아 L3 조합의 현장×공종에 보고가 먼저 있었는지로만 연결합니다.</p>';
+  }
+  function l2Section(m) {
+    var L = m.l2; if (!L || !L.has) return "";
+    var h = '<div class="card" style="margin-bottom:12px"><div class="card-h"><h2>L2 → L3 → L4 전환 현황</h2><span class="mini">현장×공종 단위 · 잔디 영업보고 ' + L.reports.toLocaleString("ko-KR") + "건(" + esc(L.first) + " ~ " + esc(L.last) + ") · L3·L4는 첫 보고(L3) 이후 365일 내 · 365일 관측이 끝난 건만 분모</span></div>";
+    h += l2Cards(L);
+    h += '<div class="op-filters">' + [["month", "월별"], ["site", "현장별"], ["vendor", "시공사별"]].map(function (x) { return '<button class="op-tg' + (St.l2v === x[0] ? " on" : "") + '" data-kact="ol2v" data-id="' + x[0] + '" aria-pressed="' + (St.l2v === x[0]) + '">' + x[1] + "</button>"; }).join("") + "</div>";
+    h += St.l2v === "month" ? l2MonthTable(L) : St.l2v === "site" ? l2SiteTable(L) : l2VendorTable(m);
+    h += '<p class="op-foot">분석기간 내(2025-06-24~) ' + L.win.n + "곳 · 과거 비교용 " + L.past.n + "곳(삭제하지 않고 보존) · 현장 연결이 불명확한(주소 없음·이름만 일치 등) " + L.review.n + "곳은 별도 검토 대상으로 분리해 위 비율에서 뺐습니다. 현장 연결이 덜 확정된 경우 실제 L3·L4가 일부 빠졌을 수 있어 비율은 하한에 가깝습니다. 2026-06-30 이후 영업보고 기록은 없어 그 이후 현장은 L2 경유로 잡히지 않습니다. 검증 전 값이며 KPI 카드 값에는 반영하지 않았습니다.</p></div>";
+    return h;
+  }
   function sel(id, opts, cur) { return '<select class="op-sel" data-kact="osel" data-id="' + id + '">' + opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(cur) === String(o[0]) ? " selected" : "") + ">" + esc(o[1]) + "</option>"; }).join("") + "</select>"; }
 
   function render(api) {
@@ -2843,14 +2897,22 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     var m = g.m, S = m.summary, rows = filtered(m);
     var h = head;
     h += '<div class="op-sum">' + [["관리 시공사", S.managed], ["활성(최근 90일 내 활동)", S.active], ["장기 무활동", S.dormant], ["기간 내 L3 활동 시공사", S.l3Vendors], ["경로 확인 필요", S.pathUnknown], ["기간 내 낙찰 시공사", S.awardVendors], ["낙찰 후 구매 미확인", S.buyMissing]].map(function (x) { return '<div class="op-k"><span>' + esc(x[0]) + "</span><b>" + esc(isNum(x[1]) ? x[1].toLocaleString("ko-KR") : "—") + "</b></div>"; }).join("") + "</div>";
-    h += '<div class="op-note"><b>읽는 법</b> L3 활동 시공사·진입 유형은 운영 시트에 있는 플랫폼 기록 기준(잔디 기록 미포함)이라 하한값입니다. 영업보고(L2) 원천이 연결되기 전에는 L3 시공사를 ' + chip("warn", "경로 확인 필요") + '로만 분류하며 직접진입 확정은 ' + S.direct + "곳입니다. 협약일 미확인 " + S.mouNone + "곳은 신규·기존을 판정하지 않았습니다. 낙찰 후 구매는 연 단위 자재 순매출 기준 '연결 후보'(관찰 " + m.obsDays + "일)입니다.</div>";
-    h += '<div class="op-filters"><input class="op-q" type="search" placeholder="시공사 이름·ID 검색" value="' + esc(St.q) + '" data-kact="oq">' + sel("scope", [["managed", "관리 시공사(" + S.managed + ")"], ["all", "협력사 외 포함"]], St.scope) + sel("stage", STAGES, St.stage) + sel("act", ACTS, St.act) + sel("path", [["all", "전체 경로"], ["unknown", "경로 확인 필요"], ["direct", "직접진입 확정"]], St.path) + sel("sort", SORTS, St.sort) +
+    h += (S.hasL2Source ? '<div class="op-note"><b>읽는 법</b> L2 = 잔디 「POUR공법기술문의」 영업 담당자 보고(업체 미기재 · 현장×공종 단위)입니다. 시공사의 "L2 경유 있음"은 그 시공사 L3 조합의 현장×공종에 L3 이전 L2 보고가 있다는 뜻이고, "L2 기록 없음"은 직접 진입으로 확정하지 않습니다. 잔디 보고 기록은 2026-06-30까지라 이후 신규 현장의 L2는 없습니다. 협약일 미확인 ' + S.mouNone + '곳은 신규·기존을 판정하지 않았습니다. 낙찰 후 구매는 연 단위 자재 순매출 기준 \x27연결 후보\x27(관찰 ' + m.obsDays + '일)입니다.</div>' : '<div class="op-note"><b>읽는 법</b> L3 활동 시공사·진입 유형은 운영 시트에 있는 플랫폼 기록 기준(잔디 기록 미포함)이라 하한값입니다. 영업보고(L2) 원천이 연결되기 전에는 L3 시공사를 ' + chip("warn", "경로 확인 필요") + '로만 분류하며 직접진입 확정은 ' + S.direct + "곳입니다. 협약일 미확인 " + S.mouNone + "곳은 신규·기존을 판정하지 않았습니다. 낙찰 후 구매는 연 단위 자재 순매출 기준 '연결 후보'(관찰 " + m.obsDays + "일)입니다.</div>" );
+    h += l2Section(m);
+    h += '<div class="op-filters"><input class="op-q" type="search" placeholder="시공사 이름·ID 검색" value="' + esc(St.q) + '" data-kact="oq">' + sel("scope", [["managed", "관리 시공사(" + S.managed + ")"], ["all", "협력사 외 포함"]], St.scope) + sel("stage", STAGES, St.stage) + sel("act", ACTS, St.act) + sel("path", [["all", "전체 경로"], ["unknown", "경로 확인 필요·L2 기록 없음"], ["via", "L2 경유 있음"], ["direct", "직접진입 확정"]], St.path) + sel("sort", SORTS, St.sort) +
       '<button class="op-tg' + (St.nobuy ? " on" : "") + '" data-kact="onb" aria-pressed="' + St.nobuy + '">낙찰 후 구매 미확인</button><button class="btn ghost" data-kact="ocsv">CSV 다운로드</button></div>';
     h += tableHtml(m, rows);
     h += '<p class="op-foot">시공사 [상세 이력]은 협약일·기간 내 L3·현장별 재사용·공고·낙찰·구매를 시간순으로 보여줍니다. 고객관리카드 데이터는 복제하지 않고 B2B 고유번호만 참조합니다. 업무 완료 자체는 L3 전환이나 구매 실적으로 계산하지 않습니다.</p></div>';
     return h;
   }
 
+  function l2Csv(api) {
+    var g = get(api); if (g.state !== "ready" || !g.m.l2) return; var rs = l2SiteRows(g.m.l2);
+    var head = ["현장ID", "현장명", "공종그룹", "첫 L2일", "L2 건수", "구분", "현장 연결", "경로 구분", "첫 L3일(L2 이후)", "L3 건수", "L3 업체", "365일 관측 완료(L2)", "L2→L3 365일 내", "L4 공고 도달", "첫 공고일", "L4 낙찰 도달", "낙찰 업체"];
+    var lines = [head].concat(rs.map(function (r) { return [r.site, r.name, r.trade, r.l2, r.n2, r.per, r.link, r.path, r.l3, r.n3, r.vend, r.obs2 ? "Y" : "", r.l3in ? "Y" : "", r.pub ? "Y" : "", r.pubDt, r.win ? "Y" : "", r.winV]; }));
+    var csv = "\ufeff" + lines.map(function (x) { return x.map(function (v) { return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"'; }).join(","); }).join("\r\n");
+    var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); a.download = "L2_L3_L4_현장별_" + g.m.asOf + ".csv"; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
   function csvOut(api) {
     var g = get(api); if (g.state !== "ready") return; var rows = filtered(g.m);
     var cols = [{ k: "시공사", csv: function (r) { return r.name; } }, { k: "통합ID", csv: function (r) { return r.id; } }, { k: "협약일", csv: function (r) { return r.mou || "미확인"; } }, { k: "현재 단계", csv: function (r) { return r.stage; } }, { k: "진입 유형", csv: function (r) { return r.entry; } }, { k: "최근 활동일", csv: function (r) { return r.lastActDt || ""; } }, { k: "L3 건수(기간 내)", csv: function (r) { return r.l3n; } }, { k: "L3 현장 수", csv: function (r) { return r.sites; } }, { k: "기준일 이전 활동(보존)", csv: function (r) { return r.preN; } }, { k: "낙찰 건수(기간 내)", csv: function (r) { return r.awardN; } }, { k: "L3→L4 조합 수", csv: function (r) { return r.path ? r.path.n : ""; } }, { k: "L4 공고 도달 조합", csv: function (r) { return r.path ? r.path.pub : ""; } }, { k: "L4 낙찰 도달 조합(누구든)", csv: function (r) { return r.path ? r.path.win : ""; } }, { k: "경로 구분", csv: function (r) { return r.path ? r.path.text : ""; } }, { k: "낙찰금액(공급가액 기준 미확인)", csv: function (r) { return r.awardAmt; } }, { k: "구매 상태", csv: function (r) { return r.buyState; } }, { k: "메인자재", csv: function (r) { return r.mainBuy; } }, { k: "관리 상태", csv: function (r) { return r.mgmt; } }, { k: "B2B고유번호", csv: function (r) { return r.cardId; } }];
@@ -2865,11 +2927,14 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     if (a === "onb") { St.nobuy = !St.nobuy; St.page = 0; rp(); return true; }
     if (a === "opg") { St.page += id === "next" ? 1 : -1; if (St.page < 0) St.page = 0; rp(); return true; }
     if (a === "ocsv") { csvOut(api); return true; }
-    if (a === "oq") return true;
+    if (a === "ol2v") { St.l2v = id; St.l2pg = 0; rp(); return true; }
+    if (a === "ol2pg") { St.l2pg += id === "next" ? 1 : -1; if (St.l2pg < 0) St.l2pg = 0; rp(); return true; }
+    if (a === "ol2csv") { l2Csv(api); return true; }
+    if (a === "oq" || a === "ol2q") return true;
     return false;
   }
-  function key(a, e, api) { if (a === "oq" && e.key === "Enter") { A = api; St.q = e.target.value.trim(); St.page = 0; rp(); return true; } return false; }
-  function change(a, t, api) { if (a !== "osel") return false; A = api; var id = t.getAttribute("data-id"); St[id] = t.value; St.page = 0; rp(); return true; }
+  function key(a, e, api) { if (a === "ol2q" && e.key === "Enter") { A = api; St.l2q = e.target.value.trim(); St.l2pg = 0; rp(); return true; } if (a === "oq" && e.key === "Enter") { A = api; St.q = e.target.value.trim(); St.page = 0; rp(); return true; } return false; }
+  function change(a, t, api) { if (a !== "osel") return false; A = api; var id = t.getAttribute("data-id"); St[id] = t.value; St.page = 0; if (id.indexOf("l2") === 0) St.l2pg = 0; rp(); return true; }
 
   /* ---------- 업무관리 연동: 추천 관리 대상 ---------- */
   var TYPES = { A: { n: "L2→L3 전환 관리", d: "기술자문 이후 컨설팅·설명회 등 전환 근거가 없는 시공사(구 정의, 시트 16탭 기준)" }, B: { n: "낙찰 후 미구매 확인", d: "기준일 이후 낙찰 기록이 있으나 관찰 기간 안에 자재 구매가 확인되지 않은 시공사" }, C: { n: "장기 무활동 시공사", d: "과거 활동은 있으나 90일 이상 새 활동이 없는 시공사" }, D: { n: "컨설팅 후속 관리", d: "컨설팅 요청 후 발행 기록이 확인되지 않은 시공사" }, E: { n: "협약일 미확인", d: "협약일이 없어 신규·기존 판정을 못한 관리 시공사 — 협약일 확인이 먼저" }, F: { n: "최근 활동 감소", d: "핵심 시공사(임시 정의) 중 최근 90일 활동이 직전 90일보다 줄어든 시공사 · 이전 기간 원천이 충분할 때만 판단" } };
@@ -3874,8 +3939,8 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     if (!A || !A.has || !A.has("24.경로전환_조합")) return "";
     var rows = A.objs("24.경로전환_조합").filter(function (r) { return r["통합ID"] === v.통합ID; }); if (!rows.length) return '<div class="card-h" style="margin-top:12px"><h2>L2·L3·L4 경로</h2></div><p class="gw-note">이 시공사는 업체·현장·공종이 확정된 L3 조합이 없습니다(업체 미기재·현장 미확정 기록은 제외).</p>';
     var yes = function (x) { return x === "Y" || x === "Y(같은 업체)" ? '<span class="st ok">' + esc(x) + "</span>" : '<span class="st na">—</span>'; };
-    var h = '<div class="card-h" style="margin-top:12px"><h2>L2·L3·L4 경로</h2><span class="mini">업체×현장×공종 조합 ' + rows.length + "개 · L3 이후 365일 이내 자사 공고·POUR 낙찰 · L2 기록 없음 = 직접 진입 확정 아님</span></div>";
-    return h + simpleTable(["현장", "공종", "경로 구분", "첫 L2", "첫 L3", "공고 도달", "낙찰 도달"], rows.slice(0, 60).map(function (r) { return [esc(r["현장명"] || r["현장ID"]), esc(r["공종그룹"]), esc(r["경로 구분"]), esc(r["첫 L2일"] || "—"), esc(r["첫 L3일"] || "—"), yes(r["L4 공고 도달(365일)"]), yes(r["L4 낙찰 도달(누구든)"])]; })) + (rows.length > 60 ? '<p class="gw-note">최대 60개만 표시 (전체 ' + rows.length + "개 — 24.경로전환_조합 탭)</p>" : "");
+    var h = '<div class="card-h" style="margin-top:12px"><h2>L2·L3·L4 경로</h2><span class="mini">업체×현장×공종 조합 ' + rows.length + "개 · L3 이후 365일 이내 자사 공고·POUR 낙찰 · L2 보고는 업체를 적지 않아 현장×공종 단위로 연결 · L2 기록 없음 = 직접 진입 확정 아님</span></div>";
+    return h + simpleTable(["현장", "공종", "경로 구분", "현장 첫 L2", "첫 L3", "공고 도달", "낙찰 도달"], rows.slice(0, 60).map(function (r) { return [esc(r["현장명"] || r["현장ID"]), esc(r["공종그룹"]), esc(r["경로 구분(L2 반영)"] || r["경로 구분"]), esc(r["현장 첫 L2일(업체 미기재 보고)"] || r["첫 L2일"] || "—"), esc(r["첫 L3일"] || "—"), yes(r["L4 공고 도달(365일)"]), yes(r["L4 낙찰 도달(누구든)"])]; })) + (rows.length > 60 ? '<p class="gw-note">최대 60개만 표시 (전체 ' + rows.length + "개 — 24.경로전환_조합 탭)</p>" : "");
   }
   /* ---------- 업체 상세: 메인자재 구매 이력(업체 단위 — 현장 사용과 구분) ---------- */
   function vendorBuyHtml(v) {

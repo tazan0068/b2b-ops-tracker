@@ -48,7 +48,7 @@
       v.acts.push(a); if (!v.firstContact || dt < v.firstContact) v.firstContact = dt; tradeRows.push({ dt: dt, id: id, trade: a.trade });
     });
     /* 23.경로전환_시공사별: 업체×현장×공종 조합 기준 L3 → L4 도달(영업보고 원천이 없으면 경로 미확정) */
-    var PV = {}; O("23.경로전환_시공사별").forEach(function (r) { var id = r["통합ID"]; if (!id) return; var n = function (k) { var x = Number(r[k]); return isFinite(x) ? x : 0; }; PV[id] = { n: n("조합 수(업체×현장×공종)"), l2: n("L2 건수"), l3: n("L3 건수"), pub: n("L4 공고 도달 조합"), win: n("L4 낙찰 도달 조합(누구든)"), winSame: n("같은 업체 낙찰 조합"), text: r["경로 구분(조합 수)"] || "" }; });
+    var PV = {}; O("23.경로전환_시공사별").forEach(function (r) { var id = r["통합ID"]; if (!id) return; var n = function (k) { var x = Number(r[k]); return isFinite(x) ? x : 0; }; PV[id] = { n: n("조합 수(업체×현장×공종)"), l2: n("L2 건수"), l3: n("L3 건수"), pub: n("L4 공고 도달 조합"), win: n("L4 낙찰 도달 조합(누구든)"), winSame: n("같은 업체 낙찰 조합"), text: r["경로 구분(조합 수)"] || "", a: n("L2 선행 조합(현장 단위·A)"), b: n("L2 기록 없는 조합(B)"), lead: n("L3 선행(L2 나중) 조합"), text2: r["경로 구분(L2 반영, 조합 수)"] || "" }; });
     /* 낙찰(5) · 반영공고(5b) */
     var awardsAll = O("5.POUR공고낙찰");
     awardsAll.forEach(function (r) { var id = r["통합ID"]; var v = id ? vend(id, r["낙찰시공사"]) : null; var dt = ymd(r["공고일"]); if (!v || !dt) return; v.awards.push({ dt: dt, site: r["현장명"] || "", trade: r["공종그룹"] || "", amt: isNum(r["낙찰금액"]) ? r["낙찰금액"] : null }); });
@@ -69,7 +69,8 @@
       var winAw = v.awards.filter(function (a) { return a.dt >= START && a.dt <= asOf; });
       var pastAw = v.awards.filter(function (a) { return a.dt < START; });
       var stage = v.l3.length ? "L3" : "확인 필요";
-      var entry = !v.l3.length ? "—" : hasL2Source ? "확인 필요" : "경로 확인 필요";
+      var pth = PV[id] || null;
+      var entry = !v.l3.length ? "—" : !hasL2Source ? "경로 확인 필요" : pth && pth.a > 0 ? "L2 경유 있음" : "L2 기록 없음";   /* L2 기록이 없다는 이유로 '직접 진입'을 확정하지 않는다 */
       var d = (v.verdict === "정상") ? "활성" : v.verdict === "장기 무활동" ? "이탈 위험" : v.verdict === "활동 이력 없음" ? "활동 이력 없음" : "확인 필요";
       var mgmt = d; if (d === "활성" && old[id] && old[id]["미전환"] > 0 && !(old[id]["L3전환_확정"] > 0)) mgmt = "전환 관리";
       /* 낙찰 후 구매: 연 단위 순매출(4탭) — 낙찰 연도 이후 구매 확인 여부(연결 후보) */
@@ -96,11 +97,24 @@
     var mc = {}; O("7.기술자문문의").forEach(function (r) { var m = ymd(r["접수일자"]).slice(0, 7); if (m) mc[m] = (mc[m] || 0) + 1; });
     var reliable = Object.keys(mc).sort().filter(function (m) { return mc[m] >= 20; })[0] || "";
     var reliableFrom = reliable ? reliable + "-01" : "";
+    /* 22.영업보고 · 25.경로전환_현장별: 현장×공종 단위 L2(잔디 영업보고) → L3 → L4 (업체는 L3 쪽 업체로만 붙인다) */
+    var L2R = O("22.영업보고"), yes = function (x) { return x === "Y"; };
+    var SPR = O("25.경로전환_현장별").map(function (r) { return { site: r["현장ID"], name: r["현장명"] || r["현장ID"], trade: r["공종그룹"] || "", l2: ymd(r["첫 L2일"]), l2Last: ymd(r["최근 L2일"]), n2: Number(r["L2 건수"]) || 0, per: r["구분(분석기간)"] || "", link: r["현장 연결"] || "", path: r["경로 구분"] || "", l3: ymd(r["첫 L3일(L2 이후)"]), n3: Number(r["L3 건수(L2 이후)"]) || 0, vend: r["L3 업체명"] || "", l3in: yes(r["L2→L3 365일 내"]), obs2: yes(r["L2 관측 완료(365일)"]), obs4: yes(r["L4 관측 완료(365일)"]), pub: yes(r["L4 공고 도달(365일)"]), pubDt: ymd(r["첫 공고일"]), win: yes(r["L4 낙찰 도달"]), winV: r["낙찰 업체명"] || "" }; });
+    function l2agg(rs) {
+      var obs = rs.filter(function (r) { return r.obs2; }), A = rs.filter(function (r) { return r.path === "A L2→L3"; }), aO = A.filter(function (r) { return r.obs4; });
+      return { n: rs.length, reports: rs.reduce(function (s, r) { return s + r.n2; }, 0), obs: obs.length, l3: obs.filter(function (r) { return r.l3in; }).length, aN: A.length, aObs: aO.length, aPub: aO.filter(function (r) { return r.pub; }).length, aWin: aO.filter(function (r) { return r.win; }).length,
+        direct: obs.filter(function (r) { return r.path.charAt(0) === "C"; }).length, only: obs.filter(function (r) { return r.path.charAt(0) === "D"; }).length, lead: rs.filter(function (r) { return r.path.indexOf("L3 선행") === 0; }).length };
+    }
+    var okRows = SPR.filter(function (r) { return r.link === "확정"; }), mo = {};
+    okRows.forEach(function (r) { var k = r.l2.slice(0, 7); (mo[k] = mo[k] || []).push(r); });
+    var l2 = { has: SPR.length > 0, hasReports: L2R.length > 0, reports: L2R.length, rows: SPR, first: L2R.length ? L2R.map(function (r) { return ymd(r["보고일"]); }).sort()[0] : "", last: L2R.length ? L2R.map(function (r) { return ymd(r["보고일"]); }).sort().slice(-1)[0] : "",
+      all: l2agg(okRows), win: l2agg(okRows.filter(function (r) { return r.per.indexOf("분석기간") === 0; })), past: l2agg(okRows.filter(function (r) { return r.per.indexOf("과거") === 0; })), review: l2agg(SPR.filter(function (r) { return r.link !== "확정"; })),
+      months: Object.keys(mo).sort().reverse().map(function (k) { var a = l2agg(mo[k]); a.month = k; return a; }) };
     /* 요약 */
     var l3v = rows.filter(function (r) { return r.l3n > 0; }), awv = rows.filter(function (r) { return r.awardN > 0; });
     var S = { asOf: asOf, start: START, hasL2Source: hasL2Source, reliableFrom: reliableFrom,
       managed: managed.length, active: managed.filter(function (r) { return r.verdict === "정상"; }).length, dormant: managed.filter(function (r) { return r.verdict === "장기 무활동"; }).length, noHistory: managed.filter(function (r) { return r.verdict === "활동 이력 없음"; }).length,
-      l3Vendors: l3v.length, l3VendorsManaged: l3v.filter(function (r) { return r.managed; }).length, pathUnknown: rows.filter(function (r) { return r.entry === "경로 확인 필요"; }).length, direct: rows.filter(function (r) { return r.entry === "직접진입"; }).length,
+      l3Vendors: l3v.length, l3VendorsManaged: l3v.filter(function (r) { return r.managed; }).length, pathUnknown: rows.filter(function (r) { return r.entry === "경로 확인 필요" || r.entry === "L2 기록 없음"; }).length, viaL2: rows.filter(function (r) { return r.entry === "L2 경유 있음"; }).length, direct: rows.filter(function (r) { return r.entry === "직접진입"; }).length,
       awardVendors: awv.length, l3AndAward: rows.filter(function (r) { return r.l3n > 0 && r.awardN > 0; }).length,
       buyCand: awv.filter(function (r) { return r.buyState === "구매 연결 후보"; }).length, buyMissing: awv.filter(function (r) { return r.buyState === "낙찰 후 구매 미확인"; }).length, buyObserving: awv.filter(function (r) { return r.buyState === "관찰 중"; }).length,
       mou: rows.filter(function (r) { return r.mou; }).length, mouNone: managed.filter(function (r) { return !r.mou; }).length, mouInWindow: rows.filter(function (r) { return r.mou && r.mou >= START; }).length,
@@ -141,7 +155,7 @@
     recs.forEach(function (x) { var r = rowBy[x.id]; if (r) { r.reasons = r.reasons || []; r.reasons.push({ type: x.type, label: RL[x.type][0], kind: RL[x.type][1] }); } });
     S.mgmtUnique = rows.filter(function (r) { return r.managed && r.reasons && r.reasons.length; }).length; S.mgmtMulti = rows.filter(function (r) { return r.managed && r.reasons && r.reasons.length > 1; }).length;
     S.recCounts = { A: recBy.A.length, B: recBy.B.length, C: recBy.C.length, D: recBy.D.length, E: recBy.E.length, F: recBy.F.length };
-    return { start: START, asOf: asOf, obsDays: obsDays, fupDays: fupDays, summary: S, rows: rows, rowBy: rowBy, lead: { core: L1, trades: trades, mons: mons, tradesComparable: comparable3, awardTrades: awTrade }, recs: recBy };
+    return { start: START, asOf: asOf, obsDays: obsDays, fupDays: fupDays, summary: S, rows: rows, rowBy: rowBy, l2: l2, lead: { core: L1, trades: trades, mons: mons, tradesComparable: comparable3, awardTrades: awTrade }, recs: recBy };
   }
   root.B2BOps = { START: START, build: build, OBS_DAYS_DEFAULT: OBS_DAYS_DEFAULT, FUP_DAYS_DEFAULT: FUP_DAYS_DEFAULT };
   if (typeof module !== "undefined" && module.exports) module.exports = root.B2BOps;

@@ -396,8 +396,8 @@
     if (!A || !A.has || !A.has("24.경로전환_조합")) return "";
     var rows = A.objs("24.경로전환_조합").filter(function (r) { return r["통합ID"] === v.통합ID; }); if (!rows.length) return '<div class="card-h" style="margin-top:12px"><h2>L2·L3·L4 경로</h2></div><p class="gw-note">이 시공사는 업체·현장·공종이 확정된 L3 조합이 없습니다(업체 미기재·현장 미확정 기록은 제외).</p>';
     var yes = function (x) { return x === "Y" || x === "Y(같은 업체)" ? '<span class="st ok">' + esc(x) + "</span>" : '<span class="st na">—</span>'; };
-    var h = '<div class="card-h" style="margin-top:12px"><h2>L2·L3·L4 경로</h2><span class="mini">업체×현장×공종 조합 ' + rows.length + "개 · L3 이후 365일 이내 자사 공고·POUR 낙찰 · L2 기록 없음 = 직접 진입 확정 아님</span></div>";
-    return h + simpleTable(["현장", "공종", "경로 구분", "첫 L2", "첫 L3", "공고 도달", "낙찰 도달"], rows.slice(0, 60).map(function (r) { return [esc(r["현장명"] || r["현장ID"]), esc(r["공종그룹"]), esc(r["경로 구분"]), esc(r["첫 L2일"] || "—"), esc(r["첫 L3일"] || "—"), yes(r["L4 공고 도달(365일)"]), yes(r["L4 낙찰 도달(누구든)"])]; })) + (rows.length > 60 ? '<p class="gw-note">최대 60개만 표시 (전체 ' + rows.length + "개 — 24.경로전환_조합 탭)</p>" : "");
+    var h = '<div class="card-h" style="margin-top:12px"><h2>L2·L3·L4 경로</h2><span class="mini">업체×현장×공종 조합 ' + rows.length + "개 · L3 이후 365일 이내 자사 공고·POUR 낙찰 · L2 보고는 업체를 적지 않아 현장×공종 단위로 연결 · L2 기록 없음 = 직접 진입 확정 아님</span></div>";
+    return h + simpleTable(["현장", "공종", "경로 구분", "현장 첫 L2", "첫 L3", "공고 도달", "낙찰 도달"], rows.slice(0, 60).map(function (r) { return [esc(r["현장명"] || r["현장ID"]), esc(r["공종그룹"]), esc(r["경로 구분(L2 반영)"] || r["경로 구분"]), esc(r["현장 첫 L2일(업체 미기재 보고)"] || r["첫 L2일"] || "—"), esc(r["첫 L3일"] || "—"), yes(r["L4 공고 도달(365일)"]), yes(r["L4 낙찰 도달(누구든)"])]; })) + (rows.length > 60 ? '<p class="gw-note">최대 60개만 표시 (전체 ' + rows.length + "개 — 24.경로전환_조합 탭)</p>" : "");
   }
   /* ---------- 업체 상세: 메인자재 구매 이력(업체 단위 — 현장 사용과 구분) ---------- */
   function vendorBuyHtml(v) {
