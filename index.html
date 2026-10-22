@@ -1256,6 +1256,8 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     sync: { status: "idle", lastOkAt: null, lastAttemptAt: null, nextAt: null, message: "", stale: false, changed: null, fingerprint: "", ledgerCount: null, issues: { missingTabs: [], badTabs: [] }, consistency: [], expiredSince: null, silentBlocked: false, interval: interval, progress: null, lastError: null, startedAt: null } };
   var embedded = null; var listeners = []; var gisReady = null; var timer = null; var syncing = null;
   var DEFAULT_TABS = ["1.통합KPI", "2.시공사마스터", "4.메인자재구매현황", "5.POUR공고낙찰", "5b.POUR반영공고", "6.타사공법낙찰", "7.기술자문문의", "7b.플랫폼가입현황", "8.컨설팅요청", "8b.컨설팅발행이력", "9.샘플카탈로그요청", "10.공법설명회이력", "11.기타문의답변", "12.거래처연결검토", "13.데이터검증변경이력", "14.판매원문차이검증", "15.마스터대조", "16.L2L3전환", "16b.L2L3시공사별", "16c.L2L3판정집계", "16d.L2L3검토이력", "17.장기무활동", "18.선행지표요약", "19.업체명정규화"];
+  var EXTRA_TABS = ["21.잔디등_L3활동", "22.영업보고", "23.경로전환_시공사별", "24.경로전환_조합"];   /* 선택 탭: 있으면 읽고 없으면 건너뜀 */
+  function readTabs() { return expectedTabs().concat(EXTRA_TABS); }
   function expectedTabs() { return SCHEMA ? Object.keys(SCHEMA) : DEFAULT_TABS.concat([LEDGER]); }
   function err(code, msg) { var e = new Error(msg); e.code = code; return e; }
 
@@ -1452,12 +1454,12 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   function fetchSnapshot(s, prev) {
     var wantLedger = !!(prev && prev.ledger);
     if (s.mode === "appsscript") {
-      return api(s, { action: "meta" }, 30000).then(function (mj) { var meta = mj.meta || {}; meta.auth = "appsscript"; var names = expectedTabs().filter(function (n) { return n !== LEDGER && meta.tabs && meta.tabs[n]; });
+      return api(s, { action: "meta" }, 30000).then(function (mj) { var meta = mj.meta || {}; meta.auth = "appsscript"; var names = readTabs().filter(function (n) { return n !== LEDGER && meta.tabs && meta.tabs[n]; });
         return api(s, { action: "tabs", tabs: names.join(",") }, 90000).then(function (j) { var tabs = {}; names.forEach(function (n) { var t = j.tabs[n]; if (t) tabs[n] = { header: t.header, rows: t.rows }; }); return { meta: meta, tabs: tabs, ledger: prev && prev.ledger || null, ledgerReused: true }; }); });
     }
     setProgress("시트 정보 확인", 0, 1);
     return gMeta(s.sheetId, wantLedger).then(function (meta) {
-      var names = expectedTabs().filter(function (n) { return n !== LEDGER && meta.tabs[n]; });
+      var names = readTabs().filter(function (n) { return n !== LEDGER && meta.tabs[n]; });
       return gTabsAll(s.sheetId, names, setProgress).then(function (tabs) {
         var fp = fingerprint(tabs); var lcount = wantLedger && meta.tabs[LEDGER] ? meta.tabs[LEDGER].rows : null;
         var changed = !prev || fp !== prev.fp || (wantLedger && lcount !== prev.ledgerCount);
@@ -2214,7 +2216,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     var PT = periodTab(api); if (!PT) return "";
     var rows = [["공고 도달", "L3 → L4 공고 도달(경로 미확정 조합)"], ["낙찰 도달", "L3 → L4 낙찰 도달(누구든 · 경로 미확정 조합)"], ["같은 업체 낙찰", "L3 → L4 낙찰 도달(같은 업체 · 경로 미확정 조합)"]].map(function (x) { var r = PT.get("L3 도달률", x[1]); return r && isNum(r["분자"]) && isNum(r["분모"]) && r["분모"] > 0 ? [x[0], p1(r["분자"] / r["분모"]) + " (" + api.num(r["분자"]) + " / " + api.num(r["분모"]) + ")"] : null; }).filter(Boolean);
     if (!rows.length) return "";
-    return '<div class="pl4"><b>참고 · 경로 미확정 L3 → L4 (365일 내, 업체×현장×공종 조합)</b>' + rows.map(function (x) { return "<span><em>" + esc(x[0]) + "</em>" + esc(x[1]) + "</span>"; }).join("") + '<small>영업보고(L2) 원천이 없어 "L3 직접 진입"으로 확정하지 않았고 검증 전 값입니다. L2 경유 경로는 계산하지 않았습니다.</small></div>';
+    return '<div class="pl4"><b>참고 · 경로 미확정 L3 → L4 (365일 내, 업체×현장×공종 조합)</b>' + rows.map(function (x) { return "<span><em>" + esc(x[0]) + "</em>" + esc(x[1]) + "</span>"; }).join("") + '<small>영업보고(L2) 원천이 없어 "L3 직접 진입"으로 확정하지 않았고 검증 전 값입니다. L2 경유 경로는 계산하지 않았습니다. 시공사별 결과는 [상세 보기(로그인)] → 시공사 추적에서 볼 수 있습니다.</small></div>';
   }
   function monthlyKpi(api, PT, mons, cats) {                                               /* KPI 월별 · 메인자재 월별 — 카드와 같은 정의·분자·분모 */
     if (!PT) return "";
@@ -2644,6 +2646,15 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     /* 활동 */
     var tradeRows = [];
     ACT.forEach(function (d) { O(d[0]).forEach(function (r) { var id = r["통합ID"]; var dt = ymd(r[d[1]]); if (!dt) return; var v = id ? vend(id, r[d[2]]) : null; var a = { dt: dt, type: d[3], stage: d[4], src: d[0], site: d[5] ? r[d[5]] || "" : "", addr: d[6] ? r[d[6]] || "" : "", trade: d[7] ? r[d[7]] || "" : "" }; if (v) { v.acts.push(a); if (!v.firstContact || dt < v.firstContact) v.firstContact = dt; } if (a.stage === "L3") tradeRows.push({ dt: dt, id: id || "", trade: a.trade || "" }); }); });
+    /* 21.잔디등_L3활동: 플랫폼 이전 L3(잔디 기술문의·잔디 PT·컨설팅 발행현황·PT 실적보고서) — 플랫폼 탭과 겹치지 않는 원천만 들어 있다. 대표 기록·유효 L3(확정+요청)만 쓰고 업체 미기재는 시공사에 붙이지 않는다 */
+    O("21.잔디등_L3활동").forEach(function (r) {
+      if (r["단계"] !== "L3" || r["대표여부"] !== "Y" || r["내부테스트"] === "Y" || !(r["L3인정"] === "확정" || r["L3인정"] === "요청")) return;
+      var id = r["통합ID"], dt = ymd(r["활동일"]); if (!id || !dt) return; var v = vend(id, r["업체명"]);
+      var a = { dt: dt, type: r["활동유형"] || "L3", stage: "L3", src: "21.잔디등_L3활동 · " + (r["출처"] || ""), site: r["현장원문"] || "", addr: r["주소"] || "", trade: r["공종그룹"] || "", siteId: r["현장ID"] || "" };
+      v.acts.push(a); if (!v.firstContact || dt < v.firstContact) v.firstContact = dt; tradeRows.push({ dt: dt, id: id, trade: a.trade });
+    });
+    /* 23.경로전환_시공사별: 업체×현장×공종 조합 기준 L3 → L4 도달(영업보고 원천이 없으면 경로 미확정) */
+    var PV = {}; O("23.경로전환_시공사별").forEach(function (r) { var id = r["통합ID"]; if (!id) return; var n = function (k) { var x = Number(r[k]); return isFinite(x) ? x : 0; }; PV[id] = { n: n("조합 수(업체×현장×공종)"), l2: n("L2 건수"), l3: n("L3 건수"), pub: n("L4 공고 도달 조합"), win: n("L4 낙찰 도달 조합(누구든)"), winSame: n("같은 업체 낙찰 조합"), text: r["경로 구분(조합 수)"] || "" }; });
     /* 낙찰(5) · 반영공고(5b) */
     var awardsAll = O("5.POUR공고낙찰");
     awardsAll.forEach(function (r) { var id = r["통합ID"]; var v = id ? vend(id, r["낙찰시공사"]) : null; var dt = ymd(r["공고일"]); if (!v || !dt) return; v.awards.push({ dt: dt, site: r["현장명"] || "", trade: r["공종그룹"] || "", amt: isNum(r["낙찰금액"]) ? r["낙찰금액"] : null }); });
@@ -2652,7 +2663,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     /* 16b: 구 정의 L2→L3 시공사별 */
     var old = {}; O("16b.L2L3시공사별").forEach(function (r) { old[r["통합ID"]] = r; });
     var oldL2Last = {}; O("16.L2L3전환").forEach(function (r) { var id = r["통합ID"], d = ymd(r["L2일자"]); if (id && d && (!oldL2Last[id] || d > oldL2Last[id])) oldL2Last[id] = d; });
-    var hasL2Source = src.has("영업보고");      /* 현재 25탭에는 영업보고 탭이 없다 */
+    var hasL2Source = src.has("영업보고") || (src.has("22.영업보고") && O("22.영업보고").length > 0);      /* 현재 25탭에는 영업보고 탭이 없다 */
     /* 시공사별 파생 */
     var obsEnd = function (dt) { return addDays(dt, obsDays); };
     var rows = order.map(function (id) {
@@ -2681,7 +2692,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
       return { id: id, name: v.name, managed: v.managed, core: v.core, mou: v.mou, mouStatus: v.mouStatus, joined: v.joined, firstContact: v.firstContact || "", lastActDt: lastDt, lastActType: last ? last.type : v.lastActType, inactDays: inactDays,
         stage: stage, entry: entry, l3n: v.l3.length, sites: Object.keys(sites).length, types: uniq(v.l3.map(function (a) { return a.type; })), trades: uniq(v.l3.map(function (a) { return a.trade; }).filter(Boolean)),
         preN: v.acts.filter(function (a) { return a.dt < START; }).length,
-        awardN: winAw.length, awardPre: pastAw.length, awardAmt: winAw.reduce(function (s, a) { return s + (a.amt || 0); }, 0), awardLast: winAw.length ? winAw.map(function (a) { return a.dt; }).sort().pop() : "", buyState: buyState, buyNote: buyNote, mainBuy: mainBuy,
+        awardN: winAw.length, awardPre: pastAw.length, awardAmt: winAw.reduce(function (s, a) { return s + (a.amt || 0); }, 0), awardLast: winAw.length ? winAw.map(function (a) { return a.dt; }).sort().pop() : "", buyState: buyState, buyNote: buyNote, mainBuy: mainBuy, path: PV[id] || null,
         verdict: v.verdict, mgmt: mgmt, core: v.core, cardId: v.cardId || "", oldL2: old[id] ? old[id]["유효L2"] : null, oldConv: old[id] ? old[id]["L3전환_확정"] : null, oldUnconv: old[id] ? old[id]["미전환"] : null, oldL2Last: oldL2Last[id] || "" };
     });
     function uniq(a) { var s = {}, o = []; a.forEach(function (x) { if (!s[x]) { s[x] = 1; o.push(x); } }); return o; }
@@ -2791,12 +2802,16 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     return rows;
   }
   function statusChip(r) { var k = r.mgmt === "활성" ? "ok" : r.mgmt === "전환 관리" ? "warn" : r.mgmt === "이탈 위험" ? "bad" : "na"; return chip(k, r.mgmt); }
+  function pathCell(r) {                                                                   /* 업체×현장×공종 조합 기준 · L2 원천이 없으면 경로 미확정 */
+    var p = r.path; if (!p || !p.n) return '<span class="op-mut">조합 없음</span><span class="op-sub">업체·현장·공종 연결 확정 L3 없음</span>';
+    return esc("공고 " + p.pub + "/" + p.n + " · 낙찰 " + p.win + "/" + p.n) + '<span class="op-sub">' + esc((p.l2 ? "L2 " + p.l2 + "건 · " : "L2 기록 없음 · ") + p.text) + "</span>";
+  }
   function buyChip(r) { var k = r.buyState === "구매 연결 후보" ? "ok" : r.buyState === "낙찰 후 구매 미확인" ? "bad" : r.buyState === "관찰 중" ? "warn" : "na"; return r.buyState === "해당 없음" ? '<span class="op-mut">—</span>' : chip(k, r.buyState); }
   function nextOf(m, id) { var out = []; ["A", "B", "C", "D", "E", "F"].forEach(function (k) { m.recs[k].forEach(function (x) { if (x.id === id && out.length < 2) out.push(x.next); }); }); return out; }
   function tableHtml(m, rows) {
     var pages = Math.max(1, Math.ceil(rows.length / PER)); if (St.page >= pages) St.page = pages - 1; var from = St.page * PER, part = rows.slice(from, from + PER);
-    var h = '<div class="op-tw"><table class="op-t"><thead><tr><th>시공사</th><th>협약</th><th>단계 · 진입 유형</th><th>최근 활동</th><th>기술지원(L3)</th><th>공법 활동</th><th>낙찰</th><th>구매 · 메인자재</th><th>관리 상태</th><th>관리 사유 · 다음 조치</th><th></th></tr></thead><tbody>';
-    if (!part.length) h += '<tr><td colspan="11" class="op-empty">조건에 맞는 시공사가 없습니다</td></tr>';
+    var h = '<div class="op-tw"><table class="op-t"><thead><tr><th>시공사</th><th>협약</th><th>단계 · 진입 유형</th><th>최근 활동</th><th>기술지원(L3)</th><th>공법 활동</th><th>낙찰</th><th>경로 전환 (L3→L4)</th><th>구매 · 메인자재</th><th>관리 상태</th><th>관리 사유 · 다음 조치</th><th></th></tr></thead><tbody>';
+    if (!part.length) h += '<tr><td colspan="12" class="op-empty">조건에 맞는 시공사가 없습니다</td></tr>';
     part.forEach(function (r) {
       var nx = nextOf(m, r.id), rs = r.reasons || [];
       h += "<tr><td data-l=\"시공사\"><b>" + esc(r.name) + "</b><span class=\"op-sub\">" + esc(r.id) + (r.core ? " · 핵심(임시)" : "") + (r.managed ? "" : " · 협력사 외") + "</span></td>" +
@@ -2806,6 +2821,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
         "<td data-l=\"기술지원(L3)\">" + (r.l3n ? esc(r.l3n + "건 · 현장 " + r.sites + "곳") + '<span class="op-sub">' + esc(r.types.join(" · ")) + "</span>" : '<span class="op-mut">기간 내 없음</span>') + (r.preN ? '<span class="op-sub">기준일 이전 ' + r.preN + "건 보존</span>" : "") + "</td>" +
         "<td data-l=\"공법 활동\">" + (r.trades.length ? esc(r.trades.slice(0, 2).join(" · ")) + (r.trades.length > 2 ? ' <span class="op-sub">외 ' + (r.trades.length - 2) + "</span>" : "") : '<span class="op-mut">' + (r.l3n ? "공법 미분류" : "—") + "</span>") + "</td>" +
         "<td data-l=\"낙찰\">" + (r.awardN ? esc(r.awardN + "건 · " + won(r.awardAmt)) + '<span class="op-sub">' + esc(r.awardLast) + "</span>" : '<span class="op-mut">기간 내 없음</span>') + "</td>" +
+        "<td data-l=\"경로 전환\">" + pathCell(r) + "</td>" +
         "<td data-l=\"구매 · 메인자재\">" + buyChip(r) + '<span class="op-sub">메인자재 ' + (r.mainBuy === "Y" ? "구매 확인" : "구매 미확인") + "</span></td>" +
         "<td data-l=\"관리 상태\">" + statusChip(r) + "</td>" +
         "<td data-l=\"관리 사유\">" + (rs.length ? rs.map(function (x) { return chip(x.kind || "warn", x.label); }).join(" ") + (nx.length ? '<span class="op-sub">' + esc(nx[0]) + "</span>" : "") : '<span class="op-mut">—</span>') + "</td>" +
@@ -2837,7 +2853,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
 
   function csvOut(api) {
     var g = get(api); if (g.state !== "ready") return; var rows = filtered(g.m);
-    var cols = [{ k: "시공사", csv: function (r) { return r.name; } }, { k: "통합ID", csv: function (r) { return r.id; } }, { k: "협약일", csv: function (r) { return r.mou || "미확인"; } }, { k: "현재 단계", csv: function (r) { return r.stage; } }, { k: "진입 유형", csv: function (r) { return r.entry; } }, { k: "최근 활동일", csv: function (r) { return r.lastActDt || ""; } }, { k: "L3 건수(기간 내)", csv: function (r) { return r.l3n; } }, { k: "L3 현장 수", csv: function (r) { return r.sites; } }, { k: "기준일 이전 활동(보존)", csv: function (r) { return r.preN; } }, { k: "낙찰 건수(기간 내)", csv: function (r) { return r.awardN; } }, { k: "낙찰금액(공급가액 기준 미확인)", csv: function (r) { return r.awardAmt; } }, { k: "구매 상태", csv: function (r) { return r.buyState; } }, { k: "메인자재", csv: function (r) { return r.mainBuy; } }, { k: "관리 상태", csv: function (r) { return r.mgmt; } }, { k: "B2B고유번호", csv: function (r) { return r.cardId; } }];
+    var cols = [{ k: "시공사", csv: function (r) { return r.name; } }, { k: "통합ID", csv: function (r) { return r.id; } }, { k: "협약일", csv: function (r) { return r.mou || "미확인"; } }, { k: "현재 단계", csv: function (r) { return r.stage; } }, { k: "진입 유형", csv: function (r) { return r.entry; } }, { k: "최근 활동일", csv: function (r) { return r.lastActDt || ""; } }, { k: "L3 건수(기간 내)", csv: function (r) { return r.l3n; } }, { k: "L3 현장 수", csv: function (r) { return r.sites; } }, { k: "기준일 이전 활동(보존)", csv: function (r) { return r.preN; } }, { k: "낙찰 건수(기간 내)", csv: function (r) { return r.awardN; } }, { k: "L3→L4 조합 수", csv: function (r) { return r.path ? r.path.n : ""; } }, { k: "L4 공고 도달 조합", csv: function (r) { return r.path ? r.path.pub : ""; } }, { k: "L4 낙찰 도달 조합(누구든)", csv: function (r) { return r.path ? r.path.win : ""; } }, { k: "경로 구분", csv: function (r) { return r.path ? r.path.text : ""; } }, { k: "낙찰금액(공급가액 기준 미확인)", csv: function (r) { return r.awardAmt; } }, { k: "구매 상태", csv: function (r) { return r.buyState; } }, { k: "메인자재", csv: function (r) { return r.mainBuy; } }, { k: "관리 상태", csv: function (r) { return r.mgmt; } }, { k: "B2B고유번호", csv: function (r) { return r.cardId; } }];
     A.csv(cols, rows, "시공사추적_" + g.m.asOf);
   }
 
@@ -3853,6 +3869,14 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     return h + '<p class="gw-note">운영 시트에 없는 원천(잔디 기술문의·잔디 PT·컨설팅 발행현황)은 포함되지 않았습니다. 현장 연결은 주소 일치 우선, 없으면 현장명 일치이며 불명확한 연결은 확정하지 않습니다.</p>';
   }
 
+  /* ---------- 업체 상세: L2·L3·L4 경로(업체×현장×공종 조합, 24탭) — 영업보고 원천이 없으면 'L2 기록 없음'(직접 진입 확정 아님) ---------- */
+  function vendorPathHtml(v) {
+    if (!A || !A.has || !A.has("24.경로전환_조합")) return "";
+    var rows = A.objs("24.경로전환_조합").filter(function (r) { return r["통합ID"] === v.통합ID; }); if (!rows.length) return '<div class="card-h" style="margin-top:12px"><h2>L2·L3·L4 경로</h2></div><p class="gw-note">이 시공사는 업체·현장·공종이 확정된 L3 조합이 없습니다(업체 미기재·현장 미확정 기록은 제외).</p>';
+    var yes = function (x) { return x === "Y" || x === "Y(같은 업체)" ? '<span class="st ok">' + esc(x) + "</span>" : '<span class="st na">—</span>'; };
+    var h = '<div class="card-h" style="margin-top:12px"><h2>L2·L3·L4 경로</h2><span class="mini">업체×현장×공종 조합 ' + rows.length + "개 · L3 이후 365일 이내 자사 공고·POUR 낙찰 · L2 기록 없음 = 직접 진입 확정 아님</span></div>";
+    return h + simpleTable(["현장", "공종", "경로 구분", "첫 L2", "첫 L3", "공고 도달", "낙찰 도달"], rows.slice(0, 60).map(function (r) { return [esc(r["현장명"] || r["현장ID"]), esc(r["공종그룹"]), esc(r["경로 구분"]), esc(r["첫 L2일"] || "—"), esc(r["첫 L3일"] || "—"), yes(r["L4 공고 도달(365일)"]), yes(r["L4 낙찰 도달(누구든)"])]; })) + (rows.length > 60 ? '<p class="gw-note">최대 60개만 표시 (전체 ' + rows.length + "개 — 24.경로전환_조합 탭)</p>" : "");
+  }
   /* ---------- 업체 상세: 메인자재 구매 이력(업체 단위 — 현장 사용과 구분) ---------- */
   function vendorBuyHtml(v) {
     var b = v.mainBuy; if (!b) return "";
@@ -3873,6 +3897,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     var h = '<div class="ks-modal" data-kact="gvclose-bg"><div class="box" role="dialog" aria-modal="true"><div class="hd"><h2>' + esc(v.이름) + '</h2><span class="mini">통합ID ' + esc(v.통합ID) + '</span><button class="x" data-kact="gvclose">닫기 ✕</button></div><div class="bd">';
     h += '<div class="kv"><span>구매 연결</span><span>' + stChip(v.link.code, v.link.label) + " " + esc(v.link.note) + "</span><span>고객관리카드(B2B 마스터)</span><span>" + (v.cardLinked ? '<span class="st ok">연결됨</span> B2B 고유번호 ' + esc(v.cardId) : '<span class="st na">카드 없음</span> B2B 마스터 미등록(신규 통합ID)') + "</span><span>사업자번호</span><span>" + esc(v.master && v.master["사업자등록번호"] || "없음") + "</span><span>마스터 연결상태</span><span>" + esc(v.master && v.master["연결상태"] || "—") + " · " + esc(v.master && v.master["연결근거"] || "") + "</span><span>최근 구매일</span><span>" + (v.lastBuy ? esc(v.lastBuy) : '<span class="mini">' + esc(v.lastBuyWhy || "구매 기록 없음") + "</span>") + "</span><span>최근 영업활동일</span><span>" + (v.lastActivity ? esc(v.lastActivity + " · " + v.lastActivityType) : '<span class="mini">활동 이력 없음(데이터 없음)</span>') + "</span></div>";
     h += vendorBuyHtml(v);
+    h += vendorPathHtml(v);
     h += vendorTimeline(v.통합ID, v);
     h += '<div class="card-h" style="margin-top:12px"><h2>연도별 POUR 낙찰 · 자재 구매</h2></div>' + simpleTable(["연도", "낙찰(건)", "낙찰금액", "자재 구매(연간)", "메인 구매", "동일기간 구매", "품목별(페인트/우레탄/에폭시)"], ys.map(function (y, i) { var a = v.awards[i], p = v.purchases[i]; return [esc(y), esc(String(a.n)), a.n ? esc(won(a.amt) || "—") + (a.missing ? ' <span class="mini">(금액 미기재 ' + a.missing + ")</span>" : "") : '<span class="mini">—</span>', p.amt == null ? '<span class="mini">대기</span>' : esc(won(p.amt) || "0원"), p.main == null ? '<span class="mini">' + esc(p.mainWhy || "대기") + "</span>" : esc(won(p.main) || "0원"), p.ytdAmt == null ? '<span class="mini">대기</span>' : esc(won(p.ytdAmt) || "0원"), p.fam ? esc([p.fam["재도장"], p.fam["우레탄"], p.fam["에폭시"]].map(function (x) { return won(x) || "0"; }).join(" / ")) : '<span class="mini">—</span>']; }));
     h += '<div class="card-h" style="margin-top:12px"><h2>구매 품목(금액 상위)</h2></div>' + (v.items.length ? '<ul class="gw-cov">' + v.items.map(function (x) { return "<li>" + esc(x.품목) + " — " + esc(won(x.금액)) + "</li>"; }).join("") + "</ul>" : '<p class="gw-note">' + esc(v.itemsWhy || "구매 품목 기록 없음") + "</p>");

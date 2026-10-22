@@ -391,6 +391,14 @@
     return h + '<p class="gw-note">운영 시트에 없는 원천(잔디 기술문의·잔디 PT·컨설팅 발행현황)은 포함되지 않았습니다. 현장 연결은 주소 일치 우선, 없으면 현장명 일치이며 불명확한 연결은 확정하지 않습니다.</p>';
   }
 
+  /* ---------- 업체 상세: L2·L3·L4 경로(업체×현장×공종 조합, 24탭) — 영업보고 원천이 없으면 'L2 기록 없음'(직접 진입 확정 아님) ---------- */
+  function vendorPathHtml(v) {
+    if (!A || !A.has || !A.has("24.경로전환_조합")) return "";
+    var rows = A.objs("24.경로전환_조합").filter(function (r) { return r["통합ID"] === v.통합ID; }); if (!rows.length) return '<div class="card-h" style="margin-top:12px"><h2>L2·L3·L4 경로</h2></div><p class="gw-note">이 시공사는 업체·현장·공종이 확정된 L3 조합이 없습니다(업체 미기재·현장 미확정 기록은 제외).</p>';
+    var yes = function (x) { return x === "Y" || x === "Y(같은 업체)" ? '<span class="st ok">' + esc(x) + "</span>" : '<span class="st na">—</span>'; };
+    var h = '<div class="card-h" style="margin-top:12px"><h2>L2·L3·L4 경로</h2><span class="mini">업체×현장×공종 조합 ' + rows.length + "개 · L3 이후 365일 이내 자사 공고·POUR 낙찰 · L2 기록 없음 = 직접 진입 확정 아님</span></div>";
+    return h + simpleTable(["현장", "공종", "경로 구분", "첫 L2", "첫 L3", "공고 도달", "낙찰 도달"], rows.slice(0, 60).map(function (r) { return [esc(r["현장명"] || r["현장ID"]), esc(r["공종그룹"]), esc(r["경로 구분"]), esc(r["첫 L2일"] || "—"), esc(r["첫 L3일"] || "—"), yes(r["L4 공고 도달(365일)"]), yes(r["L4 낙찰 도달(누구든)"])]; })) + (rows.length > 60 ? '<p class="gw-note">최대 60개만 표시 (전체 ' + rows.length + "개 — 24.경로전환_조합 탭)</p>" : "");
+  }
   /* ---------- 업체 상세: 메인자재 구매 이력(업체 단위 — 현장 사용과 구분) ---------- */
   function vendorBuyHtml(v) {
     var b = v.mainBuy; if (!b) return "";
@@ -411,6 +419,7 @@
     var h = '<div class="ks-modal" data-kact="gvclose-bg"><div class="box" role="dialog" aria-modal="true"><div class="hd"><h2>' + esc(v.이름) + '</h2><span class="mini">통합ID ' + esc(v.통합ID) + '</span><button class="x" data-kact="gvclose">닫기 ✕</button></div><div class="bd">';
     h += '<div class="kv"><span>구매 연결</span><span>' + stChip(v.link.code, v.link.label) + " " + esc(v.link.note) + "</span><span>고객관리카드(B2B 마스터)</span><span>" + (v.cardLinked ? '<span class="st ok">연결됨</span> B2B 고유번호 ' + esc(v.cardId) : '<span class="st na">카드 없음</span> B2B 마스터 미등록(신규 통합ID)') + "</span><span>사업자번호</span><span>" + esc(v.master && v.master["사업자등록번호"] || "없음") + "</span><span>마스터 연결상태</span><span>" + esc(v.master && v.master["연결상태"] || "—") + " · " + esc(v.master && v.master["연결근거"] || "") + "</span><span>최근 구매일</span><span>" + (v.lastBuy ? esc(v.lastBuy) : '<span class="mini">' + esc(v.lastBuyWhy || "구매 기록 없음") + "</span>") + "</span><span>최근 영업활동일</span><span>" + (v.lastActivity ? esc(v.lastActivity + " · " + v.lastActivityType) : '<span class="mini">활동 이력 없음(데이터 없음)</span>') + "</span></div>";
     h += vendorBuyHtml(v);
+    h += vendorPathHtml(v);
     h += vendorTimeline(v.통합ID, v);
     h += '<div class="card-h" style="margin-top:12px"><h2>연도별 POUR 낙찰 · 자재 구매</h2></div>' + simpleTable(["연도", "낙찰(건)", "낙찰금액", "자재 구매(연간)", "메인 구매", "동일기간 구매", "품목별(페인트/우레탄/에폭시)"], ys.map(function (y, i) { var a = v.awards[i], p = v.purchases[i]; return [esc(y), esc(String(a.n)), a.n ? esc(won(a.amt) || "—") + (a.missing ? ' <span class="mini">(금액 미기재 ' + a.missing + ")</span>" : "") : '<span class="mini">—</span>', p.amt == null ? '<span class="mini">대기</span>' : esc(won(p.amt) || "0원"), p.main == null ? '<span class="mini">' + esc(p.mainWhy || "대기") + "</span>" : esc(won(p.main) || "0원"), p.ytdAmt == null ? '<span class="mini">대기</span>' : esc(won(p.ytdAmt) || "0원"), p.fam ? esc([p.fam["재도장"], p.fam["우레탄"], p.fam["에폭시"]].map(function (x) { return won(x) || "0"; }).join(" / ")) : '<span class="mini">—</span>']; }));
     h += '<div class="card-h" style="margin-top:12px"><h2>구매 품목(금액 상위)</h2></div>' + (v.items.length ? '<ul class="gw-cov">' + v.items.map(function (x) { return "<li>" + esc(x.품목) + " — " + esc(won(x.금액)) + "</li>"; }).join("") + "</ul>" : '<p class="gw-note">' + esc(v.itemsWhy || "구매 품목 기록 없음") + "</p>");

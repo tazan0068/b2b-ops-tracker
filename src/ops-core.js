@@ -40,6 +40,15 @@
     /* 활동 */
     var tradeRows = [];
     ACT.forEach(function (d) { O(d[0]).forEach(function (r) { var id = r["통합ID"]; var dt = ymd(r[d[1]]); if (!dt) return; var v = id ? vend(id, r[d[2]]) : null; var a = { dt: dt, type: d[3], stage: d[4], src: d[0], site: d[5] ? r[d[5]] || "" : "", addr: d[6] ? r[d[6]] || "" : "", trade: d[7] ? r[d[7]] || "" : "" }; if (v) { v.acts.push(a); if (!v.firstContact || dt < v.firstContact) v.firstContact = dt; } if (a.stage === "L3") tradeRows.push({ dt: dt, id: id || "", trade: a.trade || "" }); }); });
+    /* 21.잔디등_L3활동: 플랫폼 이전 L3(잔디 기술문의·잔디 PT·컨설팅 발행현황·PT 실적보고서) — 플랫폼 탭과 겹치지 않는 원천만 들어 있다. 대표 기록·유효 L3(확정+요청)만 쓰고 업체 미기재는 시공사에 붙이지 않는다 */
+    O("21.잔디등_L3활동").forEach(function (r) {
+      if (r["단계"] !== "L3" || r["대표여부"] !== "Y" || r["내부테스트"] === "Y" || !(r["L3인정"] === "확정" || r["L3인정"] === "요청")) return;
+      var id = r["통합ID"], dt = ymd(r["활동일"]); if (!id || !dt) return; var v = vend(id, r["업체명"]);
+      var a = { dt: dt, type: r["활동유형"] || "L3", stage: "L3", src: "21.잔디등_L3활동 · " + (r["출처"] || ""), site: r["현장원문"] || "", addr: r["주소"] || "", trade: r["공종그룹"] || "", siteId: r["현장ID"] || "" };
+      v.acts.push(a); if (!v.firstContact || dt < v.firstContact) v.firstContact = dt; tradeRows.push({ dt: dt, id: id, trade: a.trade });
+    });
+    /* 23.경로전환_시공사별: 업체×현장×공종 조합 기준 L3 → L4 도달(영업보고 원천이 없으면 경로 미확정) */
+    var PV = {}; O("23.경로전환_시공사별").forEach(function (r) { var id = r["통합ID"]; if (!id) return; var n = function (k) { var x = Number(r[k]); return isFinite(x) ? x : 0; }; PV[id] = { n: n("조합 수(업체×현장×공종)"), l2: n("L2 건수"), l3: n("L3 건수"), pub: n("L4 공고 도달 조합"), win: n("L4 낙찰 도달 조합(누구든)"), winSame: n("같은 업체 낙찰 조합"), text: r["경로 구분(조합 수)"] || "" }; });
     /* 낙찰(5) · 반영공고(5b) */
     var awardsAll = O("5.POUR공고낙찰");
     awardsAll.forEach(function (r) { var id = r["통합ID"]; var v = id ? vend(id, r["낙찰시공사"]) : null; var dt = ymd(r["공고일"]); if (!v || !dt) return; v.awards.push({ dt: dt, site: r["현장명"] || "", trade: r["공종그룹"] || "", amt: isNum(r["낙찰금액"]) ? r["낙찰금액"] : null }); });
@@ -48,7 +57,7 @@
     /* 16b: 구 정의 L2→L3 시공사별 */
     var old = {}; O("16b.L2L3시공사별").forEach(function (r) { old[r["통합ID"]] = r; });
     var oldL2Last = {}; O("16.L2L3전환").forEach(function (r) { var id = r["통합ID"], d = ymd(r["L2일자"]); if (id && d && (!oldL2Last[id] || d > oldL2Last[id])) oldL2Last[id] = d; });
-    var hasL2Source = src.has("영업보고");      /* 현재 25탭에는 영업보고 탭이 없다 */
+    var hasL2Source = src.has("영업보고") || (src.has("22.영업보고") && O("22.영업보고").length > 0);      /* 현재 25탭에는 영업보고 탭이 없다 */
     /* 시공사별 파생 */
     var obsEnd = function (dt) { return addDays(dt, obsDays); };
     var rows = order.map(function (id) {
@@ -77,7 +86,7 @@
       return { id: id, name: v.name, managed: v.managed, core: v.core, mou: v.mou, mouStatus: v.mouStatus, joined: v.joined, firstContact: v.firstContact || "", lastActDt: lastDt, lastActType: last ? last.type : v.lastActType, inactDays: inactDays,
         stage: stage, entry: entry, l3n: v.l3.length, sites: Object.keys(sites).length, types: uniq(v.l3.map(function (a) { return a.type; })), trades: uniq(v.l3.map(function (a) { return a.trade; }).filter(Boolean)),
         preN: v.acts.filter(function (a) { return a.dt < START; }).length,
-        awardN: winAw.length, awardPre: pastAw.length, awardAmt: winAw.reduce(function (s, a) { return s + (a.amt || 0); }, 0), awardLast: winAw.length ? winAw.map(function (a) { return a.dt; }).sort().pop() : "", buyState: buyState, buyNote: buyNote, mainBuy: mainBuy,
+        awardN: winAw.length, awardPre: pastAw.length, awardAmt: winAw.reduce(function (s, a) { return s + (a.amt || 0); }, 0), awardLast: winAw.length ? winAw.map(function (a) { return a.dt; }).sort().pop() : "", buyState: buyState, buyNote: buyNote, mainBuy: mainBuy, path: PV[id] || null,
         verdict: v.verdict, mgmt: mgmt, core: v.core, cardId: v.cardId || "", oldL2: old[id] ? old[id]["유효L2"] : null, oldConv: old[id] ? old[id]["L3전환_확정"] : null, oldUnconv: old[id] ? old[id]["미전환"] : null, oldL2Last: oldL2Last[id] || "" };
     });
     function uniq(a) { var s = {}, o = []; a.forEach(function (x) { if (!s[x]) { s[x] = 1; o.push(x); } }); return o; }

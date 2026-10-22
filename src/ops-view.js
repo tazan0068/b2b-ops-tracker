@@ -45,12 +45,16 @@
     return rows;
   }
   function statusChip(r) { var k = r.mgmt === "활성" ? "ok" : r.mgmt === "전환 관리" ? "warn" : r.mgmt === "이탈 위험" ? "bad" : "na"; return chip(k, r.mgmt); }
+  function pathCell(r) {                                                                   /* 업체×현장×공종 조합 기준 · L2 원천이 없으면 경로 미확정 */
+    var p = r.path; if (!p || !p.n) return '<span class="op-mut">조합 없음</span><span class="op-sub">업체·현장·공종 연결 확정 L3 없음</span>';
+    return esc("공고 " + p.pub + "/" + p.n + " · 낙찰 " + p.win + "/" + p.n) + '<span class="op-sub">' + esc((p.l2 ? "L2 " + p.l2 + "건 · " : "L2 기록 없음 · ") + p.text) + "</span>";
+  }
   function buyChip(r) { var k = r.buyState === "구매 연결 후보" ? "ok" : r.buyState === "낙찰 후 구매 미확인" ? "bad" : r.buyState === "관찰 중" ? "warn" : "na"; return r.buyState === "해당 없음" ? '<span class="op-mut">—</span>' : chip(k, r.buyState); }
   function nextOf(m, id) { var out = []; ["A", "B", "C", "D", "E", "F"].forEach(function (k) { m.recs[k].forEach(function (x) { if (x.id === id && out.length < 2) out.push(x.next); }); }); return out; }
   function tableHtml(m, rows) {
     var pages = Math.max(1, Math.ceil(rows.length / PER)); if (St.page >= pages) St.page = pages - 1; var from = St.page * PER, part = rows.slice(from, from + PER);
-    var h = '<div class="op-tw"><table class="op-t"><thead><tr><th>시공사</th><th>협약</th><th>단계 · 진입 유형</th><th>최근 활동</th><th>기술지원(L3)</th><th>공법 활동</th><th>낙찰</th><th>구매 · 메인자재</th><th>관리 상태</th><th>관리 사유 · 다음 조치</th><th></th></tr></thead><tbody>';
-    if (!part.length) h += '<tr><td colspan="11" class="op-empty">조건에 맞는 시공사가 없습니다</td></tr>';
+    var h = '<div class="op-tw"><table class="op-t"><thead><tr><th>시공사</th><th>협약</th><th>단계 · 진입 유형</th><th>최근 활동</th><th>기술지원(L3)</th><th>공법 활동</th><th>낙찰</th><th>경로 전환 (L3→L4)</th><th>구매 · 메인자재</th><th>관리 상태</th><th>관리 사유 · 다음 조치</th><th></th></tr></thead><tbody>';
+    if (!part.length) h += '<tr><td colspan="12" class="op-empty">조건에 맞는 시공사가 없습니다</td></tr>';
     part.forEach(function (r) {
       var nx = nextOf(m, r.id), rs = r.reasons || [];
       h += "<tr><td data-l=\"시공사\"><b>" + esc(r.name) + "</b><span class=\"op-sub\">" + esc(r.id) + (r.core ? " · 핵심(임시)" : "") + (r.managed ? "" : " · 협력사 외") + "</span></td>" +
@@ -60,6 +64,7 @@
         "<td data-l=\"기술지원(L3)\">" + (r.l3n ? esc(r.l3n + "건 · 현장 " + r.sites + "곳") + '<span class="op-sub">' + esc(r.types.join(" · ")) + "</span>" : '<span class="op-mut">기간 내 없음</span>') + (r.preN ? '<span class="op-sub">기준일 이전 ' + r.preN + "건 보존</span>" : "") + "</td>" +
         "<td data-l=\"공법 활동\">" + (r.trades.length ? esc(r.trades.slice(0, 2).join(" · ")) + (r.trades.length > 2 ? ' <span class="op-sub">외 ' + (r.trades.length - 2) + "</span>" : "") : '<span class="op-mut">' + (r.l3n ? "공법 미분류" : "—") + "</span>") + "</td>" +
         "<td data-l=\"낙찰\">" + (r.awardN ? esc(r.awardN + "건 · " + won(r.awardAmt)) + '<span class="op-sub">' + esc(r.awardLast) + "</span>" : '<span class="op-mut">기간 내 없음</span>') + "</td>" +
+        "<td data-l=\"경로 전환\">" + pathCell(r) + "</td>" +
         "<td data-l=\"구매 · 메인자재\">" + buyChip(r) + '<span class="op-sub">메인자재 ' + (r.mainBuy === "Y" ? "구매 확인" : "구매 미확인") + "</span></td>" +
         "<td data-l=\"관리 상태\">" + statusChip(r) + "</td>" +
         "<td data-l=\"관리 사유\">" + (rs.length ? rs.map(function (x) { return chip(x.kind || "warn", x.label); }).join(" ") + (nx.length ? '<span class="op-sub">' + esc(nx[0]) + "</span>" : "") : '<span class="op-mut">—</span>') + "</td>" +
@@ -91,7 +96,7 @@
 
   function csvOut(api) {
     var g = get(api); if (g.state !== "ready") return; var rows = filtered(g.m);
-    var cols = [{ k: "시공사", csv: function (r) { return r.name; } }, { k: "통합ID", csv: function (r) { return r.id; } }, { k: "협약일", csv: function (r) { return r.mou || "미확인"; } }, { k: "현재 단계", csv: function (r) { return r.stage; } }, { k: "진입 유형", csv: function (r) { return r.entry; } }, { k: "최근 활동일", csv: function (r) { return r.lastActDt || ""; } }, { k: "L3 건수(기간 내)", csv: function (r) { return r.l3n; } }, { k: "L3 현장 수", csv: function (r) { return r.sites; } }, { k: "기준일 이전 활동(보존)", csv: function (r) { return r.preN; } }, { k: "낙찰 건수(기간 내)", csv: function (r) { return r.awardN; } }, { k: "낙찰금액(공급가액 기준 미확인)", csv: function (r) { return r.awardAmt; } }, { k: "구매 상태", csv: function (r) { return r.buyState; } }, { k: "메인자재", csv: function (r) { return r.mainBuy; } }, { k: "관리 상태", csv: function (r) { return r.mgmt; } }, { k: "B2B고유번호", csv: function (r) { return r.cardId; } }];
+    var cols = [{ k: "시공사", csv: function (r) { return r.name; } }, { k: "통합ID", csv: function (r) { return r.id; } }, { k: "협약일", csv: function (r) { return r.mou || "미확인"; } }, { k: "현재 단계", csv: function (r) { return r.stage; } }, { k: "진입 유형", csv: function (r) { return r.entry; } }, { k: "최근 활동일", csv: function (r) { return r.lastActDt || ""; } }, { k: "L3 건수(기간 내)", csv: function (r) { return r.l3n; } }, { k: "L3 현장 수", csv: function (r) { return r.sites; } }, { k: "기준일 이전 활동(보존)", csv: function (r) { return r.preN; } }, { k: "낙찰 건수(기간 내)", csv: function (r) { return r.awardN; } }, { k: "L3→L4 조합 수", csv: function (r) { return r.path ? r.path.n : ""; } }, { k: "L4 공고 도달 조합", csv: function (r) { return r.path ? r.path.pub : ""; } }, { k: "L4 낙찰 도달 조합(누구든)", csv: function (r) { return r.path ? r.path.win : ""; } }, { k: "경로 구분", csv: function (r) { return r.path ? r.path.text : ""; } }, { k: "낙찰금액(공급가액 기준 미확인)", csv: function (r) { return r.awardAmt; } }, { k: "구매 상태", csv: function (r) { return r.buyState; } }, { k: "메인자재", csv: function (r) { return r.mainBuy; } }, { k: "관리 상태", csv: function (r) { return r.mgmt; } }, { k: "B2B고유번호", csv: function (r) { return r.cardId; } }];
     A.csv(cols, rows, "시공사추적_" + g.m.asOf);
   }
 

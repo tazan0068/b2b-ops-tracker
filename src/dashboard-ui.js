@@ -150,7 +150,7 @@
     var PT = periodTab(api); if (!PT) return "";
     var rows = [["공고 도달", "L3 → L4 공고 도달(경로 미확정 조합)"], ["낙찰 도달", "L3 → L4 낙찰 도달(누구든 · 경로 미확정 조합)"], ["같은 업체 낙찰", "L3 → L4 낙찰 도달(같은 업체 · 경로 미확정 조합)"]].map(function (x) { var r = PT.get("L3 도달률", x[1]); return r && isNum(r["분자"]) && isNum(r["분모"]) && r["분모"] > 0 ? [x[0], p1(r["분자"] / r["분모"]) + " (" + api.num(r["분자"]) + " / " + api.num(r["분모"]) + ")"] : null; }).filter(Boolean);
     if (!rows.length) return "";
-    return '<div class="pl4"><b>참고 · 경로 미확정 L3 → L4 (365일 내, 업체×현장×공종 조합)</b>' + rows.map(function (x) { return "<span><em>" + esc(x[0]) + "</em>" + esc(x[1]) + "</span>"; }).join("") + '<small>영업보고(L2) 원천이 없어 "L3 직접 진입"으로 확정하지 않았고 검증 전 값입니다. L2 경유 경로는 계산하지 않았습니다.</small></div>';
+    return '<div class="pl4"><b>참고 · 경로 미확정 L3 → L4 (365일 내, 업체×현장×공종 조합)</b>' + rows.map(function (x) { return "<span><em>" + esc(x[0]) + "</em>" + esc(x[1]) + "</span>"; }).join("") + '<small>영업보고(L2) 원천이 없어 "L3 직접 진입"으로 확정하지 않았고 검증 전 값입니다. L2 경유 경로는 계산하지 않았습니다. 시공사별 결과는 [상세 보기(로그인)] → 시공사 추적에서 볼 수 있습니다.</small></div>';
   }
   function monthlyKpi(api, PT, mons, cats) {                                               /* KPI 월별 · 메인자재 월별 — 카드와 같은 정의·분자·분모 */
     if (!PT) return "";
