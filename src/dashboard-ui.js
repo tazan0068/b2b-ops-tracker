@@ -135,6 +135,7 @@
     rows.forEach(function (r) { by[r["구분"] + "|" + r["지표"]] = r; });
     return { rows: rows, get: function (g, l) { return by[g + "|" + l] || null; }, val: function (g, l) { var r = by[g + "|" + l]; return r && isNum(r["값"]) ? r["값"] : null; }, list: function (g) { return rows.filter(function (r) { return r["구분"] === g; }); } };
   }
+  function pMonth(x) { return String(x == null ? "" : x).replace(/^M/, ""); }          /* 시트에는 M2025-06 으로 적혀 있음(시트가 날짜로 자동 변환하지 않게) */
   function pFrac(api, r) { return r && isNum(r["분자"]) && isNum(r["분모"]) ? api.num(r["분자"]) + " / " + api.num(r["분모"]) + "곳" : "—"; }
   function kpi12Period(id, api, spec, verified) {
     var PT = periodTab(api); if (!PT || verified) return spec;
@@ -278,8 +279,8 @@
     /* 5) 월별 활동 추이 */
     var PTm = periodTab(api), ml = PTm ? PTm.list("월별 L3") : [];
     if (ml.length) {
-      var mons = ml.map(function (r) { return String(r["지표"]); }), cats = mons.map(function (m) { return { l: m, s: m.slice(2).replace("-", "/"), cur: false }; });
-      var ser = function (g) { var mp = {}; PTm.list(g).forEach(function (r) { mp[String(r["지표"])] = r["값"]; }); return mons.map(function (m) { return isNum(mp[m]) ? mp[m] : null; }); };
+      var mons = ml.map(function (r) { return pMonth(r["지표"]); }), cats = mons.map(function (m) { return { l: m, s: m.slice(2).replace("-", "/"), cur: false }; });
+      var ser = function (g) { var mp = {}; PTm.list(g).forEach(function (r) { mp[pMonth(r["지표"])] = r["값"]; }); return mons.map(function (m) { return isNum(mp[m]) ? mp[m] : null; }); };
       h += '<div class="du-t"><h2>월별 활동 추이</h2><span>월 기준은 활동일·공고일 · ' + esc(mons[0]) + " ~ " + esc(mons[mons.length - 1]) + " · 작업본 집계(검증 필요) · 마지막 달은 진행 중</span></div><section class=\"du-card wide\"><header><h3>월별 활동 및 성과 추이</h3>" + pill("rev", "검증 필요") + "</header>" +
         '<div class="du-mser"><h4>L3 활동 (건)</h4>' + mini(ser("월별 L3"), cats, { fmt: api.num }) + '</div><div class="du-mser"><h4>자사 공고 (건)</h4>' + mini(ser("월별 공고"), cats, { fmt: api.num }) + '</div><div class="du-mser"><h4>낙찰 (건)</h4>' + mini(ser("월별 낙찰"), cats, { fmt: api.num }) + "</div>" +
         '<p class="s2">L2 영업보고는 원천이 없어 표시하지 않습니다. 2025-06은 24일부터, 낙찰은 공고일 기준입니다. 같은 흐름의 컨설팅 요청·발행 등이 함께 세어져 L3 건수가 부풀 수 있습니다.</p></section>';
@@ -312,7 +313,7 @@
     }
     var typ = PT.list("팀 행동").filter(function (r) { return String(r["지표"]).indexOf("└ 유형: ") === 0; }), sum = function (re) { var t = 0, any = false; typ.forEach(function (r) { if (re.test(r["지표"]) && isNum(r["값"])) { t += r["값"]; any = true; } }); return any ? t : null; };
     return { status: "partial", asOf: "2026-10-20", source: "플랫폼 활동 시트 + 잔디 기술문의·PT + 컨설팅 발행현황 통합 작업본(익명 집계) · 검증 필요", stats: { advice: sum(/기술자문/), pt: sum(/PT|공법설명회/), etc: sum(/기타 문의/), consult: sum(/컨설팅/), vendors: { v: v("팀 행동", "L3 활동 시공사 수(업체 확인·하한)"), sub: "업체 미기재 제외 · 하한" }, via: { v: null, sub: "영업보고 원천 없음 — 구분 불가" }, direct: { v: v("L3 도달률", "L3 직접진입 확정"), sub: "확정 0 · 전부 경로 확인 필요" }, reach: { v: v("L3 도달률", "L3 도달 업체×현장 조합(합산 분자 후보)"), sub: "업체×현장 조합(분모 확정 전)" } },
-      monthly: PT.list("월별 L3").map(function (r) { return { m: String(r["지표"]), v: r["값"] }; }), note: "유형 합계는 컨설팅 요청·발행, PT 요청·실시처럼 같은 흐름의 단계별 기록을 함께 세므로 고유 활동 수보다 클 수 있습니다." };
+      monthly: PT.list("월별 L3").map(function (r) { return { m: pMonth(r["지표"]), v: r["값"] }; }), note: "유형 합계는 컨설팅 요청·발행, PT 요청·실시처럼 같은 흐름의 단계별 기록을 함께 세므로 고유 활동 수보다 클 수 있습니다." };
   }
   function builtin(id) {                               /* 이미 연결된 값만 쓰는 일부 연결(이카운트 매출: 1.통합KPI 연도별 값) */
     if (A && (id === "mou" || id === "l3")) { var PT = periodTab(A); if (PT) return periodBuiltin(id, PT); }
