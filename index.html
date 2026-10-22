@@ -2663,7 +2663,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     /* 16b: 구 정의 L2→L3 시공사별 */
     var old = {}; O("16b.L2L3시공사별").forEach(function (r) { old[r["통합ID"]] = r; });
     var oldL2Last = {}; O("16.L2L3전환").forEach(function (r) { var id = r["통합ID"], d = ymd(r["L2일자"]); if (id && d && (!oldL2Last[id] || d > oldL2Last[id])) oldL2Last[id] = d; });
-    var hasL2Source = src.has("영업보고") || (src.has("22.영업보고") && O("22.영업보고").length > 0);      /* 현재 25탭에는 영업보고 탭이 없다 */
+    var hasL2Source = src.has("영업보고") || O("22.영업보고").some(function (r) { return String(r["최종분류"] || "").indexOf("L2 확정") === 0; });   /* 22탭 행은 \"최종분류\"가 L2 확정인 건만 L2 — 잔디 기술문의 등 유형 미검증 행은 L2로 쓰지 않는다 */      /* 현재 25탭에는 영업보고 탭이 없다 */
     /* 시공사별 파생 */
     var obsEnd = function (dt) { return addDays(dt, obsDays); };
     var rows = order.map(function (id) {
@@ -2713,7 +2713,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     }
     var okRows = SPR.filter(function (r) { return r.link === "확정"; }), mo = {};
     okRows.forEach(function (r) { var k = r.l2.slice(0, 7); (mo[k] = mo[k] || []).push(r); });
-    var l2 = { has: SPR.length > 0, hasReports: L2R.length > 0, reports: L2R.length, rows: SPR, first: L2R.length ? L2R.map(function (r) { return ymd(r["보고일"]); }).sort()[0] : "", last: L2R.length ? L2R.map(function (r) { return ymd(r["보고일"]); }).sort().slice(-1)[0] : "",
+    var l2 = { has: SPR.length > 0 && hasL2Source, unclassified: hasL2Source ? 0 : L2R.length, hasReports: L2R.length > 0, reports: L2R.length, rows: SPR, first: L2R.length ? L2R.map(function (r) { return ymd(r["보고일"]); }).sort()[0] : "", last: L2R.length ? L2R.map(function (r) { return ymd(r["보고일"]); }).sort().slice(-1)[0] : "",
       all: l2agg(okRows), win: l2agg(okRows.filter(function (r) { return r.per.indexOf("분석기간") === 0; })), past: l2agg(okRows.filter(function (r) { return r.per.indexOf("과거") === 0; })), review: l2agg(SPR.filter(function (r) { return r.link !== "확정"; })),
       months: Object.keys(mo).sort().reverse().map(function (k) { var a = l2agg(mo[k]); a.month = k; return a; }) };
     /* 요약 */
@@ -2898,6 +2898,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     var h = head;
     h += '<div class="op-sum">' + [["관리 시공사", S.managed], ["활성(최근 90일 내 활동)", S.active], ["장기 무활동", S.dormant], ["기간 내 L3 활동 시공사", S.l3Vendors], ["경로 확인 필요", S.pathUnknown], ["기간 내 낙찰 시공사", S.awardVendors], ["낙찰 후 구매 미확인", S.buyMissing]].map(function (x) { return '<div class="op-k"><span>' + esc(x[0]) + "</span><b>" + esc(isNum(x[1]) ? x[1].toLocaleString("ko-KR") : "—") + "</b></div>"; }).join("") + "</div>";
     h += (S.hasL2Source ? '<div class="op-note"><b>읽는 법</b> L2 = 잔디 「POUR공법기술문의」 영업 담당자 보고(업체 미기재 · 현장×공종 단위)입니다. 시공사의 "L2 경유 있음"은 그 시공사 L3 조합의 현장×공종에 L3 이전 L2 보고가 있다는 뜻이고, "L2 기록 없음"은 직접 진입으로 확정하지 않습니다. 잔디 보고 기록은 2026-06-30까지라 이후 신규 현장의 L2는 없습니다. 협약일 미확인 ' + S.mouNone + '곳은 신규·기존을 판정하지 않았습니다. 낙찰 후 구매는 연 단위 자재 순매출 기준 \x27연결 후보\x27(관찰 ' + m.obsDays + '일)입니다.</div>' : '<div class="op-note"><b>읽는 법</b> L3 활동 시공사·진입 유형은 운영 시트에 있는 플랫폼 기록 기준(잔디 기록 미포함)이라 하한값입니다. 영업보고(L2) 원천이 연결되기 전에는 L3 시공사를 ' + chip("warn", "경로 확인 필요") + '로만 분류하며 직접진입 확정은 ' + S.direct + "곳입니다. 협약일 미확인 " + S.mouNone + "곳은 신규·기존을 판정하지 않았습니다. 낙찰 후 구매는 연 단위 자재 순매출 기준 '연결 후보'(관찰 " + m.obsDays + "일)입니다.</div>" );
+    if (m.l2 && m.l2.unclassified > 0) h += '<div class="op-note"><b>L2(영업보고) 확인 필요</b> 시트 22.영업보고 탭의 ' + m.l2.unclassified.toLocaleString("ko-KR") + '건은 L2로 확정할 근거(\"최종분류\" = L2 확정)가 없어 L2로 쓰지 않았습니다. 내용 확인에서 대부분 현장 기술자문 요청(L3 유형)이었고, L2로 확정된 기록은 없습니다. 원본은 삭제하지 않고 보존합니다.</div>';
     h += l2Section(m);
     h += '<div class="op-filters"><input class="op-q" type="search" placeholder="시공사 이름·ID 검색" value="' + esc(St.q) + '" data-kact="oq">' + sel("scope", [["managed", "관리 시공사(" + S.managed + ")"], ["all", "협력사 외 포함"]], St.scope) + sel("stage", STAGES, St.stage) + sel("act", ACTS, St.act) + sel("path", [["all", "전체 경로"], ["unknown", "경로 확인 필요·L2 기록 없음"], ["via", "L2 경유 있음"], ["direct", "직접진입 확정"]], St.path) + sel("sort", SORTS, St.sort) +
       '<button class="op-tg' + (St.nobuy ? " on" : "") + '" data-kact="onb" aria-pressed="' + St.nobuy + '">낙찰 후 구매 미확인</button><button class="btn ghost" data-kact="ocsv">CSV 다운로드</button></div>';

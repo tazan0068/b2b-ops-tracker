@@ -28,6 +28,6 @@ ok(rb.T001.l3n === ra.T001.l3n, '21탭에 없는 시공사의 L3 건수는 변�
 ok(rb.T002.path && rb.T002.path.n === 4 && rb.T002.path.pub === 2 && rb.T002.path.win === 1 && rb.T002.path.winSame === 1, '23탭 경로(조합 4 · 공고 2 · 낙찰 1)가 시공사에 연결');
 ok(rb.T001.path === null, '23탭에 없는 시공사는 path 없음');
 ok(b.summary.hasL2Source === false, '22.영업보고 탭이 비어 있으면 L2 원천 없음 유지');
-extra['22.영업보고'] = [{ 보고일: '2026-01-05', 업체: '시험업체B', 현장명: '시험단지', 주소: '', 공종: '우레탄', 구분: '영업보고', 원본ID: 'R1' }];
-ok(Ops.build(mk(extra), {}).summary.hasL2Source === true, '22.영업보고에 행이 있으면 L2 원천 있음으로 전환');
+extra['22.영업보고'] = [{ 보고일: '2026-01-05', 업체: '시험업체B', 현장명: '시험단지', 주소: '', 공종: '우레탄', 구분: '영업보고', 원본ID: 'R1', 최종분류: 'L2 확정' }];
+ok(Ops.build(mk(extra), {}).summary.hasL2Source === true, '22.영업보고에 L2 확정 행이 있으면 L2 원천 있음으로 전환');
 console.log(fails ? '\n실패 ' + fails : '\n모두 통과'); process.exit(fails ? 1 : 0);

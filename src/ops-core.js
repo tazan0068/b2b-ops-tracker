@@ -57,7 +57,7 @@
     /* 16b: 구 정의 L2→L3 시공사별 */
     var old = {}; O("16b.L2L3시공사별").forEach(function (r) { old[r["통합ID"]] = r; });
     var oldL2Last = {}; O("16.L2L3전환").forEach(function (r) { var id = r["통합ID"], d = ymd(r["L2일자"]); if (id && d && (!oldL2Last[id] || d > oldL2Last[id])) oldL2Last[id] = d; });
-    var hasL2Source = src.has("영업보고") || (src.has("22.영업보고") && O("22.영업보고").length > 0);      /* 현재 25탭에는 영업보고 탭이 없다 */
+    var hasL2Source = src.has("영업보고") || O("22.영업보고").some(function (r) { return String(r["최종분류"] || "").indexOf("L2 확정") === 0; });   /* 22탭 행은 \"최종분류\"가 L2 확정인 건만 L2 — 잔디 기술문의 등 유형 미검증 행은 L2로 쓰지 않는다 */      /* 현재 25탭에는 영업보고 탭이 없다 */
     /* 시공사별 파생 */
     var obsEnd = function (dt) { return addDays(dt, obsDays); };
     var rows = order.map(function (id) {
@@ -107,7 +107,7 @@
     }
     var okRows = SPR.filter(function (r) { return r.link === "확정"; }), mo = {};
     okRows.forEach(function (r) { var k = r.l2.slice(0, 7); (mo[k] = mo[k] || []).push(r); });
-    var l2 = { has: SPR.length > 0, hasReports: L2R.length > 0, reports: L2R.length, rows: SPR, first: L2R.length ? L2R.map(function (r) { return ymd(r["보고일"]); }).sort()[0] : "", last: L2R.length ? L2R.map(function (r) { return ymd(r["보고일"]); }).sort().slice(-1)[0] : "",
+    var l2 = { has: SPR.length > 0 && hasL2Source, unclassified: hasL2Source ? 0 : L2R.length, hasReports: L2R.length > 0, reports: L2R.length, rows: SPR, first: L2R.length ? L2R.map(function (r) { return ymd(r["보고일"]); }).sort()[0] : "", last: L2R.length ? L2R.map(function (r) { return ymd(r["보고일"]); }).sort().slice(-1)[0] : "",
       all: l2agg(okRows), win: l2agg(okRows.filter(function (r) { return r.per.indexOf("분석기간") === 0; })), past: l2agg(okRows.filter(function (r) { return r.per.indexOf("과거") === 0; })), review: l2agg(SPR.filter(function (r) { return r.link !== "확정"; })),
       months: Object.keys(mo).sort().reverse().map(function (k) { var a = l2agg(mo[k]); a.month = k; return a; }) };
     /* 요약 */
