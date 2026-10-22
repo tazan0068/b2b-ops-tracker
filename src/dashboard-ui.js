@@ -21,8 +21,8 @@
   var U = {}; window.B2BDashUI = U;
   /* 참고값(보존): 기존 지표와 새 기준(L3 도달률 합산)은 분자·분모 정의가 달라 직접 비교하지 않는다. 값은 바꾸지 않고 출처와 함께 보여 준다 */
   var REFERENCE_VALUES = [{ key: "team", label: "팀장 회의 기준", value: "24.9%", calc: "231 ÷ 929", note: "2026-10-15 회의 표 · 고객관리카드 B2B KPI 탭 임시 고정값 · 929의 산출 규칙 미확인" }];
-  var PERIOD_START = "2025-06-24";
-  var PERIOD_NOTE = "시공사별 활동·전환·성과를 동일 기준으로 추적하기 위한 공통 분석 시작일입니다. 기준일 이전의 기록은 과거 참고자료로 분리하며, 기준일 이후의 검증된 데이터를 중심으로 집계합니다.";
+  var PERIOD_START = "2026-06-01", PERIOD_OLD = "2025-06-24", OFF_PRE = "[공식] ";          /* 공식 분석 시작일(2026-06-01) · 과거 참고 시작점(2025-06-24: 기록이 처음 확인된 날) */
+  var PERIOD_NOTE = "2026년 6월 1일은 팀의 공식 운영 성과 분석 시작일입니다(이 시점부터 L3 기록이 플랫폼 한 체계로 모입니다). 시작일 이전 기록 — 2025.06.24 이후 잔디·플랫폼 기록과 그 이전의 판매·공고 이력 — 은 삭제하지 않고 과거 참고로 보존하며, 업체의 최초 경험일·과거 재사용 여부·기준선 판단에만 쓰고 공식 KPI에는 합산하지 않습니다.";
   var PATHS = [
     { id: "p1", n: "L2 → L3 → L4", d: "영업보고 → 기술지원 → 공고·낙찰", needL2: true },
     { id: "p2", n: "L2 → L4", d: "L3 없이 공고·낙찰로 진행 · 별도 추적", needL2: true },
@@ -132,19 +132,27 @@
   /* 20.기간KPI집계: 분석 기준일 이후 익명 집계(숫자·일반 라벨) — 공개·로그인 화면 공통. 없으면 null */
   function periodTab(api) {
     if (!api.has || !api.has("20.기간KPI집계")) return null; var rows = api.objs("20.기간KPI집계"); if (!rows.length) return null; var by = {};
-    rows.forEach(function (r) { by[r["구분"] + "|" + r["지표"]] = r; });
-    return { rows: rows, get: function (g, l) { return by[g + "|" + l] || null; }, val: function (g, l) { var r = by[g + "|" + l]; return r && isNum(r["값"]) ? r["값"] : null; }, list: function (g) { return rows.filter(function (r) { return r["구분"] === g; }); } };
+    var eff = [], at = {}, offs = [], hasOff = false;
+    rows.forEach(function (r) { var l = String(r["지표"] == null ? "" : r["지표"]);
+      if (l.indexOf(OFF_PRE) === 0) { offs.push(r); return; }
+      var k = r["구분"] + "|" + l; if (at[k] != null) eff[at[k]] = r; else { at[k] = eff.length; eff.push(r); } });
+    offs.forEach(function (r) { hasOff = true; var g = r["구분"], l = String(r["지표"]).slice(OFF_PRE.length);
+      if (g === "팀 행동" && /^월별 L3 /.test(l)) { g = "월별 L3"; l = l.replace(/^월별 L3 /, ""); }
+      var o = {}; for (var c in r) o[c] = r[c]; o["구분"] = g; o["지표"] = l; o["공식"] = true;
+      var k = g + "|" + l; if (at[k] != null) eff[at[k]] = o; else { at[k] = eff.length; eff.push(o); } });
+    rows = eff; eff.forEach(function (r) { by[r["구분"] + "|" + r["지표"]] = r; });
+    return { rows: rows, official: hasOff, get: function (g, l) { return by[g + "|" + l] || null; }, val: function (g, l) { var r = by[g + "|" + l]; return r && isNum(r["값"]) ? r["값"] : null; }, list: function (g) { return rows.filter(function (r) { return r["구분"] === g; }); } };
   }
   function pMonth(x) { return String(x == null ? "" : x).replace(/^M/, ""); }          /* 시트에는 M2025-06 으로 적혀 있음(시트가 날짜로 자동 변환하지 않게) */
   function pFrac(api, r) { return r && isNum(r["분자"]) && isNum(r["분모"]) ? api.num(r["분자"]) + " / " + api.num(r["분모"]) + "곳" : "—"; }
   var MRE = /^M\d{4}-\d{2}$/;
-  function monthSeries(PT, g) { return PT.list(g).filter(function (r) { return MRE.test(String(r["지표"])); }).map(function (r) { return { m: pMonth(r["지표"]), v: isNum(r["분모"]) && r["분모"] > 0 && isNum(r["값"]) ? r["값"] : null, n: r["분자"], d: r["분모"] }; }); }
+  function monthSeries(PT, g) { return PT.list(g).filter(function (r) { return MRE.test(String(r["지표"])) && pMonth(r["지표"]) >= PERIOD_START.slice(0, 7); }).map(function (r) { return { m: pMonth(r["지표"]), v: isNum(r["분모"]) && r["분모"] > 0 && isNum(r["값"]) ? r["값"] : null, n: r["분자"], d: r["분모"] }; }); }
   function kpiTrend(api, id) {
     var PT = periodTab(api), g = id === "kpi1" ? "신규 업체 사용률" : id === "kpi2" ? "재사용률" : null, s = PT && g ? monthSeries(PT, g) : [];
     if (s.filter(function (x) { return isNum(x.v); }).length < 2) return '<span class="du-dash">추이 — 월별 집계 연결 후 표시</span>';
     var pts = s.map(function (x, i) { return isNum(x.v) ? [i, x.v] : null; }).filter(Boolean), W = 150, H = 34, n = s.length - 1 || 1, mx = Math.max.apply(null, pts.map(function (p) { return p[1]; })) || 1;
     var d = pts.map(function (p, i) { var x = p[0] / n * (W - 8) + 4, y = H - 5 - p[1] / mx * (H - 10); return (i ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1); }).join(" "), last = pts[pts.length - 1];
-    return '<svg class="du-spark" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="월말 기준 추이"><path d="' + d + '"/><circle cx="' + (last[0] / n * (W - 8) + 4).toFixed(1) + '" cy="' + (H - 5 - last[1] / mx * (H - 10)).toFixed(1) + '" r="2.6"/></svg><span class="s">월말 기준 · ' + esc(s[0].m.slice(2).replace("-", "/")) + "*~" + esc(s[s.length - 1].m.slice(2).replace("-", "/")) + (id === "kpi2" ? " · 검증 필요" : "") + " · 자세히는 아래 월별 추이</span>";
+    return '<svg class="du-spark" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="월말 기준 추이"><path d="' + d + '"/><circle cx="' + (last[0] / n * (W - 8) + 4).toFixed(1) + '" cy="' + (H - 5 - last[1] / mx * (H - 10)).toFixed(1) + '" r="2.6"/></svg><span class="s">월말 기준 · ' + esc(s[0].m.slice(2).replace("-", "/")) + (s[0].m === "2025-06" ? "*" : "") + "~" + esc(s[s.length - 1].m.slice(2).replace("-", "/")) + (id === "kpi2" ? " · 검증 필요" : "") + " · 자세히는 아래 월별 추이</span>";
   }
   function l4Ref(api) {                                                                    /* L3 → L4 (경로 미확정 · 참고): 분자·분모를 함께 표시 */
     var PT = periodTab(api); if (!PT) return "";
@@ -161,7 +169,7 @@
     var h1 = mk("신규 업체 사용률", "신규 업체 사용률 (월말 · 협약 후 1년 이내 업체 중 L3 이용)", p1, ""), h2 = mk("재사용률", "재사용률 (월말 · 첫 L3 후 60일 · 다른 아파트)", p1, "검증 필요");
     var h3 = hasBuy ? '<div class="du-mser"><h4>메인자재 구매 업체 수 (월 · 구매 연결은 후보)</h4>' + mini(bser(buyN), cats, { fmt: function (v) { return api.num(v) + "곳"; } }) + '</div><div class="du-mser"><h4>메인자재 순매출 (월)</h4>' + mini(bser(buyA), cats, { fmt: api.won }) + "</div>" : "";
     if (!h1 && !h2 && !h3) return "";
-    return '<section class="du-card wide"><header><h3>월별 KPI 추이 · 메인자재 구매</h3>' + pill("rev", "검증 필요") + "</header>" + h1 + h2 + h3 + '<p class="s2"><b>* 2025-06은 6/24~30 부분 기간입니다.</b> KPI는 그 달 말(마지막 달은 기준일) 기준이며 마지막 달 값은 위 메인 카드와 같은 분자·분모입니다. 2026-01 이전은 플랫폼 L3 기록이 편입되기 전이라 낮게 보일 수 있고, 업체 미기재(잔디 기술문의) L3는 제외됩니다. 메인자재는 이카운트 판매 원문의 핵심 메인 품목이며 업체 연결은 사업자번호 부재로 후보입니다.</p></section>';
+    return '<section class="du-card wide"><header><h3>월별 KPI 추이 · 메인자재 구매</h3>' + pill("rev", "검증 필요") + "</header>" + h1 + h2 + h3 + '<p class="s2">' + (mons.indexOf("2025-06") >= 0 ? "<b>* 2025-06은 6/24~30 부분 기간입니다.</b> " : "") + 'KPI는 그 달 말(마지막 달은 기준일) 기준이며 마지막 달 값은 위 메인 카드와 같은 분자·분모입니다. ' + (mons[0] < "2026-01" ? "2026-01 이전은 플랫폼 L3 기록이 편입되기 전이라 낮게 보일 수 있고, " : "") + '업체 미기재 L3(잔디 기술문의 등)는 제외됩니다. 메인자재는 이카운트 판매 원문의 핵심 메인 품목이며 업체 연결은 사업자번호 부재로 후보입니다.</p></section>';
   }
   function kpi12Period(id, api, spec, verified) {
     var PT = periodTab(api); if (!PT || verified) return spec;
@@ -179,14 +187,14 @@
       }
       if (isNum(t["분자"]) && isNum(t["분모"]) && t["분모"] > 0 && isNum(t["값"]) && Math.abs(t["값"] - t["분자"] / t["분모"]) < 0.0005) {                        /* 카드 협약일 기준 집계(20.기간KPI집계의 분자·분모에서 읽음 — 코드에 숫자를 두지 않는다) */
         spec.state = "ok"; spec.value = p1(t["분자"] / t["분모"]);
-        spec.def = "현재까지 확인된 사용률 · 2025.06.24 이후 협약 업체 기준";
+        spec.def = "현재까지 확인된 사용률 · 2026.06.01 이후 협약 업체 기준";
         spec.parts = [["협약 후 1년 이내 L3 이용 / 대상", pFrac(api, t)], ["1년 관측 완료 업체 사용률", d && isNum(d["분모"]) && d["분모"] > 0 ? p1(d["분자"] / d["분모"]) + " (" + pFrac(api, d) + ")" : "—"]];
         spec.note = "협약 후 1년이 지나지 않은 업체" + (n && isNum(n["분모"]) ? " " + api.num(n["분모"]) + "곳" : "") + "이 포함되어 있어 <b>최종 1년 사용률이 아닙니다</b>(협약 1년 미만 업체 이용 " + pFrac(api, n) + "). 이용 = 협약일 후 1년 이내 유효 L3 활동. 협약일은 고객관리카드 기준이며, 협약일이 없는 체결 확정 업체 " + (nd ? api.num(nd["값"]) : "—") + "곳은 이 지표의 분자·분모에서만 제외하고 다른 시공사 분석에는 포함합니다" + (nl ? "(그중 L3 활동 있음 " + api.num(nl["값"]) + "곳)" : "") + ".";
         spec.trend = kpiTrend(api, id);
         return spec;
       }
       spec.vtext = d && isNum(d["분모"]) ? api.num(d["분자"]) + " / " + api.num(d["분모"]) + "곳 (관측 완료)" : "—";
-      spec.parts = [["대상(협약 2025.06.24~) 중 이용", pFrac(api, t)], ["협약 1년 미만 업체 이용", pFrac(api, n)]];
+      spec.parts = [["대상(협약 2026.06.01~) 중 이용", pFrac(api, t)], ["협약 1년 미만 업체 이용", pFrac(api, n)]];
       spec.note = "이용 = 협약일 후 1년 이내 L3 활동. 협약 1년 미만 업체는 아직 1년이 지나지 않아 확정 비율이 아닙니다. 협약일 미확인 L3 업체 " + (u ? api.num(u["값"]) : "—") + "곳은 판정에서 제외, 시작일 이전 협약(부분 관측 참고) " + pFrac(api, pr) + ". 작업본 계산 · 검증 필요.";
     } else if (id === "kpi2") {
       var r = PT.get("재사용률", RNL), sm = PT.get("재사용률", "같은 아파트 반복만 있는 업체(재사용 아님)"), r6 = PT.get("재사용률", R60), d6 = PT.get("재사용률", R60D), x6 = PT.get("재사용률", "현장 연결 미확정으로 제외한 L3 업체");
@@ -300,7 +308,7 @@
       def: one ? "MOU 협약 후 1년 이내인 신규 업체 중 L3를 이용한 업체 비율 · 협약일이 없는 업체는 별도 관리" : "기존·신규 업체 전체 · 기간 내 관측된 첫 L3 이후 같은 시공사가 다른 아파트에서 다시 L3를 이용한 비율(기간 내 관측 재사용률) · 같은 아파트 반복 문의 제외",
       dates: one ? ["협약일", "L3 활동일"] : ["L3 활동일"],
       yoy: yoyNA(YOY_WHY[id]), trend: '<span class="du-dash">추이 — 확인 후 표시</span>', refs: rf, refHead: "참고(정의 다름)",
-      note: verified ? esc(d.basis || "") : (one ? "분석 기간(2025.06.24~) 협약 업체와 업체별 L3 이력이 공개 집계에 아직 반영되지 않아 계산하지 않았습니다." : "분석 기간 내 업체·아파트 단위 L3 이력(현장 연결 확정 포함)이 공개 집계에 아직 반영되지 않아 계산하지 않았습니다."), to: one ? "mou" : "l3" };
+      note: verified ? esc(d.basis || "") : (one ? "분석 기간(2026.06.01~) 협약 업체와 업체별 L3 이력이 공개 집계에 아직 반영되지 않아 계산하지 않았습니다." : "분석 기간 내 업체·아파트 단위 L3 이력(현장 연결 확정 포함)이 공개 집계에 아직 반영되지 않아 계산하지 않았습니다."), to: one ? "mou" : "l3" };
     return kpi12Period(id, api, spec, verified);
   }
   /* ---------- 통합 KPI 모니터링 ---------- */
@@ -349,7 +357,7 @@
     /* 결과 KPI */
     var R = S && S.result, yl = G ? G.y + "년 1/1~" + String(G.gm.endMD || "").replace("-", "/") : "";
     var rr = function (name, a, b, note, st) { return "<tr><td><b>" + esc(name) + '</b></td><td class="n">' + (a == null ? '<span class="du-dash">로그인 상세 보기</span>' : esc(a)) + '</td><td class="n">' + (b == null ? '<span class="du-dash">확인 필요</span>' : esc(b)) + "</td><td>" + esc(note) + (st ? " " + pill(st[0], st[1]) : "") + "</td></tr>"; };
-    h += '<div class="du-t"><h2>결과 KPI</h2><span>분석 기준일 이후(시트 기록)와 연도별 집계(공개)는 기간이 달라 합산·혼합하지 않습니다</span></div><section class="du-card"><div class="du-rtw"><table class="du-rt2"><thead><tr><th>지표</th><th>기준일 이후<small>2025.06.24~(로그인 상세 보기)</small></th><th>연도별 집계<small>' + esc(yl || "공개 집계") + "</small></th><th>기준</th></tr></thead><tbody>" +
+    h += '<div class="du-t"><h2>결과 KPI</h2><span>분석 기준일 이후(시트 기록)와 연도별 집계(공개)는 기간이 달라 합산·혼합하지 않습니다</span></div><section class="du-card"><div class="du-rtw"><table class="du-rt2"><thead><tr><th>지표</th><th>기준일 이후<small>2026.06.01~(로그인 상세 보기)</small></th><th>연도별 집계<small>' + esc(yl || "공개 집계") + "</small></th><th>기준</th></tr></thead><tbody>" +
       rr("POUR 반영 공고", R ? api.num(R.notices) + "건" : null, mv && isNum(mv.notices) ? api.num(mv.notices) + "건" : null, "공고일 기준(집계대상=Y)") +
       rr("POUR 낙찰", R ? api.num(R.awards) + "건" : null, mv && isNum(mv.awards) ? api.num(mv.awards) + "건" : null, "공고일 기준 · 낙찰일 자료 없음(공고일과 혼동하지 않음)") +
       rr("낙찰금액", R ? api.won(R.awardAmt) : null, mv && isNum(mv.awardAmt) ? api.won(mv.awardAmt) : null, "VAT 포함 여부 미확인" + (R && R.awardAmtMissing ? " · 금액 미기재 " + R.awardAmtMissing + "건 제외" : "")) +
@@ -380,7 +388,7 @@
     if (!okL) yoy3 = "—"; else if (isNum(pv) && isNum(pn) && pn >= MIN_SAMPLE) { var dd = (L["값"] - pv) * 100; yoy3 = (dd >= 0 ? "▲ +" : "▼ −") + Math.abs(dd).toFixed(1) + "%p"; } else yoy3 = '<span class="du-dash">비교 불가</span><span class="s">' + esc(prev || "전년") + "년 표본 " + (isNum(pn) ? api.num(pn) + "건" : "—") + "</span>";
     var rate = ys.map(function (y) { var n = api.kpiVal(y, "L2건수_유효"), v = api.kpiVal(y, "L2L3전환율_공식"); return isNum(v) && isNum(n) && n >= MIN_SAMPLE ? v : null; });
     var h = '<div class="du">';
-    h += '<section class="du-period" aria-label="분석 기간"><div class="pm"><span class="pi">' + ic("doc") + '</span><b>분석 기준일: 2025.06.24</b><span class="pt">조회 기간 2025.06.24 ~ 현재</span></div><p>' + esc(PERIOD_NOTE) + '</p><div class="pf"><span class="pl">기간 필터</span><button class="on" aria-pressed="true">전체</button><button disabled title="월·연도 단위 집계가 공개 집계에 추가되면 제공합니다">연도</button><button disabled title="월·연도 단위 집계가 공개 집계에 추가되면 제공합니다">월</button><button disabled title="월·연도 단위 집계가 공개 집계에 추가되면 제공합니다">최근 3개월</button><span class="ph">연도·월 필터는 월 단위 집계가 연결되면 제공됩니다 · 마지막 동기화와 정합성 점검은 위 상태줄에서 확인</span></div></section>';
+    h += '<section class="du-period" aria-label="분석 기간"><div class="pm"><span class="pi">' + ic("doc") + '</span><b>공식 분석 시작일: 2026.06.01</b><span class="pt">조회 기간 2026.06.01 ~ 현재 · 이전 기록은 과거 참고</span></div><p>' + esc(PERIOD_NOTE) + '</p><div class="pf"><span class="pl">기간 필터</span><button class="on" aria-pressed="true">전체</button><button disabled title="월·연도 단위 집계가 공개 집계에 추가되면 제공합니다">연도</button><button disabled title="월·연도 단위 집계가 공개 집계에 추가되면 제공합니다">월</button><button disabled title="월·연도 단위 집계가 공개 집계에 추가되면 제공합니다">최근 3개월</button><span class="ph">연도·월 필터는 월 단위 집계가 연결되면 제공됩니다 · 마지막 동기화와 정합성 점검은 위 상태줄에서 확인</span></div></section>';
     h += '<header class="du-head"><div><h1>B2B 업무 성과 대시보드</h1><p>' + esc(ys[0]) + "~" + esc(last) + "년 · " + esc(last) + "년은 " + esc(asOf || "기준일") + "까지 누계(*) · 값이 없는 항목은 0 이 아니라 '—' 로 표시</p></div></header>";
     h += '<div class="du-kpis">' +
             kpiCard(withGoal(kpi12Spec("kpi1", api), "kpi1", api)) +
@@ -396,7 +404,7 @@
     var seg = nm && ia != null && nb != null && tv != null && nm + ia + nb === tv ? [["정상", nm, "c1"], ["장기 무활동", ia, "c2"], ["이력 없음", nb, "c3"]] : null;
     var stack = seg ? '<div class="du-stack">' + seg.map(function (x) { return '<i class="' + x[2] + '" style="flex:' + x[1] + '" title="' + esc(x[0] + " " + api.num(x[1])) + '곳"></i>'; }).join("") + '</div><div class="du-lg">' + seg.map(function (x) { return '<span><i class="du-dot ' + x[2] + '"></i>' + esc(x[0]) + " <b>" + api.num(x[1]) + "</b></span>"; }).join("") + "</div>" : "";
     var won = api.won, l3sum = null; ["기술자문문의_건수", "컨설팅요청_건수", "공법설명회_건수", "기타문의_건수"].forEach(function (c) { if (isNum(kL[c])) l3sum = (l3sum || 0) + kL[c]; });
-    h += '<div class="du-t"><h2>시공사별 영업·기술지원·성과 요약</h2><span>' + esc(last) + "년 " + esc(asOf) + " 누계(연도별 집계) · 2025.06.24 기준 합산은 집계 확장 후 표시</span></div><div class=\"du-sum\">" +
+    h += '<div class="du-t"><h2>시공사별 영업·기술지원·성과 요약</h2><span>' + esc(last) + "년 " + esc(asOf) + " 누계(연도별 집계) · 2026.06.01 기준 합산은 집계 확장 후 표시</span></div><div class=\"du-sum\">" +
       '<section class="du-card"><header><h3>업체 현황</h3><button class="btn ghost du-go" data-kact="dgo" data-id="mou">자세히 →</button></header><p class="df">기준 날짜: 협약일 · 활동일</p>' + stat("전체 협력사", tv, "B2B 마스터 기준", api.num, true) + stack + '<p class="s2">핵심 협력사 ' + esc(dv(core ? core["값"] : null, api.num).t) + "곳(임시 정의)</p></section>" +
       '<section class="du-card"><header><h3>L2 · L3 활동 현황</h3><button class="btn ghost du-go" data-kact="dgo" data-id="l3">자세히 →</button></header><p class="df">기준 날짜: 활동일(접수·등록일)</p><div class="du-pair"><div>' + stat("L2 영업보고", null, "데이터 연결 예정", null, true) + "</div><div>" + stat("L3 활동(시트 기준)", l3sum, "기술자문·컨설팅·설명회·기타", api.num, true) + '</div></div><p class="s2">기술자문 ' + esc(dv(kL["기술자문문의_건수"], api.num).t) + " · 컨설팅 " + esc(dv(kL["컨설팅요청_건수"], api.num).t) + " · 설명회 " + esc(dv(kL["공법설명회_건수"], api.num).t) + " · 기타 " + esc(dv(kL["기타문의_건수"], api.num).t) + "</p></section>" +
       '<section class="du-card"><header><h3>공고 · 낙찰 현황</h3><button class="btn ghost du-go" data-kact="view" data-id="growth">자세히 →</button></header><p class="df">기준 날짜: 공고일 (낙찰일 자료 없음)</p>' + stat("POUR 낙찰", kL["POUR낙찰_건수"], "공고 " + esc(dv(kL["POUR반영공고_건수"], api.num).t) + "건 · 낙찰금액 " + esc(dv(kL["POUR낙찰금액_VAT미확인"], won).t), function (v) { return api.num(v) + "건"; }, true) + mini(col("POUR낙찰_건수"), cats, { fmt: api.num }) + "</section>" +
@@ -416,18 +424,18 @@
     /* 5) 월별 활동 추이 */
     var PTm = periodTab(api), ml = PTm ? PTm.list("월별 L3") : [];
     if (ml.length) {
-      var mons = ml.map(function (r) { return pMonth(r["지표"]); }), cats = mons.map(function (m, i) { var mm = String(parseInt(m.slice(5), 10)); return { l: m, s: m === "2025-06" ? "6*" : (mm === "1" ? m.slice(2, 4) + "/1" : mm), cur: false, part: m === "2025-06" }; });
+      var mons = ml.map(function (r) { return pMonth(r["지표"]); }).filter(function (m) { return /^\d{4}-\d{2}$/.test(m) && m >= PERIOD_START.slice(0, 7); }), cats = mons.map(function (m, i) { var mm = String(parseInt(m.slice(5), 10)); return { l: m, s: m === "2025-06" ? "6*" : (mm === "1" ? m.slice(2, 4) + "/1" : mm), cur: false, part: m === "2025-06" }; });
       var ser = function (g) { var mp = {}; PTm.list(g).forEach(function (r) { mp[pMonth(r["지표"])] = r["값"]; }); return mons.map(function (m) { return isNum(mp[m]) ? mp[m] : null; }); };
       h += '<div class="du-t"><h2>월별 활동 추이</h2><span>월 기준은 활동일·공고일 · ' + esc(mons[0]) + " ~ " + esc(mons[mons.length - 1]) + " · 작업본 집계(검증 필요) · 마지막 달은 진행 중</span></div><section class=\"du-card wide\"><header><h3>월별 활동 및 성과 추이</h3>" + pill("rev", "검증 필요") + "</header>" +
         '<div class="du-mser"><h4>L3 활동 (건)</h4>' + mini(ser("월별 L3"), cats, { fmt: api.num }) + '</div><div class="du-mser"><h4>자사 공고 (건)</h4>' + mini(ser("월별 공고"), cats, { fmt: api.num }) + '</div><div class="du-mser"><h4>낙찰 (건)</h4>' + mini(ser("월별 낙찰"), cats, { fmt: api.num }) + "</div>" +
-        '<p class="s2"><b>* 2025-06은 6/24~30(7일)만 포함한 부분 기간입니다 — 전체 6월과 비교하지 마세요.</b> L2 영업보고는 원천이 없어 표시하지 않습니다. 낙찰은 공고일 기준입니다. 같은 흐름의 컨설팅 요청·발행 등이 함께 세어져 L3 건수가 부풀 수 있습니다.</p></section>' + monthlyKpi(api, PTm, mons, cats);
+        '<p class="s2">' + (mons.indexOf("2025-06") >= 0 ? "<b>* 2025-06은 6/24~30(7일)만 포함한 부분 기간입니다 — 전체 6월과 비교하지 마세요.</b> " : "") + 'L2 영업보고는 원천이 없어 표시하지 않습니다. 낙찰은 공고일 기준입니다. 같은 흐름의 컨설팅 요청·발행 등이 함께 세어져 L3 건수가 부풀 수 있습니다.</p></section>' + monthlyKpi(api, PTm, mons, cats);
     } else {
       h += '<div class="du-t"><h2>월별 활동 추이</h2><span>월 기준은 각 지표의 날짜 필드(활동일·공고일·매출일)를 따릅니다</span></div><section class="du-card wide"><header><h3>월별 활동 및 성과 추이</h3>' + pending() + "</header>" + ghostMonths(3) + '<div class="du-lg"><span><i class="du-dot c1"></i>L2 영업보고</span><span><i class="du-dot c2"></i>L3 활동</span><span><i class="du-dot c3"></i>공고·낙찰</span></div><div class="du-empty"><b>월별 데이터가 아직 연결되지 않았습니다</b><span>연결되면 2025.06부터 월별 L2·L3·L4 추이가 이 자리에 표시됩니다. 임의 수치는 넣지 않습니다.</span></div></section>';
     }
 
     /* 6) 업체별 상세 분석 · 관리 대상 */
     var iaV = inact && isNum(inact["값"]) ? inact["값"] : null, nbV = none && isNum(none["값"]) ? none["값"] : null, coreIn = api.leading("핵심 협력사 중 장기 무활동"), coreInV = coreIn && isNum(coreIn["값"]) ? coreIn["값"] : null;
-    h += '<div class="du-t"><h2>업체별 상세 분석 · 관리 대상</h2><span>시공사 한 곳을 선택하면 이력을 시간순으로 봅니다(상세 보기)</span></div><div class="du-mgmt"><section class="du-card"><header><h3>관리 대상 업체</h3><button class="btn ghost du-go" data-kact="dgo" data-id="act">관리 이력 →</button></header><div class="du-pair"><div>' + stat("장기 무활동(90일+)", iaV, "마지막 영업활동 기준", api.num, true) + "</div><div>" + stat("활동 이력 없음", nbV, "2025.06.24 이후 기록 기준", api.num, true) + '</div></div><p class="s2">핵심 협력사 중 장기 무활동 ' + esc(dv(coreInV, api.num).t) + "곳(핵심 협력사 정의는 임시)</p>" + mgmtExtra(api, (opsModel(api) || {}).summary || null) + "</section>" +
+    h += '<div class="du-t"><h2>업체별 상세 분석 · 관리 대상</h2><span>시공사 한 곳을 선택하면 이력을 시간순으로 봅니다(상세 보기)</span></div><div class="du-mgmt"><section class="du-card"><header><h3>관리 대상 업체</h3><button class="btn ghost du-go" data-kact="dgo" data-id="act">관리 이력 →</button></header><div class="du-pair"><div>' + stat("장기 무활동(90일+)", iaV, "마지막 영업활동 기준", api.num, true) + "</div><div>" + stat("활동 이력 없음", nbV, "2026.06.01 이후 기록 기준", api.num, true) + '</div></div><p class="s2">핵심 협력사 중 장기 무활동 ' + esc(dv(coreInV, api.num).t) + "곳(핵심 협력사 정의는 임시)</p>" + mgmtExtra(api, (opsModel(api) || {}).summary || null) + "</section>" +
       '<section class="du-card"><header><h3>시공사별 상세 이력</h3>' + pill("part", "상세 보기(로그인)") + "</header><p class=\"s2\">시공사를 검색하면 협약일 · 영업보고(L2) · 기술지원(L3) · 현장별 재사용 · 공고·낙찰(L4) · 자재 구매를 시간순으로 확인합니다. 업체 단위 정보는 공개 화면에 싣지 않고 로그인 상세 보기에서만 보입니다.</p>" + '<button class="btn ghost du-go" data-kact="view" data-id="growth">성장 분석에서 시공사 검색 →</button></section></div>';
 
     /* 4) 추가 데이터 5종 */
@@ -446,7 +454,7 @@
     var v = function (g, l) { return PT.val(g, l); };
     if (id === "mou") {
       var dif = v("협약일", "마스터와 협약일 불일치(검증 대상)"), nb = v("협약일", "사업자번호가 없어 대조하지 못한 목록 업체");
-      return { status: "partial", asOf: "2026-10-20", source: v("협약일", "고객관리카드에 협약일이 입력된 업체") != null ? "고객관리카드 협약일(신규 업체 사용률 계산에 사용) · 시공사 마스터 파일 협약일·협약 체결 업체 목록(2026-10-14)과 대조" : "시공사 마스터 파일 협약일 · 협약 체결 업체 목록(2026-10-14) 대조 · 고객관리카드 협약일은 연동 전", stats: { total: { v: v("협약일", "협약일 보유 시공사"), sub: "협약일이 있는 시공사" }, fresh: { v: v("협약일", "협약일이 분석 기간 내인 시공사"), sub: "신규 판정 대상(협약일 2025.06.24 이후)" }, dated: v("협약일", "협약일 보유 시공사"), undated: { v: v("관리 대상", "추천 대상: 협약일 미확인"), sub: "관리 시공사 중 협약일 없음 · 신규·기존 판정 안 함" } }, note: "원천 대조: 일치 " + (v("협약일", "마스터와 협약일 일치(사업자번호 기준)") == null ? "—" : v("협약일", "마스터와 협약일 일치(사업자번호 기준)")) + "곳 · 불일치 " + (dif == null ? "—" : dif) + "곳(검증 대상) · 사업자번호 없어 대조 못함 " + (nb == null ? "—" : nb) + "곳" };
+      return { status: "partial", asOf: "2026-10-20", source: v("협약일", "고객관리카드에 협약일이 입력된 업체") != null ? "고객관리카드 협약일(신규 업체 사용률 계산에 사용) · 시공사 마스터 파일 협약일·협약 체결 업체 목록(2026-10-14)과 대조" : "시공사 마스터 파일 협약일 · 협약 체결 업체 목록(2026-10-14) 대조 · 고객관리카드 협약일은 연동 전", stats: { total: { v: v("협약일", "협약일 보유 시공사"), sub: "협약일이 있는 시공사" }, fresh: { v: v("협약일", "협약일이 분석 기간 내인 시공사"), sub: "신규 판정 대상(협약일 2026.06.01 이후)" }, dated: v("협약일", "협약일 보유 시공사"), undated: { v: v("관리 대상", "추천 대상: 협약일 미확인"), sub: "관리 시공사 중 협약일 없음 · 신규·기존 판정 안 함" } }, note: "원천 대조: 일치 " + (v("협약일", "마스터와 협약일 일치(사업자번호 기준)") == null ? "—" : v("협약일", "마스터와 협약일 일치(사업자번호 기준)")) + "곳 · 불일치 " + (dif == null ? "—" : dif) + "곳(검증 대상) · 사업자번호 없어 대조 못함 " + (nb == null ? "—" : nb) + "곳" };
     }
     var typ = PT.list("팀 행동").filter(function (r) { return String(r["지표"]).indexOf("└ 유형: ") === 0; }), sum = function (re) { var t = 0, any = false; typ.forEach(function (r) { if (re.test(r["지표"]) && isNum(r["값"])) { t += r["값"]; any = true; } }); return any ? t : null; };
     return { status: "partial", asOf: "2026-10-20", source: "플랫폼 활동 시트 + 잔디 기술문의·PT + 컨설팅 발행현황 통합 작업본(익명 집계) · 검증 필요", stats: { advice: sum(/기술자문/), pt: sum(/PT|공법설명회/), etc: sum(/기타 문의/), consult: sum(/컨설팅/), vendors: { v: v("팀 행동", "L3 활동 시공사 수(업체 확인·하한)"), sub: "업체 미기재 제외 · 하한" }, via: { v: null, sub: "영업보고 원천 없음 — 구분 불가" }, direct: { v: v("L3 도달률", "L3 직접진입 확정"), sub: "확정 0 · 전부 경로 확인 필요" }, reach: { v: v("L3 도달률", "L3 도달 업체×현장 조합(합산 분자 후보)"), sub: "업체×현장 조합(분모 확정 전)" } },

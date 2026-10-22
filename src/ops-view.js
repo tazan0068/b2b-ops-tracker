@@ -119,7 +119,7 @@
   function render(api) {
     A = api; var g = get(api);
     var head = '<div class="op"><div class="op-head"><div><h2>시공사별 활동·성과 추적</h2><p>우리 팀의 활동 → 시공사 반응 → 공법 경험 → 낙찰·구매 → 성과 → 다음 관리 업무를 시공사 단위로 봅니다.</p></div></div>' +
-      '<div class="op-period"><b>분석 기준일 2025.06.24</b><span>기준일 이후 유효 활동만 집계하고, 이전 기록은 삭제하지 않고 이력으로 보존합니다. 협약일 없는 업체는 신규·기존을 판정하지 않습니다.</span></div>';
+      '<div class="op-period"><b>공식 분석 시작일 2026.06.01</b><span>기준일 이후 유효 활동만 집계하고, 이전 기록은 삭제하지 않고 이력으로 보존합니다. 협약일 없는 업체는 신규·기존을 판정하지 않습니다.</span></div>';
     if (g.state === "public") return head + '<div class="card"><div class="ks-warn"><b>시공사 단위 정보는 공개 화면에 싣지 않습니다.</b> 상단의 [상세 보기(로그인)]로 시트에 연결하면 이 화면에서 시공사별 추적표를 볼 수 있습니다.</div></div></div>';
     if (g.state === "wait") return head + '<div class="card"><div class="ks-warn"><b>시트 데이터를 읽는 중이거나 연결되지 않았습니다.</b> 연결 설정에서 구글시트를 연결하면 표시됩니다(값을 만들어 채우지 않습니다).</div></div></div>';
     if (g.state === "error") return head + '<div class="card"><div class="ks-warn"><b>계산할 수 없습니다.</b> ' + esc(g.msg || "") + "</div></div></div>";
