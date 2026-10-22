@@ -901,6 +901,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
 .du-svg{width:19px;height:19px}
 .du-pill{display:inline-block;font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:100px;white-space:nowrap;line-height:1.4}
 .du-pill.ok{background:#E3F6F1;color:#0B7A6E}.du-pill.part{background:#E8F0FD;color:#2455B8}.du-pill.bad{background:#FDEBEA;color:#B42318}
+.du-pill.rev{background:#FFF3DC;color:#9A5B00}
 .du-pill.wait{background:#F1F5F9;color:#64748B;border:1px dashed #C6D0DD}
 .du-dash{color:#8A97AB;font-weight:600}
 .du-go{padding:5px 10px;font-size:12px;white-space:nowrap}
@@ -1044,6 +1045,24 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   .du-tbl td.empty{display:block;text-align:center;padding:24px 8px} .du-tbl td.empty::before{content:none}
   .du-tbl tr:has(td.empty){border:0;margin:0;padding:0}
 }
+
+/* KPI ③ 검증 필요 · 경로 구분 · 참고값 */
+.du-kpi.rev::before{background:repeating-linear-gradient(90deg,var(--acc) 0 14px,#F4C46B 14px 22px)}
+.du-kpi .val.rv{font-size:clamp(28px,3.6vw,36px);letter-spacing:-.8px;color:#9A5B00;font-weight:900}
+.du-kpi.rev .val::after{content:none}
+.du-kpi .parts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.du-kpi .parts span{background:#F5F8FC;border:1px solid #E6ECF4;border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:1px}
+.du-kpi .parts em{font-style:normal;font-size:10.5px;color:var(--du-sub);font-weight:700}.du-kpi .parts b{font-size:15px;font-weight:900;color:#9AA8BC}
+.du-kpi .refs{border-top:1px solid #EEF2F7;padding-top:8px;display:flex;flex-direction:column;gap:6px}
+.du-kpi .refs .rh{font-size:10.5px;font-weight:800;color:var(--du-sub);letter-spacing:.2px}
+.du-kpi .refs .r{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--du-ink)}
+.du-kpi .refs .r span{flex:1 1 150px;color:var(--du-sub);font-weight:600}.du-kpi .refs .r b{font-weight:900;font-variant-numeric:tabular-nums}.du-kpi .refs .r small{font-size:10.5px;color:var(--du-sub);flex-basis:100%;margin-top:-4px}
+.du-rate b.rv{font-size:22px;color:#9A5B00}
+.du-flow .ar{font-size:22px}
+.du-routes .du-rt.sep{background:#FBFCFE;border-style:dashed}
+.du-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (min-width:760px){ .du-stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))} }
+@media (min-width:760px){ .du-routes{grid-template-columns:repeat(4,minmax(0,1fr))} }
 
 </style>
 </head>
@@ -1872,6 +1891,8 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
 (function () {
   "use strict";
   var U = {}; window.B2BDashUI = U;
+  /* 참고값(보존): 기존 지표와 새 기준(L3 도달률 합산)은 분자·분모 정의가 달라 직접 비교하지 않는다. 값은 바꾸지 않고 출처와 함께 보여 준다 */
+  var REFERENCE_VALUES = [{ key: "team", label: "팀장 회의 기준", value: "24.9%", calc: "231 ÷ 929", note: "2026-10-15 회의 표 · 고객관리카드 B2B KPI 탭 임시 고정값 · 929의 산출 규칙 미확인" }];
   var MIN_SAMPLE = 30;                               /* 전년 대비를 보여 주기 위한 전년 표본(건수) 최소값 — 표시 기준일 뿐 계산식이 아님 */
   var ST = { ds: "l2", F: { year: "all", month: "all", vendor: "", trade: "all" }, page: 0 };
   var ADAPTERS = {};
@@ -1887,9 +1908,9 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
       monthlyTitle: "월별 신규 협약 현황", breakdowns: [["month", "월별 신규 협약"], ["kind", "신규·기존 구분"]],
       cols: [["vendor", "업체명"], ["code", "B2B 고유코드"], ["date", "실제 협약 체결일"], ["kind", "신규·기존 구분"], ["source", "원본 출처"]], dedupe: ["code"], filters: ["year", "month", "vendor"] },
     l3: { id: "l3", short: "L3 자료", title: "잔디 L3 자료", icon: "chat", blurb: "기술자문·공법설명회·기타문의·컨설팅내역서 요청 이력을 봅니다.", source: "잔디 추출 엑셀 → 구글시트", desc: "L3 = 기술자문문의(기술자문) · 공법설명회(PT) · 기타문의 · 컨설팅내역서 요청.",
-      stats: [["advice", "기술자문문의", "건"], ["pt", "공법설명회(PT)", "건"], ["etc", "기타문의", "건"], ["consult", "컨설팅내역서 요청", "건"], ["vendors", "L3 경험 업체", "곳"]],
+      stats: [["advice", "기술자문문의", "건"], ["pt", "공법설명회(PT)", "건"], ["etc", "기타문의", "건"], ["consult", "컨설팅내역서 요청", "건"], ["vendors", "L3 경험 업체", "곳"], ["via", "L2 경유 L3 현장", "곳"], ["direct", "L3 직접 진입 현장", "곳"], ["reach", "L3 도달 현장(합산)", "곳"]],
       monthlyTitle: "월별 L3 활동 추이", breakdowns: [["vendor", "업체별 L3 이용 이력"], ["site", "현장별 L3 이용 이력"], ["type", "활동 유형별"]],
-      cols: [["date", "활동일"], ["vendor", "업체명"], ["site", "아파트명"], ["trade", "공종"], ["type", "활동 유형"], ["status", "요청 상태"], ["source", "원본 출처"]], dedupe: ["date", "vendor", "site", "type"], filters: ["year", "month", "vendor", "trade", "type"] },
+      cols: [["date", "활동일"], ["vendor", "업체명"], ["site", "아파트명"], ["trade", "공종"], ["type", "활동 유형"], ["route", "진입 경로(L2 경유/직접)"], ["status", "요청 상태"], ["source", "원본 출처"]], dedupe: ["date", "vendor", "site", "type"], filters: ["year", "month", "vendor", "trade", "type"] },
     sales: { id: "sales", short: "매출(이카운트)", title: "이카운트 매출", icon: "box", blurb: "전체·메인자재 매출과 낙찰 현장 연결 현황을 봅니다.", source: "이카운트 원본 → 구글시트(3.이카운트판매원문)", desc: "전체 자재 매출과 메인자재 매출, 낙찰 현장과 자재 구매의 연결 현황을 봅니다.",
       stats: [["total", "전체 자재 매출", "원"], ["main", "메인자재 매출", "원"], ["share", "메인자재 매출 비중", "%"], ["linked", "낙찰 현장↔구매 연결", "곳"]],
       monthlyTitle: "월별 매출 추이", breakdowns: [["trade", "공종별 메인자재 매출"], ["vendor", "업체별 구매 현황"], ["site", "낙찰 현장↔구매 연결"]],
@@ -1927,12 +1948,15 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
 
   /* ---------- 메인 대시보드 ---------- */
   function kpiCard(o) {
-    var okv = !!o.ok;
-    return '<article class="du-kpi ' + o.cls + (okv ? "" : " pend") + '"><div class="top"><span class="ic">' + ic(o.icon) + "</span><h3>" + esc(o.label) + '</h3><span class="du-pill ' + (okv ? "ok" : "wait") + '">' + esc(okv ? "시트 연결됨" : "데이터 연결 예정") + "</span></div>" +
-      '<div class="val' + (okv ? "" : " na") + '">' + (okv ? esc(o.value) : "—") + "</div>" +
+    var st = o.state || (o.ok ? "ok" : "wait"), okv = st === "ok", rv = st === "review";
+    var pillT = okv ? "연결됨" : rv ? "검증 필요" : "데이터 연결 예정", pillC = okv ? "ok" : rv ? "rev" : "wait";
+    return '<article class="du-kpi ' + o.cls + (okv ? "" : " pend") + (rv ? " rev" : "") + '"><div class="top"><span class="ic">' + ic(o.icon) + "</span><h3>" + esc(o.label) + '</h3><span class="du-pill ' + pillC + '">' + esc(pillT) + "</span></div>" +
+      '<div class="val' + (okv ? "" : rv ? " rv" : " na") + '">' + (okv ? esc(o.value) : rv ? "검증 필요" : "—") + "</div>" +
       '<p class="def">' + esc(o.def) + "</p>" +
+      (o.parts ? '<div class="parts">' + o.parts.map(function (p) { return '<span><em>' + esc(p[0]) + "</em><b>" + esc(p[1]) + "</b></span>"; }).join("") + "</div>" : "") +
       '<div class="yoy"><span class="l">전년 대비</span><span class="v">' + o.yoy + "</span></div>" +
       '<div class="trend"><span class="l">추이</span>' + o.trend + "</div>" +
+      (o.refs ? '<div class="refs"><span class="rh">참고값(보존)</span>' + o.refs.map(function (r) { return '<div class="r"><span>' + esc(r.label) + "</span><b>" + esc(r.value) + "</b>" + (r.calc ? "<small>" + esc(r.calc) + "</small>" : "") + "</div>"; }).join("") + "</div>" : "") +
       (o.note ? '<p class="kn">' + o.note + "</p>" : "") +
       '<div class="foot">' + go(o.to, "상세 보기") + "</div></article>";
   }
@@ -1942,6 +1966,20 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     var max = Math.max.apply(null, pts.map(function (p) { return p[1]; })), min = Math.min.apply(null, pts.map(function (p) { return p[1]; })), W = 120, H = 30, n = vals.length - 1 || 1;
     var d = pts.map(function (p, i) { var x = p[0] / n * (W - 6) + 3, y = H - 4 - (max === min ? 0.5 : (p[1] - min) / (max - min)) * (H - 8); return (i ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1); }).join(" ");
     return '<svg class="du-spark" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="연도별 추이"><path d="' + d + '"/></svg>';
+  }
+  /* KPI ③ L3 도달률(합산): L2 경유 L3 + L3 직접 진입. 분모 기준이 확정되기 전에는 비율을 만들지 않고 '검증 필요'로 표시한다.
+     연결: B2BDashUI.connect("kpi3", function (api) { return { status: "verified" | "review", value: 0.123, numerator: n, denominator: n, basis: "분모 기준 설명", asOf: "YYYY-MM-DD",
+            routes: { via: n, direct: n, l3l4: n, l2l4: n } }; });  — status 가 verified 이고 value 가 숫자일 때만 비율이 표시된다 */
+  function kpi3Spec(api, L, Lc, L2n, okL) {
+    var d = null; if (ADAPTERS.kpi3) { try { d = ADAPTERS.kpi3(api) || null; } catch (e) { d = null; } }
+    var verified = !!(d && d.status === "verified" && isNum(d.value)), R = d && d.routes || {};
+    var rf = []; if (okL) rf.push({ label: "기존 L2→L3 전환률(업무트래커)", value: api.pc(L["값"]), calc: Lc && L2n && isNum(Lc["값"]) && isNum(L2n["값"]) ? api.num(Lc["값"]) + " ÷ " + api.num(L2n["값"]) + " · 구 정의(L2=기술자문문의)" : "구 정의" });
+    REFERENCE_VALUES.forEach(function (r) { rf.push({ label: r.label, value: r.value, calc: r.calc }); });
+    var pv = function (v) { return isNum(v) ? api.num(v) + "곳" : "—"; };
+    return { cls: "k3", icon: "flow", label: "L3 도달률", state: verified ? "ok" : "review", value: verified ? api.pc(d.value) : "",
+      def: "L2(영업보고)를 거친 업체·현장 + L3에 바로 진입한 업체·현장을 합산 · L3 = 기술자문문의(기술자문) · 공법설명회(PT) · 기타문의 · 컨설팅내역서 요청",
+      parts: [["L2 경유 L3", pv(R.via)], ["L3 직접 진입", pv(R.direct)]], yoy: '<span class="du-dash">검증 필요</span>', trend: '<span class="du-dash">추이 — 검증 후 표시</span>', refs: rf,
+      note: verified ? esc(d.basis || "") : "분모 기준이 확정되지 않았거나 데이터가 부족해 비율을 계산하지 않았습니다. 기존 9.56%·24.9%는 정의가 달라 참고값으로만 보존합니다.", to: "l3" };
   }
   function render(api) {
     A = api; var ys = api.years(); if (!ys.length) return "";
@@ -1959,7 +1997,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     h += '<div class="du-kpis">' +
       kpiCard({ cls: "k1", icon: "user", label: "신규 업체 사용률", ok: false, def: "실제 MOU 협약일부터 1년 · 신규 업체 중 L3 활동이 발생한 업체 비율", yoy: "—", trend: '<span class="du-dash">추이 — 연결 예정</span>', note: "협약일 데이터 반영 후 표시됩니다", to: "mou" }) +
       kpiCard({ cls: "k2", icon: "repeat", label: "재사용률", ok: false, def: "기존·신규 업체 전체 · 첫 L3 이후 다른 아파트 현장에서 L3 활동이 다시 발생한 업체 비율", yoy: "—", trend: '<span class="du-dash">추이 — 연결 예정</span>', note: "L3 이력 데이터 반영 후 표시됩니다", to: "l3" }) +
-      kpiCard({ cls: "k3", icon: "flow", label: "L2 → L3 전환률", ok: okL, value: okL ? api.pc(L["값"]) : "", def: "영업보고(L2) 이후 같은 업체·현장에서 L3(기술자문·공법설명회·기타문의·컨설팅내역서 요청)로 이어진 비율", yoy: yoy3, trend: trendSpark(rate, cats), note: okL ? "현재 시트 기준값" + (Lc && L2n && isNum(Lc["값"]) && isNum(L2n["값"]) ? " · " + api.num(Lc["값"]) + " ÷ " + api.num(L2n["값"]) : "") + ' · <b class="warnt">정의 정리 예정</b>' : "시트에서 값을 읽지 못했습니다", to: "l2" }) + "</div>";
+      kpiCard(kpi3Spec(api, L, Lc, L2n, okL)) + "</div>";
 
     /* 2) 현황 요약 4 */
     var tot = api.leading("전체 협력사"), inact = api.leading("장기 무활동"), none = api.leading("활동 이력 없음"), core = api.leading("핵심 협력사 수");
@@ -1977,9 +2015,9 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     var l2v = L2n && isNum(L2n["값"]) ? L2n["값"] : null, lcv = Lc && isNum(Lc["값"]) ? Lc["값"] : null, lrv = Lr && isNum(Lr["값"]) ? Lr["값"] : null;
     h += '<div class="du-t"><h2>추이 · 흐름</h2><span>월별 값은 데이터 연결 후 표시됩니다</span></div><div class="du-flowrow">' +
       '<section class="du-card wide"><header><h3>월별 활동 및 성과 추이</h3>' + pending() + "</header>" + ghostMonths(3) + '<div class="du-lg"><span><i class="du-dot c1"></i>L2 영업보고</span><span><i class="du-dot c2"></i>L3 활동</span><span><i class="du-dot c3"></i>낙찰·매출</span></div><div class="du-empty"><b>월별 데이터가 아직 연결되지 않았습니다</b><span>연결되면 월별 L2·L3 활동과 성과 추이가 이 자리에 표시됩니다. 임의 수치는 넣지 않습니다.</span></div></section>' +
-      '<section class="du-card"><header><h3>L2 → L3 흐름</h3>' + pill(okL ? "ok" : "wait", okL ? "현재 시트 기준" : "데이터 연결 예정") + '</header><div class="du-flow"><div class="n"><span>L2 영업보고</span><b>' + esc(dv(l2v, api.num).t) + '</b></div><i class="ar">→</i><div class="n"><span>L3 전환 확정</span><b>' + esc(dv(lcv, api.num).t) + '</b></div></div><div class="du-rate"><span>전환률</span><b>' + (okL ? esc(api.pc(L["값"])) : "—") + '</b></div><p class="s2">검토 대상 ' + esc(dv(lrv, api.num).t) + '건은 공식 계산에서 제외 · <b class="warnt">L2·L3 정의 정리 예정</b></p></section></div>';
-    h += '<div class="du-routes"><div class="du-rt-h"><h3>경로별 결과 비교</h3><span>L4 정의가 확정되면 연결됩니다</span></div>' +
-      [["L2 → L3 → L4", "영업보고 후 L3를 거쳐 L4로"], ["L2 → L4", "영업보고에서 바로 L4로"], ["L3 → L4", "L3에서 L4로 (영업보고 없이)"]].map(function (r) { return '<div class="du-rt"><b>' + esc(r[0]) + "</b><span>" + esc(r[1]) + '</span><em>—</em>' + pill("wait", "데이터 연결 예정") + "</div>"; }).join("") + "</div>";
+      '<section class="du-card"><header><h3>L3 도달 경로</h3>' + pill("rev", "검증 필요") + '</header><div class="du-flow"><div class="n"><span>L2 경유 L3</span><b>—</b></div><i class="ar">+</i><div class="n"><span>L3 직접 진입</span><b>—</b></div></div><div class="du-rate"><span>합산 L3 도달률</span><b class="rv">검증 필요</b></div><p class="s2">L2 경유와 L3 직접 진입은 구분해 보관하고, 메인 화면에서는 합산합니다. 영업보고(L2) 원천이 반영되면 구분 값이 채워집니다.</p>' + (okL ? '<p class="s2">참고: 기존 L2→L3 전환률 <b>' + esc(api.pc(L["값"])) + "</b> (" + esc(dv(lcv, api.num).t) + " ÷ " + esc(dv(l2v, api.num).t) + ") — 구 정의</p>" : "") + "</section></div>";
+    h += '<div class="du-routes"><div class="du-rt-h"><h3>경로별 결과 비교</h3><span>L2 없이 L3에 진입한 경로도 포함 · L2→L4(L3 미경험)는 별도 추적</span></div>' +
+      [["L2 → L3", "영업보고 이후 L3로 이어진 경로", "포함"], ["L3 직접 진입", "영업보고 없이 L3에 바로 진입", "포함"], ["L2 없이 L3 → L4", "L3 직접 진입 후 L4(공고·낙찰)로", "포함"], ["L2 → L4", "L3를 거치지 않고 L4로 — 별도 추적", "별도"]].map(function (r) { return '<div class="du-rt' + (r[2] === "별도" ? " sep" : "") + '"><b>' + esc(r[0]) + "</b><span>" + esc(r[1]) + "</span><em>—</em>" + pill(r[2] === "별도" ? "part" : "wait", r[2] === "별도" ? "별도 추적 · 연결 예정" : "데이터 연결 예정") + "</div>"; }).join("") + "</div>";
 
     /* 4) 추가 데이터 5종 */
     h += '<div class="du-t"><h2>추가 데이터</h2><span>화면에서 바로 확인하거나 상세 분석으로 이동합니다</span></div><div class="du-data">' +

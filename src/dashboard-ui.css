@@ -12,6 +12,7 @@
 .du-svg{width:19px;height:19px}
 .du-pill{display:inline-block;font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:100px;white-space:nowrap;line-height:1.4}
 .du-pill.ok{background:#E3F6F1;color:#0B7A6E}.du-pill.part{background:#E8F0FD;color:#2455B8}.du-pill.bad{background:#FDEBEA;color:#B42318}
+.du-pill.rev{background:#FFF3DC;color:#9A5B00}
 .du-pill.wait{background:#F1F5F9;color:#64748B;border:1px dashed #C6D0DD}
 .du-dash{color:#8A97AB;font-weight:600}
 .du-go{padding:5px 10px;font-size:12px;white-space:nowrap}
@@ -155,3 +156,21 @@
   .du-tbl td.empty{display:block;text-align:center;padding:24px 8px} .du-tbl td.empty::before{content:none}
   .du-tbl tr:has(td.empty){border:0;margin:0;padding:0}
 }
+
+/* KPI ③ 검증 필요 · 경로 구분 · 참고값 */
+.du-kpi.rev::before{background:repeating-linear-gradient(90deg,var(--acc) 0 14px,#F4C46B 14px 22px)}
+.du-kpi .val.rv{font-size:clamp(28px,3.6vw,36px);letter-spacing:-.8px;color:#9A5B00;font-weight:900}
+.du-kpi.rev .val::after{content:none}
+.du-kpi .parts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.du-kpi .parts span{background:#F5F8FC;border:1px solid #E6ECF4;border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:1px}
+.du-kpi .parts em{font-style:normal;font-size:10.5px;color:var(--du-sub);font-weight:700}.du-kpi .parts b{font-size:15px;font-weight:900;color:#9AA8BC}
+.du-kpi .refs{border-top:1px solid #EEF2F7;padding-top:8px;display:flex;flex-direction:column;gap:6px}
+.du-kpi .refs .rh{font-size:10.5px;font-weight:800;color:var(--du-sub);letter-spacing:.2px}
+.du-kpi .refs .r{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--du-ink)}
+.du-kpi .refs .r span{flex:1 1 150px;color:var(--du-sub);font-weight:600}.du-kpi .refs .r b{font-weight:900;font-variant-numeric:tabular-nums}.du-kpi .refs .r small{font-size:10.5px;color:var(--du-sub);flex-basis:100%;margin-top:-4px}
+.du-rate b.rv{font-size:22px;color:#9A5B00}
+.du-flow .ar{font-size:22px}
+.du-routes .du-rt.sep{background:#FBFCFE;border-style:dashed}
+.du-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (min-width:760px){ .du-stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))} }
+@media (min-width:760px){ .du-routes{grid-template-columns:repeat(4,minmax(0,1fr))} }
