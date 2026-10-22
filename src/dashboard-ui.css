@@ -234,3 +234,25 @@
 .du-mser{margin:6px 0 12px}.du-mser h4{margin:0 0 4px;font-size:12px;font-weight:800;color:var(--du-ink)}
 .du-mini[style*="--n:17"] .c span,.du-mini[style*="--n:16"] .c span{font-size:9px}
 .du-mg{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.du-mg span{background:#F5F8FC;border:1px solid #E6ECF4;border-radius:9px;padding:5px 9px;font-weight:900;font-size:15px;display:flex;flex-direction:column}.du-mg em{font-style:normal;font-size:10px;font-weight:700;color:var(--du-sub)}
+
+/* ===== 팀장 목표 달성 현황(핵심 KPI 3 카드 · 상세) ===== */
+.du-goal{margin:2px 0 4px;padding:11px 12px 10px;border:1px solid var(--du-line);border-radius:12px;background:#F8FAFD;display:flex;flex-direction:column;gap:6px;min-width:0}
+.du-goal .gn{font-size:11px;color:var(--du-sub);font-weight:700;line-height:1.45;word-break:keep-all}
+.du-goal .gt{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.du-goal .gk{font-size:12px;font-weight:800;color:var(--du-ink)}
+.du-goal .gv{font-size:24px;font-weight:900;letter-spacing:-.6px;color:var(--du-ink);font-variant-numeric:tabular-nums;line-height:1.1}
+.du-goal .gp{margin-left:auto;font-size:11.5px;font-weight:800;padding:3px 9px;border-radius:999px;background:#EEF2F7;color:var(--du-sub);white-space:nowrap}
+.du-goal.ok .gp{background:#E3F4EA;color:#1D6B43}.du-goal.gap .gp{background:#FFF1E2;color:#9A5313}.du-goal.vf .gp{background:#FFF3D6;color:#8A6A10}
+.du-goal .gbar{height:10px;border-radius:999px;background:#E4EAF2;overflow:hidden}
+.du-goal .gbar i{display:block;height:100%;min-width:0;border-radius:999px;background:var(--acc,var(--du-blue))}
+.du-goal.ok .gbar i{background:#2E9D62}
+.du-goal .gbar.na{background:repeating-linear-gradient(135deg,#EDF1F6 0 6px,#E4EAF2 6px 12px)}
+.du-goal .gm{font-size:12px;color:var(--du-ink);font-weight:700}.du-goal .gm b{font-size:14px;font-variant-numeric:tabular-nums}
+.du-goal .gs{display:flex;flex-wrap:wrap;gap:2px 12px;font-size:11px;color:var(--du-sub);font-weight:600}
+.du-goal .gw{font-size:11.5px;line-height:1.55;color:#7A5A0B;font-weight:600;word-break:keep-all}
+.du-gdet{display:flex;flex-direction:column;gap:8px}
+.du-gdet .gl{font-size:13px;color:var(--du-ink);line-height:1.6}.du-gdet .gl .src{display:block;font-size:11.5px;color:var(--du-sub)}
+.du-gdet .gc{font-size:12.5px;line-height:1.65;color:var(--du-ink);background:#F4F7FB;border-radius:10px;padding:9px 11px;word-break:keep-all}
+.du-gdet .gd{font-size:12px;line-height:1.65;color:var(--du-sub);word-break:keep-all}.du-gdet .gd b{color:var(--du-ink)}
+.du-gt th,.du-gt td{white-space:nowrap}.du-gt tr.of th,.du-gt tr.of td{font-weight:900;background:#EEF4FF}
+@media (max-width:420px){ .du-goal .gv{font-size:22px} .du-goal .gp{margin-left:0} }
