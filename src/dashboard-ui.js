@@ -21,6 +21,17 @@
   var U = {}; window.B2BDashUI = U;
   /* 참고값(보존): 기존 지표와 새 기준(L3 도달률 합산)은 분자·분모 정의가 달라 직접 비교하지 않는다. 값은 바꾸지 않고 출처와 함께 보여 준다 */
   var REFERENCE_VALUES = [{ key: "team", label: "팀장 회의 기준", value: "24.9%", calc: "231 ÷ 929", note: "2026-10-15 회의 표 · 고객관리카드 B2B KPI 탭 임시 고정값 · 929의 산출 규칙 미확인" }];
+  var PERIOD_START = "2025-06-24";
+  var PERIOD_NOTE = "2025년 6월 24일은 기존 영업활동 여정 데이터에서 확인된 최초 기록일입니다. 시공사별 활동 및 성과를 동일한 기간으로 비교하기 위해 해당 날짜부터 분석합니다. 원천별 누락이나 연결 미확인 기록은 별도로 관리합니다.";
+  var PATHS = [
+    { id: "p1", n: "L2 → L3 → L4", d: "영업보고 → 기술지원 → 공고·낙찰", needL2: true },
+    { id: "p2", n: "L2 → L4", d: "L3 없이 공고·낙찰로 진행 · 별도 추적", needL2: true },
+    { id: "p3", n: "L3 → L4", d: "L2 없이 L3 직접 진입 후 공고·낙찰", needL2: false },
+    { id: "p4", n: "L2 → L3 (L4 미발생)", d: "영업보고 후 기술지원까지, 공고 전", needL2: true },
+    { id: "p5", n: "L3 직접 진입 (L4 미발생)", d: "L2 없이 기술지원만 발생", needL2: false },
+    { id: "p6", n: "L2만 발생", d: "영업보고만 있고 다음 단계 없음", needL2: true },
+    { id: "p7", n: "다른 아파트 재사용", d: "같은 시공사가 다른 현장에서 L3 재이용", needL2: false }
+  ];
   var MIN_SAMPLE = 30;                               /* 전년 대비를 보여 주기 위한 전년 표본(건수) 최소값 — 표시 기준일 뿐 계산식이 아님 */
   var ST = { ds: "l2", F: { year: "all", month: "all", vendor: "", trade: "all" }, page: 0 };
   var ADAPTERS = {};
@@ -80,7 +91,7 @@
     var pillT = okv ? "연결됨" : rv ? (o.pill || "검증 필요") : "데이터 연결 예정", pillC = okv ? "ok" : rv ? "rev" : "wait";
     return '<article class="du-kpi ' + o.cls + (okv ? "" : " pend") + (rv ? " rev" : "") + '"><div class="top"><span class="ic">' + ic(o.icon) + "</span><h3>" + esc(o.label) + '</h3><span class="du-pill ' + pillC + '">' + esc(pillT) + "</span></div>" +
       '<div class="val' + (okv ? "" : rv ? " rv" : " na") + '">' + (okv ? esc(o.value) : rv ? esc(o.vtext || "검증 필요") : "—") + "</div>" +
-      '<p class="def">' + esc(o.def) + "</p>" +
+      '<p class="def">' + esc(o.def) + "</p>" + (o.dates ? '<div class="dfs"><span class="dl">기준 날짜</span>' + o.dates.map(function (x) { return "<i>" + esc(x) + "</i>"; }).join("") + "</div>" : "") +
       (o.parts ? '<div class="parts">' + o.parts.map(function (p) { return '<span><em>' + esc(p[0]) + "</em><b>" + esc(p[1]) + "</b></span>"; }).join("") + "</div>" : "") +
       '<div class="yoy"><span class="l">전년 대비</span><span class="v">' + o.yoy + "</span></div>" +
       '<div class="trend"><span class="l">추이</span>' + o.trend + "</div>" +
@@ -105,7 +116,8 @@
     REFERENCE_VALUES.forEach(function (r) { rf.push({ label: r.label, value: r.value, calc: r.calc }); });
     var pv = function (v) { return isNum(v) ? api.num(v) + "곳" : "—"; };
     return { cls: "k3", icon: "flow", label: "L3 도달률", state: verified ? "ok" : "review", value: verified ? api.pc(d.value) : "",
-      def: "L2(영업보고)를 거친 업체·현장 + L3에 바로 진입한 업체·현장을 합산 · L3 = 기술자문문의(기술자문) · 공법설명회(PT) · 기타문의 · 컨설팅내역서 요청",
+      def: "L2(영업보고)를 거친 경우 + L3에 직접 진입한 경우를 합산 · L3 = 기술자문문의 · 공법설명회(PT) · 기타문의 · 컨설팅내역서 요청 · 분모는 업체×현장 고유 조합 등 후보를 검증한 뒤 확정",
+      dates: ["L2 영업보고일", "L3 활동일"],
       parts: [["L2 경유 L3", pv(R.via)], ["L3 직접 진입", pv(R.direct)]], yoy: '<span class="du-dash">검증 필요</span>', trend: '<span class="du-dash">추이 — 검증 후 표시</span>', refs: rf,
       note: verified ? esc(d.basis || "") : "분모 기준이 확정되지 않았거나 데이터가 부족해 비율을 계산하지 않았습니다. 기존 9.56%·24.9%는 정의가 달라 참고값으로만 보존합니다.", to: "l3" };
   }
@@ -117,9 +129,10 @@
     var act = api.leading("신규 협력사 활성화율(별도)"), rf = null;
     if (one && act && isNum(act["값"])) rf = [{ label: "신규 협력사 활성화율(별도 지표)", value: api.pc(act["값"]), calc: String(act["비고"] || "") + " · 플랫폼 가입 기준·L2 이상 활동 — 신규 업체 사용률(협약일 1년·L3)과 정의가 달라 참고용" }];
     return { cls: one ? "k1" : "k2", icon: one ? "user" : "repeat", label: one ? "신규 업체 사용률" : "재사용률", state: verified ? "ok" : "review", pill: "데이터 확인 필요", vtext: "데이터 확인 필요", value: verified ? api.pc(d.value) : "",
-      def: one ? "실제 MOU 협약일부터 1년 · 신규 업체 중 L3 활동이 발생한 업체 비율" : "기존·신규 업체 전체 · 첫 L3 이후 다른 아파트 현장에서 L3 활동이 다시 발생한 업체 비율",
+      def: one ? "실제 MOU 협약일 기준 신규 업체 중 협약 후 1년 이내 L3를 이용한 비율 · 협약일 없는 업체는 미확인으로 분리, 관측 1년 미만은 '관측 중'" : "기존·신규 업체 전체 · 기간 내 관측된 첫 L3 이후 같은 시공사가 다른 아파트에서 다시 L3를 이용한 비율(기간 내 관측 재사용률) · 같은 아파트 반복 문의 제외",
+      dates: one ? ["협약일", "L3 활동일"] : ["L3 활동일"],
       yoy: "—", trend: '<span class="du-dash">추이 — 확인 후 표시</span>', refs: rf, refHead: "참고(정의 다름)",
-      note: verified ? esc(d.basis || "") : (one ? "협약일(고객관리카드)과 업체별 L3 이력이 운영 시트·공개 집계에 아직 반영되지 않아 계산하지 않았습니다." : "업체·아파트 단위 L3 이력(현장 연결 확정 포함)이 운영 시트·공개 집계에 아직 반영되지 않아 계산하지 않았습니다."), to: one ? "mou" : "l3" };
+      note: verified ? esc(d.basis || "") : (one ? "분석 기간(2025.06.24~) 협약 업체와 업체별 L3 이력이 공개 집계에 아직 반영되지 않아 계산하지 않았습니다." : "분석 기간 내 업체·아파트 단위 L3 이력(현장 연결 확정 포함)이 공개 집계에 아직 반영되지 않아 계산하지 않았습니다."), to: one ? "mou" : "l3" };
   }
   function render(api) {
     A = api; var ys = api.years(); if (!ys.length) return "";
@@ -133,6 +146,7 @@
     if (!okL) yoy3 = "—"; else if (isNum(pv) && isNum(pn) && pn >= MIN_SAMPLE) { var dd = (L["값"] - pv) * 100; yoy3 = (dd >= 0 ? "▲ +" : "▼ −") + Math.abs(dd).toFixed(1) + "%p"; } else yoy3 = '<span class="du-dash">비교 불가</span><span class="s">' + esc(prev || "전년") + "년 표본 " + (isNum(pn) ? api.num(pn) + "건" : "—") + "</span>";
     var rate = ys.map(function (y) { var n = api.kpiVal(y, "L2건수_유효"), v = api.kpiVal(y, "L2L3전환율_공식"); return isNum(v) && isNum(n) && n >= MIN_SAMPLE ? v : null; });
     var h = '<div class="du">';
+    h += '<section class="du-period" aria-label="분석 기간"><div class="pm"><span class="pi">' + ic("doc") + '</span><b>분석 기간: 2025.06.24 ~ 현재</b><span class="pt">공식 분석 시작일</span></div><p><b>분석 기준일 안내</b> ' + esc(PERIOD_NOTE) + "</p></section>";
     h += '<header class="du-head"><div><h1>B2B 업무 성과 대시보드</h1><p>' + esc(ys[0]) + "~" + esc(last) + "년 · " + esc(last) + "년은 " + esc(asOf || "기준일") + "까지 누계(*) · 값이 없는 항목은 0 이 아니라 '—' 로 표시</p></div></header>";
     h += '<div class="du-kpis">' +
             kpiCard(kpi12Spec("kpi1", api)) +
@@ -145,19 +159,30 @@
     var seg = nm && ia != null && nb != null && tv != null && nm + ia + nb === tv ? [["정상", nm, "c1"], ["장기 무활동", ia, "c2"], ["이력 없음", nb, "c3"]] : null;
     var stack = seg ? '<div class="du-stack">' + seg.map(function (x) { return '<i class="' + x[2] + '" style="flex:' + x[1] + '" title="' + esc(x[0] + " " + api.num(x[1])) + '곳"></i>'; }).join("") + '</div><div class="du-lg">' + seg.map(function (x) { return '<span><i class="du-dot ' + x[2] + '"></i>' + esc(x[0]) + " <b>" + api.num(x[1]) + "</b></span>"; }).join("") + "</div>" : "";
     var won = api.won, l3sum = null; ["기술자문문의_건수", "컨설팅요청_건수", "공법설명회_건수", "기타문의_건수"].forEach(function (c) { if (isNum(kL[c])) l3sum = (l3sum || 0) + kL[c]; });
-    h += '<div class="du-t"><h2>현황 요약</h2><span>' + esc(last) + "년 " + esc(asOf) + " 누계 기준</span></div><div class=\"du-sum\">" +
-      '<section class="du-card"><header><h3>업체 현황</h3><button class="btn ghost du-go" data-kact="dgo" data-id="mou">자세히 →</button></header>' + stat("전체 협력사", tv, "B2B 마스터 기준", api.num, true) + stack + '<p class="s2">핵심 협력사 ' + esc(dv(core ? core["값"] : null, api.num).t) + "곳(임시 정의)</p></section>" +
-      '<section class="du-card"><header><h3>L2 · L3 활동 현황</h3><button class="btn ghost du-go" data-kact="dgo" data-id="l3">자세히 →</button></header><div class="du-pair"><div>' + stat("L2 영업보고", null, "데이터 연결 예정", null, true) + "</div><div>" + stat("L3 활동(시트 기준)", l3sum, "기술자문·컨설팅·설명회·기타", api.num, true) + '</div></div><p class="s2">기술자문 ' + esc(dv(kL["기술자문문의_건수"], api.num).t) + " · 컨설팅 " + esc(dv(kL["컨설팅요청_건수"], api.num).t) + " · 설명회 " + esc(dv(kL["공법설명회_건수"], api.num).t) + " · 기타 " + esc(dv(kL["기타문의_건수"], api.num).t) + "</p></section>" +
-      '<section class="du-card"><header><h3>공고 · 낙찰 현황</h3><button class="btn ghost du-go" data-kact="view" data-id="growth">자세히 →</button></header>' + stat("POUR 낙찰", kL["POUR낙찰_건수"], "공고 " + esc(dv(kL["POUR반영공고_건수"], api.num).t) + "건 · 낙찰금액 " + esc(dv(kL["POUR낙찰금액_VAT미확인"], won).t), function (v) { return api.num(v) + "건"; }, true) + mini(col("POUR낙찰_건수"), cats, { fmt: api.num }) + "</section>" +
-      '<section class="du-card"><header><h3>메인자재 매출</h3><button class="btn ghost du-go" data-kact="dgo" data-id="sales">자세히 →</button></header>' + stat("메인자재 순매출", kL["메인자재순매출"], "전체 " + esc(dv(kL["전체자재순매출"], won).t) + " · 비중 " + esc(dv(kL["메인비중"], api.pc).t), won, true) + mini(col("메인자재순매출"), cats, { fmt: won }) + "</section></div>";
+    h += '<div class="du-t"><h2>시공사별 영업·기술지원·성과 요약</h2><span>' + esc(last) + "년 " + esc(asOf) + " 누계(연도별 집계) · 2025.06.24 기준 합산은 집계 확장 후 표시</span></div><div class=\"du-sum\">" +
+      '<section class="du-card"><header><h3>업체 현황</h3><button class="btn ghost du-go" data-kact="dgo" data-id="mou">자세히 →</button></header><p class="df">기준 날짜: 협약일 · 활동일</p>' + stat("전체 협력사", tv, "B2B 마스터 기준", api.num, true) + stack + '<p class="s2">핵심 협력사 ' + esc(dv(core ? core["값"] : null, api.num).t) + "곳(임시 정의)</p></section>" +
+      '<section class="du-card"><header><h3>L2 · L3 활동 현황</h3><button class="btn ghost du-go" data-kact="dgo" data-id="l3">자세히 →</button></header><p class="df">기준 날짜: 활동일(접수·등록일)</p><div class="du-pair"><div>' + stat("L2 영업보고", null, "데이터 연결 예정", null, true) + "</div><div>" + stat("L3 활동(시트 기준)", l3sum, "기술자문·컨설팅·설명회·기타", api.num, true) + '</div></div><p class="s2">기술자문 ' + esc(dv(kL["기술자문문의_건수"], api.num).t) + " · 컨설팅 " + esc(dv(kL["컨설팅요청_건수"], api.num).t) + " · 설명회 " + esc(dv(kL["공법설명회_건수"], api.num).t) + " · 기타 " + esc(dv(kL["기타문의_건수"], api.num).t) + "</p></section>" +
+      '<section class="du-card"><header><h3>공고 · 낙찰 현황</h3><button class="btn ghost du-go" data-kact="view" data-id="growth">자세히 →</button></header><p class="df">기준 날짜: 공고일 (낙찰일 자료 없음)</p>' + stat("POUR 낙찰", kL["POUR낙찰_건수"], "공고 " + esc(dv(kL["POUR반영공고_건수"], api.num).t) + "건 · 낙찰금액 " + esc(dv(kL["POUR낙찰금액_VAT미확인"], won).t), function (v) { return api.num(v) + "건"; }, true) + mini(col("POUR낙찰_건수"), cats, { fmt: api.num }) + "</section>" +
+      '<section class="du-card"><header><h3>메인자재 매출</h3><button class="btn ghost du-go" data-kact="dgo" data-id="sales">자세히 →</button></header><p class="df">기준 날짜: 매출일(거래일)</p>' + stat("메인자재 순매출", kL["메인자재순매출"], "전체 " + esc(dv(kL["전체자재순매출"], won).t) + " · 비중 " + esc(dv(kL["메인비중"], api.pc).t), won, true) + mini(col("메인자재순매출"), cats, { fmt: won }) + "</section></div>";
 
-    /* 3) 추이·흐름·경로 */
-    var l2v = L2n && isNum(L2n["값"]) ? L2n["값"] : null, lcv = Lc && isNum(Lc["값"]) ? Lc["값"] : null, lrv = Lr && isNum(Lr["값"]) ? Lr["값"] : null;
-    h += '<div class="du-t"><h2>추이 · 흐름</h2><span>월별 값은 데이터 연결 후 표시됩니다</span></div><div class="du-flowrow">' +
-      '<section class="du-card wide"><header><h3>월별 활동 및 성과 추이</h3>' + pending() + "</header>" + ghostMonths(3) + '<div class="du-lg"><span><i class="du-dot c1"></i>L2 영업보고</span><span><i class="du-dot c2"></i>L3 활동</span><span><i class="du-dot c3"></i>낙찰·매출</span></div><div class="du-empty"><b>월별 데이터가 아직 연결되지 않았습니다</b><span>연결되면 월별 L2·L3 활동과 성과 추이가 이 자리에 표시됩니다. 임의 수치는 넣지 않습니다.</span></div></section>' +
-      '<section class="du-card"><header><h3>L3 도달 경로</h3>' + pill("rev", "검증 필요") + '</header><div class="du-flow"><div class="n"><span>L2 경유 L3</span><b>—</b></div><i class="ar">+</i><div class="n"><span>L3 직접 진입</span><b>—</b></div></div><div class="du-rate"><span>합산 L3 도달률</span><b class="rv">검증 필요</b></div><p class="s2">L2 경유와 L3 직접 진입은 구분해 보관하고, 메인 화면에서는 합산합니다. 영업보고(L2) 원천이 반영되면 구분 값이 채워집니다.</p>' + (okL ? '<p class="s2">참고: 기존 L2→L3 전환률 <b>' + esc(api.pc(L["값"])) + "</b> (" + esc(dv(lcv, api.num).t) + " ÷ " + esc(dv(l2v, api.num).t) + ") — 구 정의</p>" : "") + "</section></div>";
-    h += '<div class="du-routes"><div class="du-rt-h"><h3>경로별 결과 비교</h3><span>L2 없이 L3에 진입한 경로도 포함 · L2→L4(L3 미경험)는 별도 추적</span></div>' +
-      [["L2 → L3", "영업보고 이후 L3로 이어진 경로", "포함"], ["L3 직접 진입", "영업보고 없이 L3에 바로 진입", "포함"], ["L2 없이 L3 → L4", "L3 직접 진입 후 L4(공고·낙찰)로", "포함"], ["L2 → L4", "L3를 거치지 않고 L4로 — 별도 추적", "별도"]].map(function (r) { return '<div class="du-rt' + (r[2] === "별도" ? " sep" : "") + '"><b>' + esc(r[0]) + "</b><span>" + esc(r[1]) + "</span><em>—</em>" + pill(r[2] === "별도" ? "part" : "wait", r[2] === "별도" ? "별도 추적 · 연결 예정" : "데이터 연결 예정") + "</div>"; }).join("") + "</div>";
+    /* 4) L2·L3·L4 경로 분석 */
+    var l2v = L2n && isNum(L2n["값"]) ? L2n["값"] : null, lcv = Lc && isNum(Lc["값"]) ? Lc["값"] : null;
+    var PD = null; if (ADAPTERS.paths) { try { PD = ADAPTERS.paths(api) || null; } catch (e) { PD = null; } }
+    h += '<div class="du-t"><h2>L2 · L3 · L4 경로 분석</h2><span>실제 날짜 순서와 업체·현장 연결이 확인된 기록만 확정 집계 · 불명확한 연결은 검토 대상으로 분리</span></div>';
+    h += '<div class="du-paths">' + PATHS.map(function (p) {
+      var x = PD && PD[p.id] || null, ok = !!(x && x.verify === "ok"), cell = function (v) { return ok && isNum(v) ? api.num(v) : "—"; };
+      var st = ok ? pill("ok", "확인 완료") : x ? pill("rev", "검증 필요") : p.needL2 ? pill("wait", "영업보고 원천 대기") : pill("rev", "데이터 확인 필요");
+      return '<button class="du-path' + (p.needL2 ? " l2" : "") + (p.id === "p2" ? " sep" : "") + '" data-kact="dgo" data-id="' + (p.needL2 ? "l2" : "l3") + '"><div class="ph"><b>' + esc(p.n) + "</b>" + st + '</div><span class="pd">' + esc(p.d) + '</span><div class="pn"><span><em>업체</em><b>' + cell(x && x.vendors) + "</b></span><span><em>현장</em><b>" + cell(x && x.sites) + "</b></span><span><em>활동</em><b>" + cell(x && x.acts) + "</b></span></div></button>";
+    }).join("") + "</div>";
+    h += '<section class="du-card du-reach"><header><h3>L3 도달 경로 (L2 경유 + L3 직접 진입)</h3>' + pill("rev", "검증 필요") + '</header><div class="du-flow"><div class="n"><span>L2 경유 L3</span><b>—</b></div><i class="ar">+</i><div class="n"><span>L3 직접 진입</span><b>—</b></div></div><p class="s2">두 경로는 각각 구분해 보관하고 메인에는 합산만 표시합니다. 개별 건수와 비율은 L3 자료 화면에서 확인합니다. ' + (okL ? "참고: 기존 L2→L3 전환률 " + esc(api.pc(L["값"])) + " (" + esc(dv(lcv, api.num).t) + " ÷ " + esc(dv(l2v, api.num).t) + ", 구 정의)" : "") + "</p>" + go("l3", "L3 자료 화면") + "</section>";
+
+    /* 5) 월별 활동 추이 */
+    h += '<div class="du-t"><h2>월별 활동 추이</h2><span>월 기준은 각 지표의 날짜 필드(활동일·공고일·매출일)를 따릅니다</span></div><section class="du-card wide"><header><h3>월별 활동 및 성과 추이</h3>' + pending() + "</header>" + ghostMonths(3) + '<div class="du-lg"><span><i class="du-dot c1"></i>L2 영업보고</span><span><i class="du-dot c2"></i>L3 활동</span><span><i class="du-dot c3"></i>공고·낙찰</span></div><div class="du-empty"><b>월별 데이터가 아직 연결되지 않았습니다</b><span>연결되면 2025.06부터 월별 L2·L3·L4 추이가 이 자리에 표시됩니다. 임의 수치는 넣지 않습니다.</span></div></section>';
+
+    /* 6) 업체별 상세 분석 · 관리 대상 */
+    var iaV = inact && isNum(inact["값"]) ? inact["값"] : null, nbV = none && isNum(none["값"]) ? none["값"] : null, coreIn = api.leading("핵심 협력사 중 장기 무활동"), coreInV = coreIn && isNum(coreIn["값"]) ? coreIn["값"] : null;
+    h += '<div class="du-t"><h2>업체별 상세 분석 · 관리 대상</h2><span>시공사 한 곳을 선택하면 이력을 시간순으로 봅니다(상세 보기)</span></div><div class="du-mgmt"><section class="du-card"><header><h3>관리 대상 업체</h3><button class="btn ghost du-go" data-kact="dgo" data-id="act">관리 이력 →</button></header><div class="du-pair"><div>' + stat("장기 무활동(90일+)", iaV, "마지막 영업활동 기준", api.num, true) + "</div><div>" + stat("활동 이력 없음", nbV, "2025.06.24 이후 기록 기준", api.num, true) + '</div></div><p class="s2">핵심 협력사 중 장기 무활동 ' + esc(dv(coreInV, api.num).t) + "곳(핵심 협력사 정의는 임시)</p></section>" +
+      '<section class="du-card"><header><h3>시공사별 상세 이력</h3>' + pill("part", "상세 보기(로그인)") + "</header><p class=\"s2\">시공사를 검색하면 협약일 · 영업보고(L2) · 기술지원(L3) · 현장별 재사용 · 공고·낙찰(L4) · 자재 구매를 시간순으로 확인합니다. 업체 단위 정보는 공개 화면에 싣지 않고 로그인 상세 보기에서만 보입니다.</p>" + '<button class="btn ghost du-go" data-kact="view" data-id="growth">성장 분석에서 시공사 검색 →</button></section></div>';
 
     /* 4) 추가 데이터 5종 */
     h += '<div class="du-t"><h2>추가 데이터</h2><span>화면에서 바로 확인하거나 상세 분석으로 이동합니다</span></div><div class="du-data">' +
