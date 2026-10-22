@@ -7,7 +7,7 @@
    ============================================================ */
 (function () {
   var S = window.B2BSheet;
-  var V = { view: "growth", year: "2026", q: "", page: {}, per: 50, awardYear: "all", awardTrade: "all", ledgerYear: "all", ledgerKind: "all", ledgerMain: "all", vendor: null, inactFilter: "all", actYear: "2026", linkMsg: null, ledgerState: "idle", detail: null, draft: null, integrity: null, integrityBadOnly: false };
+  var V = { view: "dash", year: "2026", q: "", page: {}, per: 50, awardYear: "all", awardTrade: "all", ledgerYear: "all", ledgerKind: "all", ledgerMain: "all", vendor: null, inactFilter: "all", actYear: "2026", linkMsg: null, ledgerState: "idle", detail: null, draft: null, integrity: null, integrityBadOnly: false };
   var repaintRef = null; var ledgerRows = null; var OC = {};
   var MAIN_UNVERIFIED = { "2022": 1, "2023": 1 };
   var INTERNAL = /테스트|포어솔루션|넷폼/;
@@ -94,7 +94,7 @@
     else { cls = "fallback"; label = "공개 집계를 불러오지 못함"; }
     var sub = isPub() ? "기준일 " + esc(meta.asOf || "") + " · 서버 집계 " + esc(hhmm(meta.generatedAt)) + " · 시트 변경 감지 " + esc(hhmm(meta.sourceModified)) + " · 다음 확인 " + hms(sy.nextAt) + " (" + ivText(sy.interval) + "마다 자동)" : (sy.status === "syncing" ? progHtml() : esc(sy.message || ""));
     var h = '<div class="ks-bar"><span class="ks-src ' + cls + '"><span class="dot"></span>' + esc(label) + '</span><span class="mini">' + sub + '</span><span class="sp"></span><button class="btn ghost" data-kact="refresh"' + (st.loading ? " disabled" : "") + ">" + (st.loading ? "확인 중…" : "지금 확인") + '</button><button class="btn ghost" data-kact="view" data-id="link">상세 보기(로그인)</button>' + (isPub() ? '<button class="btn ghost" data-kact="integrity">검증 정보</button>' : "") + "</div>";
-    h += '<div class="ks-note"><b>공개 보기</b> — 로그인 없이 누구나 볼 수 있는 <b>집계값</b>입니다. 시공사·현장·거래 명세와 판매 원문은 포함하지 않으며(비공개), 시트를 공유받은 직원은 [상세 보기(로그인)]에서 기존처럼 근거 목록을 열람합니다. 2022~2025년은 확정 실적 · 2026년은 기준일까지 누계 · 시트가 바뀌면 서버가 자동으로 다시 집계합니다.</div>';
+    if (V.view !== "dash") h += '<div class="ks-note"><b>공개 보기</b> — 로그인 없이 누구나 볼 수 있는 <b>집계값</b>입니다. 시공사·현장·거래 명세와 판매 원문은 포함하지 않으며(비공개), 시트를 공유받은 직원은 [상세 보기(로그인)]에서 기존처럼 근거 목록을 열람합니다. 2022~2025년은 확정 실적 · 2026년은 기준일까지 누계 · 시트가 바뀌면 서버가 자동으로 다시 집계합니다.</div>';
     if (isPub() && sy.stale) h += '<div class="ks-warn stale"><b>이전 데이터입니다.</b> ' + esc(sy.message) + (p.checkedAt ? " 마지막 정상 확인: " + hhmm(p.checkedAt) : "") + '<div class="ks-tools" style="margin:8px 0 0"><button class="btn" data-kact="refresh">다시 시도</button></div></div>';
     return h;
   }
@@ -144,7 +144,7 @@
       (needBtn ? '<button class="btn" data-kact="gsignin">' + (signedBefore ? "로그인 상태 재확인" : "Google 로그인으로 연결") + "</button>" : "") +
       '<button class="btn ghost" data-kact="refresh"' + (st.loading ? " disabled" : "") + ">" + (st.loading ? "동기화 중…" : "지금 동기화") + '</button>' + (st.loading ? '<button class="btn ghost" data-kact="cancelsync">취소</button>' : "") + '<button class="btn ghost" data-kact="view" data-id="link">연결 설정</button><button class="btn ghost" data-kact="vmode" data-id="public">공개 보기</button><button class="btn ghost" data-kact="integrity">정합성 점검</button>' +
       ((st.signedIn || (live && m.auth === "google")) ? '<button class="btn ghost" data-kact="gsignout">로그아웃</button>' : "") + "</div>";
-    h += '<div class="ks-note">2022~2025년은 확정 과거 실적(변경은 승인 정정만) · 2026년은 지속 갱신(기준일 ' + esc(em.asOf || "2026-10-20") + ') · 공식 L2→L3 전환율은 검증된 확정 건만, 검토 건은 별도 표시 · <b>모든 지표 카드를 클릭하면 근거 목록이 열립니다</b></div>';
+    if (V.view !== "dash") h += '<div class="ks-note">2022~2025년은 확정 과거 실적(변경은 승인 정정만) · 2026년은 지속 갱신(기준일 ' + esc(em.asOf || "2026-10-20") + ') · 공식 L2→L3 전환율은 검증된 확정 건만, 검토 건은 별도 표시 · <b>모든 지표 카드를 클릭하면 근거 목록이 열립니다</b></div>';
     if (live && sy.stale) h += '<div class="ks-warn stale"><b>이전 데이터입니다.</b> ' + esc(sy.message) + " 마지막 정상 동기화: " + hhmm(sy.lastOkAt) + '<div class="ks-tools" style="margin:8px 0 0"><button class="btn" data-kact="refresh">다시 시도</button><button class="btn ghost" data-kact="diag">연결 진단</button></div></div>';
     else if (st.needSignIn && !live) h += '<div class="ks-warn" style="color:#92400E;background:#FFF4E5;border-color:#F5D9A8"><b>' + (signedBefore ? "로그인 상태를 재확인해야 합니다." : "Google 로그인이 필요합니다.") + "</b> " + (signedBefore ? "[로그인 상태 재확인]을 한 번 누르면 이어서 자동으로 불러옵니다(팝업을 허용해 두면 다음부터는 열 때 자동 재확인). " : "시트를 공유받은 직원 계정으로 로그인하면 실제 데이터가 표시됩니다. ") + esc(sy.message || "") + "</div>";
     else if ((sy.status === "denied" || sy.status === "signedout") && !live) h += '<div class="ks-warn"><b>' + (sy.status === "denied" ? "접근이 거부되었습니다." : "로그아웃되었습니다.") + "</b> " + esc(sy.message) + "</div>";
@@ -164,7 +164,11 @@
     h += table("schema", [{ k: "탭" }, { k: "행수", l: "행 수", r: 1, fmt: num }, { k: "상태", raw: 1, f: function (o) { return '<span class="st ' + (o.상태 === "정상" ? "ok" : o.상태 === "원문(필요 시 조회)" ? "" : "bad") + '">' + esc(o.상태) + "</span>"; }, csv: function (o) { return o.상태; } }, { k: "비고", wrap: 1 }], exp.map(function (n) { var inMeta = live && m.tabs && m.tabs[n]; var t = live ? (st.tabs && st.tabs[n]) : null; return { 탭: n, 행수: live ? (n === S.LEDGER ? (sy.ledgerCount != null ? sy.ledgerCount : null) : (t ? t.rows.length : null)) : null, 상태: !live ? "—" : n === S.LEDGER ? (iss.missingTabs.indexOf(n) >= 0 ? "누락" : badMap[n] ? "구조 변경" : "원문(필요 시 조회)") : iss.missingTabs.indexOf(n) >= 0 ? "누락" : badMap[n] ? "구조 변경" : inMeta ? "정상" : "—", 비고: badMap[n] ? "누락 열: " + badMap[n].missing.join(", ") : iss.missingTabs.indexOf(n) >= 0 ? "시트에 탭이 없습니다 — 0으로 표시하지 않음" : "" }; }), { per: 30 });
     return h + "</div>" + diagCard();
   }
-  function nav() { var items = pubWanted() ? [["growth", "성장 분석"], ["home", "요약"], ["link", "상세 보기(로그인)"]] : [["growth", "성장 분석"], ["home", "요약"], ["sales", "매출·원문"], ["awards", "낙찰"], ["vendors", "시공사"], ["activity", "영업활동"], ["leading", "선행지표"], ["link", "연결 설정"]]; return '<div class="ks-nav">' + items.map(function (x) { return '<button data-kact="view" data-id="' + x[0] + '"' + (V.view === x[0] ? ' aria-current="true"' : "") + ">" + x[1] + "</button>"; }).join("") + "</div>"; }
+
+  /* 대시보드·데이터 화면은 dashboard-ui.js(window.B2BDashUI)가 그린다 — 이 파일은 데이터 읽기 도구(API)만 넘긴다 */
+  function dash() { var U = window.B2BDashUI; return U ? U.render(API) : '<div class="card"><div class="ks-warn">대시보드 모듈을 불러오지 못했습니다.</div></div>'; }
+  function dataView() { var U = window.B2BDashUI; return U ? U.renderData(API) : '<div class="card"><div class="ks-warn">데이터 화면 모듈을 불러오지 못했습니다.</div></div>'; }
+  function nav() { var items = pubWanted() ? [["dash", "대시보드"], ["growth", "성장 분석"], ["data", "데이터"], ["link", "상세 보기(로그인)"]] : [["dash", "대시보드"], ["growth", "성장 분석"], ["data", "데이터"], ["home", "요약(근거 목록)"], ["sales", "매출·원문"], ["awards", "낙찰"], ["vendors", "시공사"], ["activity", "영업활동"], ["leading", "선행지표"], ["link", "연결 설정"]]; return '<div class="ks-nav">' + items.map(function (x) { return '<button data-kact="view" data-id="' + x[0] + '"' + (V.view === x[0] ? ' aria-current="true"' : "") + ">" + x[1] + "</button>"; }).join("") + "</div>"; }
   function yearChips(cur, act) { return '<div class="ks-chips">' + years().map(function (y) { return '<button data-kact="' + act + '" data-id="' + y + '"' + (cur === y ? ' aria-current="true"' : "") + ">" + y + (y === "2026" ? " (~10/20)" : "") + "</button>"; }).join("") + "</div>"; }
 
   /* ---------- 팀장 핵심 지표 6 (최신 연도 · 전년 동일기간 대비, 1.통합KPI 탭 값만 사용) ---------- */
@@ -467,21 +471,22 @@
     if (!S.state.ready) return '<div class="kp ks"><div class="card"><div class="loading">' + (S.state.decodeError ? "데이터를 열 수 없습니다: " + esc(S.state.decodeError) : "저장된 데이터 여는 중…") + "</div></div></div>";
     var ready = has("1.통합KPI");
     if (!ready && V.view !== "link") { V.detail = null; V.integrity = null; return '<div class="kp ks">' + statusBar() + nav() + (pubWanted() ? pubWaiting() : waiting()) + "</div>"; }
-    if (isPub() && !/^(growth|home|link)$/.test(V.view)) V.view = "growth";
-    var body = V.view === "growth" ? growthBody() : V.view === "home" ? home() : V.view === "sales" ? sales() : V.view === "awards" ? awards() : V.view === "vendors" ? vendors() : V.view === "activity" ? activity() : V.view === "leading" ? leadingView() : link();
-    return '<div class="kp ks">' + statusBar() + nav() + body + detailModal() + integrityModal() + "</div>";
+    if (isPub() && !/^(dash|growth|data|link)$/.test(V.view)) V.view = "dash";
+    var body = V.view === "dash" ? dash() : V.view === "data" ? dataView() : V.view === "growth" ? growthBody() : V.view === "home" ? home() : V.view === "sales" ? sales() : V.view === "awards" ? awards() : V.view === "vendors" ? vendors() : V.view === "activity" ? activity() : V.view === "leading" ? leadingView() : link();
+    return '<div class="kp ks' + (V.view === "dash" ? ' is-dash' : '') + '">' + statusBar() + nav() + body + detailModal() + integrityModal() + "</div>";
   }
   /* 성장 분석 모듈(growth-page.js)에 넘기는 공용 도구 */
-  var API = { S: S, V: V, esc: esc, won: won, num: num, hhmm: hhmm, has: has, objs: objs, csv: csv, ledger: function () { return ledgerRows; }, needLedger: needLedger, repaint: function (soft) { if (repaintRef) repaintRef(!!soft); }, goOldVendor: function (id, name) { goVendor(id, name); }, setView: function (v) { V.view = v; if (repaintRef) repaintRef(false); } };
+  var API = { years: years, kpiRow: kpiRow, kpiVal: kpiVal, leading: leading, pc: pc, isNum: isNum, S: S, V: V, esc: esc, won: won, num: num, hhmm: hhmm, has: has, objs: objs, csv: csv, ledger: function () { return ledgerRows; }, needLedger: needLedger, repaint: function (soft) { if (repaintRef) repaintRef(!!soft); }, goOldVendor: function (id, name) { goVendor(id, name); }, setView: function (v) { V.view = v; if (repaintRef) repaintRef(false); } };
   function growthBody() { var GV = window.B2BGrowthView; if (!GV || !window.B2BGrowth) return '<div class="card"><div class="ks-warn">성장 분석 모듈을 불러오지 못했습니다.</div></div>'; return GV.render(API); }
   function goVendor(id, name) { V.detail = null; V.view = "vendors"; V.page = {}; if (id) { V.vendor = id; V.q = ""; } else { V.vendor = null; V.q = name || ""; } }
   function after(repaint) {
     repaintRef = repaint; var root = document.querySelector(".ks"); if (!root) return;
     root.addEventListener("keydown", function (e) { var a = e.target.getAttribute("data-kact"); var GVk = window.B2BGrowthView; if (GVk && GVk.key && GVk.key(a, e, API)) return; if (a === "q" && e.key === "Enter") { V.q = e.target.value.trim(); V.page = {}; repaint(true); } if (a === "dq" && e.key === "Enter") { V.detail.q = e.target.value.trim(); V.page["detail"] = 0; repaint(true); } if (a === "detail" && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openDetail(e.target.getAttribute("data-id")); repaint(true); } if (e.key === "Escape" && (V.detail || V.integrity)) { V.detail = null; V.integrity = null; repaint(true); } });
     root.addEventListener("input", function (e) { var GVi = window.B2BGrowthView; if (GVi && GVi.input && GVi.input(e.target.getAttribute("data-kact"), e, API)) return; if (/^ks-(ep|key|sid|cid)$/.test(e.target.id)) { V.draft = Object.assign({}, S.settings() || {}, V.draft || {}); V.draft.mode = V.draft.mode || (S.settings() || {}).mode || "google"; var g = function (id) { var el = document.getElementById(id); return el ? el.value : (V.draft[id === "ks-ep" ? "endpoint" : id === "ks-key" ? "key" : id === "ks-sid" ? "sheetId" : "clientId"] || ""); }; V.draft.endpoint = g("ks-ep"); V.draft.key = g("ks-key"); V.draft.sheetId = g("ks-sid"); V.draft.clientId = g("ks-cid"); return; } var a = e.target.getAttribute("data-kact"); if (a === "q" && !e.target.value) { V.q = ""; V.page = {}; repaint(true); } if (a === "dq" && !e.target.value) { V.detail.q = ""; repaint(true); } });
-    root.addEventListener("change", function (e) { var a = e.target.getAttribute("data-kact"); if (!a) return; var GVc = window.B2BGrowthView; if (GVc && GVc.change && GVc.change(a, e.target, API)) return; if (a === "lyear") V.ledgerYear = e.target.value; if (a === "lkind") V.ledgerKind = e.target.value; if (a === "lmain") V.ledgerMain = e.target.value; if (a === "atrade") V.awardTrade = e.target.value; if (/^(lyear|lkind|lmain|atrade)$/.test(a)) { V.page = {}; repaint(true); } });
+    root.addEventListener("change", function (e) { var a = e.target.getAttribute("data-kact"); if (!a) return; var DUc = window.B2BDashUI; if (DUc && DUc.change && DUc.change(a, e.target, API)) return; var GVc = window.B2BGrowthView; if (GVc && GVc.change && GVc.change(a, e.target, API)) return; if (a === "lyear") V.ledgerYear = e.target.value; if (a === "lkind") V.ledgerKind = e.target.value; if (a === "lmain") V.ledgerMain = e.target.value; if (a === "atrade") V.awardTrade = e.target.value; if (/^(lyear|lkind|lmain|atrade)$/.test(a)) { V.page = {}; repaint(true); } });
     root.addEventListener("click", function (e) {
       var el = e.target.closest("[data-kact]"); if (!el) return; var a = el.getAttribute("data-kact"), id = el.getAttribute("data-id");
+      var DUh = window.B2BDashUI; if (DUh && DUh.handle && DUh.handle(a, el, id, API, e)) return;
       var GVh = window.B2BGrowthView; if (GVh && GVh.handle && GVh.handle(a, el, id, API, e)) return;
       if (a === "q" || a === "dq") return;
       if (a === "dclose-bg") { if (e.target === el) { V.detail = null; repaint(true); } return; }
