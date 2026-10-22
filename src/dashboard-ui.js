@@ -77,14 +77,14 @@
   /* ---------- 메인 대시보드 ---------- */
   function kpiCard(o) {
     var st = o.state || (o.ok ? "ok" : "wait"), okv = st === "ok", rv = st === "review";
-    var pillT = okv ? "연결됨" : rv ? "검증 필요" : "데이터 연결 예정", pillC = okv ? "ok" : rv ? "rev" : "wait";
+    var pillT = okv ? "연결됨" : rv ? (o.pill || "검증 필요") : "데이터 연결 예정", pillC = okv ? "ok" : rv ? "rev" : "wait";
     return '<article class="du-kpi ' + o.cls + (okv ? "" : " pend") + (rv ? " rev" : "") + '"><div class="top"><span class="ic">' + ic(o.icon) + "</span><h3>" + esc(o.label) + '</h3><span class="du-pill ' + pillC + '">' + esc(pillT) + "</span></div>" +
-      '<div class="val' + (okv ? "" : rv ? " rv" : " na") + '">' + (okv ? esc(o.value) : rv ? "검증 필요" : "—") + "</div>" +
+      '<div class="val' + (okv ? "" : rv ? " rv" : " na") + '">' + (okv ? esc(o.value) : rv ? esc(o.vtext || "검증 필요") : "—") + "</div>" +
       '<p class="def">' + esc(o.def) + "</p>" +
       (o.parts ? '<div class="parts">' + o.parts.map(function (p) { return '<span><em>' + esc(p[0]) + "</em><b>" + esc(p[1]) + "</b></span>"; }).join("") + "</div>" : "") +
       '<div class="yoy"><span class="l">전년 대비</span><span class="v">' + o.yoy + "</span></div>" +
       '<div class="trend"><span class="l">추이</span>' + o.trend + "</div>" +
-      (o.refs ? '<div class="refs"><span class="rh">참고값(보존)</span>' + o.refs.map(function (r) { return '<div class="r"><span>' + esc(r.label) + "</span><b>" + esc(r.value) + "</b>" + (r.calc ? "<small>" + esc(r.calc) + "</small>" : "") + "</div>"; }).join("") + "</div>" : "") +
+      (o.refs ? '<div class="refs"><span class="rh">' + esc(o.refHead || "참고값(보존)") + '</span>' + o.refs.map(function (r) { return '<div class="r"><span>' + esc(r.label) + "</span><b>" + esc(r.value) + "</b>" + (r.calc ? "<small>" + esc(r.calc) + "</small>" : "") + "</div>"; }).join("") + "</div>" : "") +
       (o.note ? '<p class="kn">' + o.note + "</p>" : "") +
       '<div class="foot">' + go(o.to, "상세 보기") + "</div></article>";
   }
@@ -109,6 +109,18 @@
       parts: [["L2 경유 L3", pv(R.via)], ["L3 직접 진입", pv(R.direct)]], yoy: '<span class="du-dash">검증 필요</span>', trend: '<span class="du-dash">추이 — 검증 후 표시</span>', refs: rf,
       note: verified ? esc(d.basis || "") : "분모 기준이 확정되지 않았거나 데이터가 부족해 비율을 계산하지 않았습니다. 기존 9.56%·24.9%는 정의가 달라 참고값으로만 보존합니다.", to: "l3" };
   }
+  /* KPI ①②: 신규 업체 사용률 · 재사용률. 운영 시트(25탭)·공개 집계(1.통합KPI, 18.선행지표요약)에는 계산값이 없어 '데이터 확인 필요'로 표시한다.
+     연결: B2BDashUI.connect("kpi1" | "kpi2", function (api) { return { status: "verified", value: 0.123, basis: "분자·분모 설명", asOf: "YYYY-MM-DD" }; }) — verified + 숫자일 때만 비율 표시 */
+  function kpi12Spec(id, api) {
+    var d = null; if (ADAPTERS[id]) { try { d = ADAPTERS[id](api) || null; } catch (e) { d = null; } }
+    var verified = !!(d && d.status === "verified" && isNum(d.value)), one = id === "kpi1";
+    var act = api.leading("신규 협력사 활성화율(별도)"), rf = null;
+    if (one && act && isNum(act["값"])) rf = [{ label: "신규 협력사 활성화율(별도 지표)", value: api.pc(act["값"]), calc: String(act["비고"] || "") + " · 플랫폼 가입 기준·L2 이상 활동 — 신규 업체 사용률(협약일 1년·L3)과 정의가 달라 참고용" }];
+    return { cls: one ? "k1" : "k2", icon: one ? "user" : "repeat", label: one ? "신규 업체 사용률" : "재사용률", state: verified ? "ok" : "review", pill: "데이터 확인 필요", vtext: "데이터 확인 필요", value: verified ? api.pc(d.value) : "",
+      def: one ? "실제 MOU 협약일부터 1년 · 신규 업체 중 L3 활동이 발생한 업체 비율" : "기존·신규 업체 전체 · 첫 L3 이후 다른 아파트 현장에서 L3 활동이 다시 발생한 업체 비율",
+      yoy: "—", trend: '<span class="du-dash">추이 — 확인 후 표시</span>', refs: rf, refHead: "참고(정의 다름)",
+      note: verified ? esc(d.basis || "") : (one ? "협약일(고객관리카드)과 업체별 L3 이력이 운영 시트·공개 집계에 아직 반영되지 않아 계산하지 않았습니다." : "업체·아파트 단위 L3 이력(현장 연결 확정 포함)이 운영 시트·공개 집계에 아직 반영되지 않아 계산하지 않았습니다."), to: one ? "mou" : "l3" };
+  }
   function render(api) {
     A = api; var ys = api.years(); if (!ys.length) return "";
     var last = ys[ys.length - 1], prev = ys[ys.length - 2], kL = api.kpiRow(last) || {}, asOf = String(kL["기준"] || "").replace(/^~/, "");
@@ -123,8 +135,8 @@
     var h = '<div class="du">';
     h += '<header class="du-head"><div><h1>B2B 업무 성과 대시보드</h1><p>' + esc(ys[0]) + "~" + esc(last) + "년 · " + esc(last) + "년은 " + esc(asOf || "기준일") + "까지 누계(*) · 값이 없는 항목은 0 이 아니라 '—' 로 표시</p></div></header>";
     h += '<div class="du-kpis">' +
-      kpiCard({ cls: "k1", icon: "user", label: "신규 업체 사용률", ok: false, def: "실제 MOU 협약일부터 1년 · 신규 업체 중 L3 활동이 발생한 업체 비율", yoy: "—", trend: '<span class="du-dash">추이 — 연결 예정</span>', note: "협약일 데이터 반영 후 표시됩니다", to: "mou" }) +
-      kpiCard({ cls: "k2", icon: "repeat", label: "재사용률", ok: false, def: "기존·신규 업체 전체 · 첫 L3 이후 다른 아파트 현장에서 L3 활동이 다시 발생한 업체 비율", yoy: "—", trend: '<span class="du-dash">추이 — 연결 예정</span>', note: "L3 이력 데이터 반영 후 표시됩니다", to: "l3" }) +
+            kpiCard(kpi12Spec("kpi1", api)) +
+            kpiCard(kpi12Spec("kpi2", api)) +
       kpiCard(kpi3Spec(api, L, Lc, L2n, okL)) + "</div>";
 
     /* 2) 현황 요약 4 */
