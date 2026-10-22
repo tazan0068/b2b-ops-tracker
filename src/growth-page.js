@@ -453,5 +453,5 @@
   }
   function change(a, t, api) { A = api; if (a === "gtrade") { Gs.trade = t.value; api.V.page.gaw = 0; rp(); return true; } return false; }
   function input(a, e, api) { A = api; if (a === "gdin") { Gs.draft = Gs.draft || {}; var id = e.target.id; if (id.indexOf("gd-l-") === 0) Gs.draft["l-" + id.slice(5)] = e.target.value; else if (id === "gd-end") Gs.draft.end = e.target.value; else if (id === "gd-basis") Gs.draft.basis = e.target.value; else if (id === "gd-fam") Gs.draft.fam = e.target.value; else if (id === "gd-why") Gs.draft.why = e.target.value; return true; } if (a === "gq" && !e.target.value && Gs.q) { Gs.q = ""; Gs.qres = null; rp(); return true; } return false; }
-  window.B2BGrowthView = { render: render, handle: handle, key: key, change: change, input: input, state: Gs, model: function () { return model; }, defs: defs };
+  window.B2BGrowthView = { render: render, handle: handle, key: key, change: change, input: input, state: Gs, model: function () { return model; }, modelFor: function (api) { A = api; return getModel(); }, defs: defs };
 })();

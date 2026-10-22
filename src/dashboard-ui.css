@@ -201,3 +201,36 @@
 .du-reach{margin-top:12px}
 .du-mgmt{display:grid;grid-template-columns:1fr;gap:12px}
 @media (min-width:900px){ .du-mgmt{grid-template-columns:repeat(2,minmax(0,1fr))} }
+
+/* 기간 필터 · 운영 모니터링 · 퍼널 · 선행지표 · 결과 KPI */
+.du-period .pf{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+.du-period .pf .pl{font-size:11px;font-weight:800;color:#3C4C6B}
+.du-period .pf button{border:1px solid #CFE0FB;background:#fff;color:#3C4C6B;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;min-height:32px}
+.du-period .pf button.on{background:#1F5FD1;color:#fff;border-color:#1F5FD1}.du-period .pf button:disabled{opacity:.5}
+.du-period .pf .ph{font-size:10.5px;color:#5B6B85;flex-basis:100%}
+.du-mcs{display:grid;grid-template-columns:1fr;gap:10px}
+@media (min-width:640px){ .du-mcs{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (min-width:1100px){ .du-mcs{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px} }
+.du-mc{background:#fff;border:1px solid var(--du-line);border-radius:14px;padding:12px 14px;text-align:left;display:flex;flex-direction:column;gap:6px;cursor:pointer;font:inherit;color:inherit;min-height:44px}
+.du-mc:hover{border-color:#B7CBEB;box-shadow:0 2px 10px rgba(31,95,209,.08)}
+.du-mc .mh{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap}.du-mc .ml{font-size:13px;font-weight:800;color:var(--du-ink)}
+.du-mc .mv{font-size:24px;font-weight:900;letter-spacing:-.5px;color:var(--du-ink);line-height:1.2}.du-mc .mv.na{font-size:17px;color:#9A5B00}
+.du-mc .mb{margin:0;font-size:11.5px;line-height:1.5;color:var(--du-sub)}
+.du-mc .mt{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11px;color:var(--du-sub);border-top:1px solid #EEF2F7;padding-top:6px}.du-mc .mt em{font-style:normal;font-weight:800;margin-right:5px}
+.du-funnel .fns{display:grid;grid-template-columns:1fr;gap:6px;align-items:stretch}
+@media (min-width:900px){ .du-funnel .fns{grid-template-columns:1fr auto 1fr auto 1fr auto 1fr} }
+.du-funnel .fn{background:#F5F8FC;border:1px solid #E1E8F2;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.du-funnel .fn.na{background:#FBFCFE;border-style:dashed}
+.du-funnel .fl{font-size:12px;font-weight:800;color:var(--du-ink)}.du-funnel .fn b{font-size:20px;font-weight:900;color:var(--du-ink)}.du-funnel .fn.na b{color:#9AA8BC}.du-funnel .fn small{font-size:11px;color:var(--du-sub);line-height:1.45}
+.du-funnel .ar{align-self:center;justify-self:center;font-style:normal;color:#9AA8BC;font-weight:900;transform:rotate(90deg)}@media (min-width:900px){ .du-funnel .ar{transform:none} }
+.du-funnel .fsub{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:10px;font-size:12px;color:var(--du-sub)}.du-funnel .fsub em{font-style:normal;font-weight:800;margin-right:6px;color:var(--du-ink)}
+.du-leads{display:grid;grid-template-columns:1fr;gap:12px}@media (min-width:980px){ .du-leads{grid-template-columns:repeat(3,minmax(0,1fr))} }
+.du-card .s2.mut{color:#8A97AC;font-size:11.5px}
+.du-rtw{overflow-x:auto}
+.du-rt2{width:100%;border-collapse:collapse;font-size:12.5px}.du-rt2 th{text-align:left;font-size:11px;color:var(--du-sub);font-weight:800;padding:8px;border-bottom:1px solid var(--du-line);white-space:nowrap}.du-rt2 th small{display:block;font-weight:600;font-size:10px}
+.du-rt2 td{padding:9px 8px;border-bottom:1px solid #EEF2F7;vertical-align:top;line-height:1.45}.du-rt2 td.n{font-variant-numeric:tabular-nums;font-weight:800;white-space:nowrap}
+@media (max-width:640px){ .du-rt2,.du-rt2 tbody,.du-rt2 tr,.du-rt2 td{display:block;width:100%}.du-rt2 thead{display:none}.du-rt2 tr{border:1px solid var(--du-line);border-radius:12px;padding:8px 10px;margin-bottom:8px}.du-rt2 td{border:0;padding:3px 0}.du-rt2 td.n{white-space:normal}.du-rt2 td:nth-child(2)::before{content:"기준일 이후 · ";color:var(--du-sub);font-weight:600}.du-rt2 td:nth-child(3)::before{content:"연도별 · ";color:var(--du-sub);font-weight:600} }
+
+.du-mser{margin:6px 0 12px}.du-mser h4{margin:0 0 4px;font-size:12px;font-weight:800;color:var(--du-ink)}
+.du-mini[style*="--n:17"] .c span,.du-mini[style*="--n:16"] .c span{font-size:9px}
+.du-mg{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.du-mg span{background:#F5F8FC;border:1px solid #E6ECF4;border-radius:9px;padding:5px 9px;font-weight:900;font-size:15px;display:flex;flex-direction:column}.du-mg em{font-style:normal;font-size:10px;font-weight:700;color:var(--du-sub)}
