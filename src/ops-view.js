@@ -60,7 +60,7 @@
         "<td data-l=\"기술지원(L3)\">" + (r.l3n ? esc(r.l3n + "건 · 현장 " + r.sites + "곳") + '<span class="op-sub">' + esc(r.types.join(" · ")) + "</span>" : '<span class="op-mut">기간 내 없음</span>') + (r.preN ? '<span class="op-sub">기준일 이전 ' + r.preN + "건 보존</span>" : "") + "</td>" +
         "<td data-l=\"공법 활동\">" + (r.trades.length ? esc(r.trades.slice(0, 2).join(" · ")) + (r.trades.length > 2 ? ' <span class="op-sub">외 ' + (r.trades.length - 2) + "</span>" : "") : '<span class="op-mut">' + (r.l3n ? "공법 미분류" : "—") + "</span>") + "</td>" +
         "<td data-l=\"낙찰\">" + (r.awardN ? esc(r.awardN + "건 · " + won(r.awardAmt)) + '<span class="op-sub">' + esc(r.awardLast) + "</span>" : '<span class="op-mut">기간 내 없음</span>') + "</td>" +
-        "<td data-l=\"구매 · 메인자재\">" + buyChip(r) + '<span class="op-sub">메인자재 ' + (r.mainBuy === "Y" ? "구매 확인" : r.mainBuy === "N" ? "구매 없음" : "미확인") + "</span></td>" +
+        "<td data-l=\"구매 · 메인자재\">" + buyChip(r) + '<span class="op-sub">메인자재 ' + (r.mainBuy === "Y" ? "구매 확인" : "구매 미확인") + "</span></td>" +
         "<td data-l=\"관리 상태\">" + statusChip(r) + "</td>" +
         "<td data-l=\"관리 사유\">" + (rs.length ? rs.map(function (x) { return chip(x.kind || "warn", x.label); }).join(" ") + (nx.length ? '<span class="op-sub">' + esc(nx[0]) + "</span>" : "") : '<span class="op-mut">—</span>') + "</td>" +
         "<td class=\"op-act\"><button class=\"btn ghost\" data-kact=\"ovend\" data-id=\"" + esc(r.id) + "\">상세 이력</button></td></tr>";
@@ -83,7 +83,7 @@
     h += '<div class="op-sum">' + [["관리 시공사", S.managed], ["활성(최근 90일 내 활동)", S.active], ["장기 무활동", S.dormant], ["기간 내 L3 활동 시공사", S.l3Vendors], ["경로 확인 필요", S.pathUnknown], ["기간 내 낙찰 시공사", S.awardVendors], ["낙찰 후 구매 미확인", S.buyMissing]].map(function (x) { return '<div class="op-k"><span>' + esc(x[0]) + "</span><b>" + esc(isNum(x[1]) ? x[1].toLocaleString("ko-KR") : "—") + "</b></div>"; }).join("") + "</div>";
     h += '<div class="op-note"><b>읽는 법</b> L3 활동 시공사·진입 유형은 운영 시트에 있는 플랫폼 기록 기준(잔디 기록 미포함)이라 하한값입니다. 영업보고(L2) 원천이 연결되기 전에는 L3 시공사를 ' + chip("warn", "경로 확인 필요") + '로만 분류하며 직접진입 확정은 ' + S.direct + "곳입니다. 협약일 미확인 " + S.mouNone + "곳은 신규·기존을 판정하지 않았습니다. 낙찰 후 구매는 연 단위 자재 순매출 기준 '연결 후보'(관찰 " + m.obsDays + "일)입니다.</div>";
     h += '<div class="op-filters"><input class="op-q" type="search" placeholder="시공사 이름·ID 검색" value="' + esc(St.q) + '" data-kact="oq">' + sel("scope", [["managed", "관리 시공사(" + S.managed + ")"], ["all", "협력사 외 포함"]], St.scope) + sel("stage", STAGES, St.stage) + sel("act", ACTS, St.act) + sel("path", [["all", "전체 경로"], ["unknown", "경로 확인 필요"], ["direct", "직접진입 확정"]], St.path) + sel("sort", SORTS, St.sort) +
-      '<button class="op-tg' + (St.nobuy ? " on" : "") + '" data-kact="onb" aria-pressed="' + St.nobuy + '">낙찰 후 미구매</button><button class="btn ghost" data-kact="ocsv">CSV 다운로드</button></div>';
+      '<button class="op-tg' + (St.nobuy ? " on" : "") + '" data-kact="onb" aria-pressed="' + St.nobuy + '">낙찰 후 구매 미확인</button><button class="btn ghost" data-kact="ocsv">CSV 다운로드</button></div>';
     h += tableHtml(m, rows);
     h += '<p class="op-foot">시공사 [상세 이력]은 협약일·기간 내 L3·현장별 재사용·공고·낙찰·구매를 시간순으로 보여줍니다. 고객관리카드 데이터는 복제하지 않고 B2B 고유번호만 참조합니다. 업무 완료 자체는 L3 전환이나 구매 실적으로 계산하지 않습니다.</p></div>';
     return h;

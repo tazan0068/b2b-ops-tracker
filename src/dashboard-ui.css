@@ -245,7 +245,8 @@
 .du-goal.vf .ga b{color:#8A6A10}
 .du-goal .gbar{position:relative;height:12px;border-radius:999px;background:#E4EAF2;overflow:hidden}
 .du-goal .gbar i{display:block;height:100%;border-radius:999px;background:var(--acc,var(--du-blue))}
-.du-goal .gbar .mk{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:rgba(22,35,59,.55)}
+.du-goal .gbar .mk{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:rgba(22,35,59,.35)}.du-goal .gbar .mk.of{width:3px;margin-left:-1.5px;background:rgba(22,35,59,.8)}
+.du-goal .gtk{position:relative;height:13px;margin-top:-2px}.du-goal .gtk span{position:absolute;top:0;transform:translateX(-50%);font-size:10px;line-height:13px;color:var(--du-sub);font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}.du-goal .gtk span.of{color:var(--du-ink);font-weight:900}
 .du-goal .gbar.prov i{background:repeating-linear-gradient(135deg,#F0B35B 0 6px,#F7D9A6 6px 12px)}
 .du-goal .gbar.na{background:repeating-linear-gradient(135deg,#EDF1F6 0 6px,#E4EAF2 6px 12px)}
 .du-goal .gx{display:flex;justify-content:space-between;gap:8px;font-size:10.5px;color:var(--du-sub);font-weight:600;margin-top:-2px}
@@ -261,4 +262,9 @@
 .du-gdet .gc{font-size:12.5px;line-height:1.65;color:var(--du-ink);background:#F4F7FB;border-radius:10px;padding:9px 11px;word-break:keep-all}
 .du-gdet .gd{font-size:12px;line-height:1.65;color:var(--du-sub);word-break:keep-all}.du-gdet .gd b{color:var(--du-ink)}
 .du-gt th,.du-gt td{white-space:nowrap}.du-gt tr.of th,.du-gt tr.of td{font-weight:900;background:#EEF4FF}
-@media (max-width:420px){ .du-goal .gv{font-size:22px} .du-goal .ga{margin-left:0;width:100%} }
+@media (max-width:420px){ .du-goal .gv{font-size:22px} .du-goal .ga{margin-left:0;width:100%} .du-goal .gtk span{font-size:9.5px} }
+
+/* ===== 월별 부분 기간 · KPI 월별 · 경로 참고 ===== */
+.du-mini i.part{background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.55) 0 4px,transparent 4px 8px)}
+.du-kpi .trend .s{display:block;font-size:10.5px;color:var(--du-sub);margin-top:2px}.du-kpi .trend .du-spark{width:100%;max-width:170px;height:34px;display:block}.du-kpi .trend .du-spark circle{fill:var(--acc,var(--du-blue))}
+.du-path .pl4{margin-top:8px;padding:8px 10px;border-radius:10px;background:#F4F7FB;display:flex;flex-direction:column;gap:3px;text-align:left;font-size:11.5px;color:var(--du-ink)}.du-path .pl4 b{font-size:11px;color:var(--du-sub)}.du-path .pl4 span{display:flex;justify-content:space-between;gap:8px;font-weight:700;font-variant-numeric:tabular-nums}.du-path .pl4 em{font-style:normal;color:var(--du-sub);font-weight:600}.du-path .pl4 small{font-size:10.5px;line-height:1.5;color:#7A5A0B;font-weight:600;word-break:keep-all}

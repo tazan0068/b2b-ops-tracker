@@ -183,7 +183,7 @@
       if (!led) return { code: "wait", label: "원문 읽는 중", note: "판매 원문을 읽은 뒤 적요 유사 여부를 확인합니다" };
       var key = nz(award["현장명"]); var list = (memos() || {})[award["통합ID"]] || [];
       if (key.length >= 4) { var hit = list.filter(function (m) { return m.k.indexOf(key) >= 0 || (m.k.length >= 4 && key.indexOf(m.k) >= 0); }); if (hit.length) return { code: "cand", label: "후보", note: "판매 적요에 비슷한 현장명 " + hit.length + "건(납품·사용 증빙은 아님)" }; }
-      return { code: "na", label: "확인 불가", note: "현장별 사용 증빙이 시트에 없음 — 타사 자재 사용으로 판단하지 않음" };
+      return { code: "na", label: "미확인", note: "현장별 사용 증빙이 시트에 없음 — 타사 자재 사용으로 판단하지 않음" };
     };
     /* 낙찰 목록 (연도·기간) — 상세 표용 */
     G.awardRows = function (basis, y) {
@@ -205,6 +205,22 @@
     /* 낙찰 이력이 있으나 구매 확인이 필요한 업체: 낙찰 연도에 자재 구매가 확인되지 않은 업체 */
     G.needCheck = function (basis, y) { var rows = G.cohortRows(basis, y); return rows.filter(function (r) { return r.구매확인 === false; }).sort(function (a, b) { return b.낙찰금액 - a.낙찰금액 || b.낙찰건수 - a.낙찰건수; }); };
 
+    /* 업체별 핵심 메인 구매 거래(원문): 업체 구매 사실만 다룬다 — 특정 낙찰 현장 사용 여부는 siteStatus 가 별도로 판단 */
+    var mainTx = null;
+    function mainIdx() {
+      if (mainTx || !led) return mainTx; mainTx = {};
+      led.forEach(function (r) { if (r["순매출포함"] !== "포함" || !isNum(r["공급가액"]) || r["메인자재분류"] !== "핵심 메인") return; var id = r["통합ID"], nm = r["품목명·규격"] || "(품목명 없음)"; (mainTx[id] = mainTx[id] || []).push({ d: ymd(r["거래일자"]), item: nm, fam: famOf(nm, famRules), qty: isNum(r["수량"]) ? r["수량"] : null, amt: r["공급가액"], memo: r["적요(현장명)"] || "" }); });
+      for (var k in mainTx) mainTx[k].sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : 0; });
+      return mainTx;
+    }
+    G.vendorMainBuy = function (id) {
+      if (!led) return { state: "wait", label: "원문 읽는 중", note: "판매 원문을 읽은 뒤 구매 이력을 표시합니다" };
+      var all = (mainIdx() || {})[id] || [], paid = all.filter(function (x) { return x.amt > 0; });
+      if (!paid.length) return { state: "unknown", label: "구매 미확인", note: "판매 원문에서 핵심 메인 구매 기록이 확인되지 않았습니다 — 미구매로 단정하지 않습니다(거래처 연결이 후보라 누락 가능)", count: 0, history: [] };
+      var days = uniq(paid.map(function (x) { return x.d; })), it = {}; paid.forEach(function (x) { var k = x.item; it[k] = it[k] || { 품목: k, 공종: x.fam, 금액: 0, 건수: 0 }; it[k].금액 += x.amt; it[k].건수++; });
+      return { state: "confirmed", label: "구매 확인", note: "판매 원문의 핵심 메인 품목 구매 기록 — 업체 단위 구매이며 특정 낙찰 현장에 사용했다는 뜻이 아닙니다", count: paid.length, days: days.length, first: paid[0].d, last: paid[paid.length - 1].d, repurchase: days.length >= 2, amt: sumBy(paid, function (x) { return x.amt; }),
+        sinceStart: paid.filter(function (x) { return x.d >= "2025-06-24"; }).length, items: Object.keys(it).map(function (k) { return it[k]; }).sort(function (a, b) { return b.금액 - a.금액; }).slice(0, 8), history: all.slice(-30).reverse() };
+    };
     /* ---------- 업체 상세 ---------- */
     G.vendorDetail = function (id) {
       var ms = master[id] || null; var out = { 통합ID: id, master: ms, 이름: G.vendorName(id) }; out.link = G.linkGrade(id);
@@ -213,7 +229,7 @@
       var lastBuy = null, items = {}; years.forEach(function (y) { var c = buyRec("ann", y, id); if (c && c.last && (!lastBuy || c.last > lastBuy)) lastBuy = c.last; if (c) for (var k in c.items) items[k] = (items[k] || 0) + c.items[k]; });
       out.lastBuy = led ? lastBuy : null; out.lastBuyWhy = led ? null : "판매 원문을 읽는 중"; out.items = Object.keys(items).map(function (k) { return { 품목: k, 금액: items[k] }; }).filter(function (x) { return x.금액 > 0; }).sort(function (a, b) { return b.금액 - a.금액; }).slice(0, 8); out.itemsWhy = led ? null : "판매 원문을 읽는 중";
       var la = null, lat = null; ACT.forEach(function (d) { if (!src.has(d[0])) return; src.objs(d[0]).forEach(function (r) { if (r["통합ID"] !== id) return; var dt = ymd(r[d[1]]); if (dt && (!la || dt > la)) { la = dt; lat = d[3]; } }); }); out.lastActivity = la; out.lastActivityType = lat;
-      out.cardLinked = !!(ms && ms["B2B고유번호"]); out.cardId = ms ? ms["B2B고유번호"] : null;
+      out.cardLinked = !!(ms && ms["B2B고유번호"]); out.cardId = ms ? ms["B2B고유번호"] : null; out.mainBuy = G.vendorMainBuy(id);
       out.sites = awardsOf("ann", lastY).concat([]); out.siteRows = [];
       years.forEach(function (y) { G.awardRows("ann", y).filter(function (r) { return r.통합ID === id; }).forEach(function (r) { out.siteRows.push(r); }); });
       return out;
@@ -237,7 +253,7 @@
       if (led && firstSale.main) n.push({ t: "메인자재 판매 개시", d: "원문 기준 첫 판매일 — 메인 전체 " + firstSale.main + " · " + FAMS.map(function (f) { return FAM_LABEL[f] + " " + (firstSale[f] || "없음"); }).join(" · ") + ". 개시 이전 기간이 섞인 연도는 증감률을 계산하지 않음" });
       else if (!led) n.push({ t: "메인자재 품목별 첫 판매일", d: "판매 원문을 읽으면 표시" });
       var cnf = 0; Object.keys(master).forEach(function (id) { if (G.linkGrade(id).code === "ok") cnf++; }); n.push({ t: "구매 연결은 '후보'", d: "판매 원천에 사업자번호·거래처코드가 없어 낙찰 시공사와 판매 거래처의 동일 법인을 확정할 수 없음(확정 " + cnf + "곳) — 이름 정규화 일치만 '연결 후보'로 집계하며 공식 구매율은 산출하지 않음" });
-      n.push({ t: "현장별 사용 확인 불가", d: "납품서·사용확인 증빙이 시트에 없어 낙찰 현장별 자재 사용은 '확인 불가'(적요 현장명이 비슷하면 '후보') — 구매 기록이 없다고 타사 자재 사용으로 판단하지 않음" });
+      n.push({ t: "현장별 사용 미확인", d: "납품서·사용확인 증빙이 시트에 없어 낙찰 현장별 자재 사용은 '확인 불가'(적요 현장명이 비슷하면 '후보') — 구매 기록이 없다고 타사 자재 사용으로 판단하지 않음" });
       var un = 0; years.forEach(function (y) { un += metrics("ann", y).unmatchedAwards || 0; }); if (un) n.push({ t: "공고 목록과 연결되지 않은 낙찰", d: "낙찰 기록 " + un + "건은 공고 목록(5b)에서 같은 현장명·공고일을 찾지 못해 낙찰 비율 분자에서 제외(낙찰 건수에는 포함)" });
       return n;
     };

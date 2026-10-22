@@ -77,7 +77,7 @@
   function stat(label, v, sub, fmt, big) { var r = dv(v, fmt); return '<div class="du-stat' + (r.ok ? "" : " na") + (big ? " big" : "") + '"><span class="l">' + esc(label) + "</span><b>" + esc(r.t) + "</b>" + (sub ? '<span class="s">' + sub + "</span>" : "") + "</div>"; }
   function mini(vals, labels, opt) {              /* 작은 막대(연도별) — 값이 없는 연도는 빗금 */
     var max = 0; vals.forEach(function (v) { if (isNum(v) && v > max) max = v; });
-    return '<div class="du-mini" style="--n:' + vals.length + '">' + vals.map(function (v, i) { return '<div class="c"><i class="' + (isNum(v) ? "" : "na") + (labels[i].cur ? " cur" : "") + '"' + (isNum(v) ? ' style="height:' + Math.max(6, Math.round(v / max * 100)) + '%"' : "") + ' title="' + esc(labels[i].l + " · " + (isNum(v) ? (opt && opt.fmt ? opt.fmt(v) : v) : (v == null ? "—" : v))) + '"></i><span>' + esc(labels[i].s) + "</span></div>"; }).join("") + "</div>";
+    return '<div class="du-mini" style="--n:' + vals.length + '">' + vals.map(function (v, i) { return '<div class="c"><i class="' + (isNum(v) ? "" : "na") + (labels[i].cur ? " cur" : "") + (labels[i].part ? " part" : "") + '"' + (isNum(v) ? ' style="height:' + Math.max(6, Math.round(v / max * 100)) + '%"' : "") + ' title="' + esc(opt && opt.tip ? opt.tip(i) : labels[i].l + (labels[i].part ? "(6/24~30 부분 기간)" : "") + " · " + (isNum(v) ? (opt && opt.fmt ? opt.fmt(v) : v) : (v == null ? "—" : v))) + '"></i><span>' + esc(labels[i].s) + "</span></div>"; }).join("") + "</div>";
   }
   function ghostMonths(cols) { var h = ""; for (var i = 1; i <= 12; i++) h += '<div class="c"><i class="ghost" style="height:' + (22 + (i * 29 + (cols || 0)) % 44) + '%"></i><span>' + i + "월</span></div>"; return '<div class="du-mini big" style="--n:12" aria-hidden="true">' + h + "</div>"; }
   function monthBars(rows, fmt) {
@@ -119,7 +119,7 @@
     var out3 = { cls: "k3", icon: "flow", label: "L3 도달률", state: verified ? "ok" : "review", value: verified ? api.pc(d.value) : "",
       def: "L2(영업보고)를 거친 경우 + L3에 직접 진입한 경우를 합산 · L3 = 기술자문문의 · 공법설명회(PT) · 기타문의 · 컨설팅내역서 요청 · 분모는 업체×현장 고유 조합 등 후보를 검증한 뒤 확정",
       dates: ["L2 영업보고일", "L3 활동일"],
-      parts: [["L2 경유 L3", pv(R.via)], ["L3 직접 진입", pv(R.direct)]], yoy: '<span class="du-dash">검증 필요</span>', trend: '<span class="du-dash">추이 — 검증 후 표시</span>', refs: rf,
+      parts: [["L2 경유 L3", pv(R.via)], ["L3 직접 진입", pv(R.direct)]], yoy: yoyNA(YOY_WHY.kpi3), trend: '<span class="du-dash">추이 — 검증 후 표시</span>', refs: rf,
       note: verified ? esc(d.basis || "") : "분모 기준이 확정되지 않았거나 데이터가 부족해 비율을 계산하지 않았습니다. 기존 9.56%·24.9%는 정의가 달라 참고값으로만 보존합니다.", to: "l3" };
     if (!verified && cb && isNum(cb["값"])) {
       out3.parts = [["L2 경유 L3", "구분 불가(영업보고 원천 없음)"], ["L3 직접 진입", (dr && isNum(dr["값"]) ? "확정 " + api.num(dr["값"]) : "—") + " · 경로 확인 필요"]];
@@ -137,46 +137,96 @@
   }
   function pMonth(x) { return String(x == null ? "" : x).replace(/^M/, ""); }          /* 시트에는 M2025-06 으로 적혀 있음(시트가 날짜로 자동 변환하지 않게) */
   function pFrac(api, r) { return r && isNum(r["분자"]) && isNum(r["분모"]) ? api.num(r["분자"]) + " / " + api.num(r["분모"]) + "곳" : "—"; }
+  var MRE = /^M\d{4}-\d{2}$/;
+  function monthSeries(PT, g) { return PT.list(g).filter(function (r) { return MRE.test(String(r["지표"])); }).map(function (r) { return { m: pMonth(r["지표"]), v: isNum(r["분모"]) && r["분모"] > 0 && isNum(r["값"]) ? r["값"] : null, n: r["분자"], d: r["분모"] }; }); }
+  function kpiTrend(api, id) {
+    var PT = periodTab(api), g = id === "kpi1" ? "신규 업체 사용률" : id === "kpi2" ? "재사용률" : null, s = PT && g ? monthSeries(PT, g) : [];
+    if (s.filter(function (x) { return isNum(x.v); }).length < 2) return '<span class="du-dash">추이 — 월별 집계 연결 후 표시</span>';
+    var pts = s.map(function (x, i) { return isNum(x.v) ? [i, x.v] : null; }).filter(Boolean), W = 150, H = 34, n = s.length - 1 || 1, mx = Math.max.apply(null, pts.map(function (p) { return p[1]; })) || 1;
+    var d = pts.map(function (p, i) { var x = p[0] / n * (W - 8) + 4, y = H - 5 - p[1] / mx * (H - 10); return (i ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1); }).join(" "), last = pts[pts.length - 1];
+    return '<svg class="du-spark" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="월말 기준 추이"><path d="' + d + '"/><circle cx="' + (last[0] / n * (W - 8) + 4).toFixed(1) + '" cy="' + (H - 5 - last[1] / mx * (H - 10)).toFixed(1) + '" r="2.6"/></svg><span class="s">월말 기준 · ' + esc(s[0].m.slice(2).replace("-", "/")) + "*~" + esc(s[s.length - 1].m.slice(2).replace("-", "/")) + (id === "kpi2" ? " · 검증 필요" : "") + " · 자세히는 아래 월별 추이</span>";
+  }
+  function l4Ref(api) {                                                                    /* L3 → L4 (경로 미확정 · 참고): 분자·분모를 함께 표시 */
+    var PT = periodTab(api); if (!PT) return "";
+    var rows = [["공고 도달", "L3 → L4 공고 도달(경로 미확정 조합)"], ["낙찰 도달", "L3 → L4 낙찰 도달(누구든 · 경로 미확정 조합)"], ["같은 업체 낙찰", "L3 → L4 낙찰 도달(같은 업체 · 경로 미확정 조합)"]].map(function (x) { var r = PT.get("L3 도달률", x[1]); return r && isNum(r["분자"]) && isNum(r["분모"]) && r["분모"] > 0 ? [x[0], p1(r["분자"] / r["분모"]) + " (" + api.num(r["분자"]) + " / " + api.num(r["분모"]) + ")"] : null; }).filter(Boolean);
+    if (!rows.length) return "";
+    return '<div class="pl4"><b>참고 · 경로 미확정 L3 → L4 (365일 내, 업체×현장×공종 조합)</b>' + rows.map(function (x) { return "<span><em>" + esc(x[0]) + "</em>" + esc(x[1]) + "</span>"; }).join("") + '<small>영업보고(L2) 원천이 없어 "L3 직접 진입"으로 확정하지 않았고 검증 전 값입니다. L2 경유 경로는 계산하지 않았습니다.</small></div>';
+  }
+  function monthlyKpi(api, PT, mons, cats) {                                               /* KPI 월별 · 메인자재 월별 — 카드와 같은 정의·분자·분모 */
+    if (!PT) return "";
+    var mk = function (g, label, fmt, tag) { var s = monthSeries(PT, g); if (!s.some(function (x) { return isNum(x.v); })) return ""; var mp = {}; s.forEach(function (x) { mp[x.m] = x; }); var vals = mons.map(function (m) { return mp[m] && isNum(mp[m].v) ? mp[m].v : null; });
+      return '<div class="du-mser"><h4>' + esc(label) + (tag ? " " + pill("rev", tag) : "") + "</h4>" + mini(vals, cats, { fmt: fmt, tip: function (i) { var x = mp[mons[i]]; return mons[i] + (mons[i] === "2025-06" ? "(6/24~30 부분 기간)" : "") + " · " + (x && isNum(x.v) ? p1(x.v) + " (" + api.num(x.n) + " / " + api.num(x.d) + "곳)" : "대상 없음"); } }) + "</div>"; };
+    var buyN = {}, buyA = {}; PT.list("결과 성과").forEach(function (r) { var s = String(r["지표"]), m = s.match(/^메인자재 (구매 업체 수|순매출) · (M\d{4}-\d{2})$/); if (m) (m[1] === "순매출" ? buyA : buyN)[pMonth(m[2])] = r["값"]; });
+    var bser = function (src) { return mons.map(function (m) { return isNum(src[m]) ? src[m] : null; }); }, hasBuy = Object.keys(buyN).length > 0;
+    var h1 = mk("신규 업체 사용률", "신규 업체 사용률 (월말 · 협약 후 1년 이내 업체 중 L3 이용)", p1, ""), h2 = mk("재사용률", "재사용률 (월말 · 첫 L3 후 60일 · 다른 아파트)", p1, "검증 필요");
+    var h3 = hasBuy ? '<div class="du-mser"><h4>메인자재 구매 업체 수 (월 · 구매 연결은 후보)</h4>' + mini(bser(buyN), cats, { fmt: function (v) { return api.num(v) + "곳"; } }) + '</div><div class="du-mser"><h4>메인자재 순매출 (월)</h4>' + mini(bser(buyA), cats, { fmt: api.won }) + "</div>" : "";
+    if (!h1 && !h2 && !h3) return "";
+    return '<section class="du-card wide"><header><h3>월별 KPI 추이 · 메인자재 구매</h3>' + pill("rev", "검증 필요") + "</header>" + h1 + h2 + h3 + '<p class="s2"><b>* 2025-06은 6/24~30 부분 기간입니다.</b> KPI는 그 달 말(마지막 달은 기준일) 기준이며 마지막 달 값은 위 메인 카드와 같은 분자·분모입니다. 2026-01 이전은 플랫폼 L3 기록이 편입되기 전이라 낮게 보일 수 있고, 업체 미기재(잔디 기술문의) L3는 제외됩니다. 메인자재는 이카운트 판매 원문의 핵심 메인 품목이며 업체 연결은 사업자번호 부재로 후보입니다.</p></section>';
+  }
   function kpi12Period(id, api, spec, verified) {
     var PT = periodTab(api); if (!PT || verified) return spec;
     if (id === "kpi1") {
       var g = "신규 업체 사용률", t = PT.get(g, "대상 신규 업체(협약일이 분석 시작일 이후)"), d = PT.get(g, "관측 완료(협약 후 1년 경과)"), n = PT.get(g, "관측 중(협약 후 1년 미만)"), u = PT.get(g, "협약일 미확인·L3 활동 있음(판정 제외)"), pr = PT.get(g, "분석 시작일 이전 협약·1년 이내(부분 관측 참고)");
       if (!t) return spec;
       var nd = PT.get(g, "협약일 없는 체결 확정 업체(판정 제외)"), nl = PT.get(g, "협약일 미확인·L3 활동 있음(판정 제외)");
+      if (ratioRow(n)) {                                                                  /* 새 정의: MOU 협약 후 1년 이내인 신규 업체 중 L3를 이용한 업체 비율 — 집계 행(협약 후 1년 미만)의 분자·분모에서 읽음 */
+        spec.state = "ok"; spec.value = p1(n["분자"] / n["분모"]);
+        spec.def = "MOU 협약 후 1년 이내인 신규 업체 중 L3를 이용한 업체 비율";
+        spec.parts = [["L3 이용 / 신규 업체", pFrac(api, n)], ["협약일 없는 체결 확정 업체(별도 관리)", nd && isNum(nd["값"]) ? api.num(nd["값"]) + "곳" : "—"]];
+        spec.note = "협약 후 1년이 지나면 신규 업체에서 빠집니다. 이용 = 협약일 이후 L3 활동 1건 이상. 협약일은 고객관리카드 기준이며, 협약일이 없는 체결 확정 업체는 이 지표에서만 제외하고 별도 관리합니다" + (nl && isNum(nl["값"]) ? "(그중 L3 활동 있음 " + api.num(nl["값"]) + "곳)" : "") + ".";
+        spec.trend = kpiTrend(api, id);
+        return spec;
+      }
       if (isNum(t["분자"]) && isNum(t["분모"]) && t["분모"] > 0 && isNum(t["값"]) && Math.abs(t["값"] - t["분자"] / t["분모"]) < 0.0005) {                        /* 카드 협약일 기준 집계(20.기간KPI집계의 분자·분모에서 읽음 — 코드에 숫자를 두지 않는다) */
         spec.state = "ok"; spec.value = p1(t["분자"] / t["분모"]);
         spec.def = "현재까지 확인된 사용률 · 2025.06.24 이후 협약 업체 기준";
         spec.parts = [["협약 후 1년 이내 L3 이용 / 대상", pFrac(api, t)], ["1년 관측 완료 업체 사용률", d && isNum(d["분모"]) && d["분모"] > 0 ? p1(d["분자"] / d["분모"]) + " (" + pFrac(api, d) + ")" : "—"]];
-        spec.note = "협약 후 1년이 지나지 않은 업체" + (n && isNum(n["분모"]) ? " " + api.num(n["분모"]) + "곳" : "") + "이 포함되어 있어 <b>최종 1년 사용률이 아닙니다</b>(관측 중 이용 " + pFrac(api, n) + "). 이용 = 협약일 후 1년 이내 유효 L3 활동. 협약일은 고객관리카드 기준이며, 협약일이 없는 체결 확정 업체 " + (nd ? api.num(nd["값"]) : "—") + "곳은 이 지표의 분자·분모에서만 제외하고 다른 시공사 분석에는 포함합니다" + (nl ? "(그중 L3 활동 있음 " + api.num(nl["값"]) + "곳)" : "") + ".";
-        spec.trend = '<span class="du-dash">추이 — 월별 집계 연결 후 표시</span>';
+        spec.note = "협약 후 1년이 지나지 않은 업체" + (n && isNum(n["분모"]) ? " " + api.num(n["분모"]) + "곳" : "") + "이 포함되어 있어 <b>최종 1년 사용률이 아닙니다</b>(협약 1년 미만 업체 이용 " + pFrac(api, n) + "). 이용 = 협약일 후 1년 이내 유효 L3 활동. 협약일은 고객관리카드 기준이며, 협약일이 없는 체결 확정 업체 " + (nd ? api.num(nd["값"]) : "—") + "곳은 이 지표의 분자·분모에서만 제외하고 다른 시공사 분석에는 포함합니다" + (nl ? "(그중 L3 활동 있음 " + api.num(nl["값"]) + "곳)" : "") + ".";
+        spec.trend = kpiTrend(api, id);
         return spec;
       }
       spec.vtext = d && isNum(d["분모"]) ? api.num(d["분자"]) + " / " + api.num(d["분모"]) + "곳 (관측 완료)" : "—";
-      spec.parts = [["대상(협약 2025.06.24~) 중 이용", pFrac(api, t)], ["관측 중(1년 미만) 이용", pFrac(api, n)]];
-      spec.note = "이용 = 협약일 후 1년 이내 L3 활동. 관측 중 업체는 아직 1년이 지나지 않아 확정 비율이 아닙니다. 협약일 미확인 L3 업체 " + (u ? api.num(u["값"]) : "—") + "곳은 판정에서 제외, 시작일 이전 협약(부분 관측 참고) " + pFrac(api, pr) + ". 작업본 계산 · 검증 필요.";
+      spec.parts = [["대상(협약 2025.06.24~) 중 이용", pFrac(api, t)], ["협약 1년 미만 업체 이용", pFrac(api, n)]];
+      spec.note = "이용 = 협약일 후 1년 이내 L3 활동. 협약 1년 미만 업체는 아직 1년이 지나지 않아 확정 비율이 아닙니다. 협약일 미확인 L3 업체 " + (u ? api.num(u["값"]) : "—") + "곳은 판정에서 제외, 시작일 이전 협약(부분 관측 참고) " + pFrac(api, pr) + ". 작업본 계산 · 검증 필요.";
     } else if (id === "kpi2") {
-      var r = PT.get("재사용률", "기간 내 관측 재사용률(첫 L3 이후 다른 아파트에서 다시 L3)"), sm = PT.get("재사용률", "같은 아파트 반복만 있는 업체(재사용 아님)");
+      var r = PT.get("재사용률", RNL), sm = PT.get("재사용률", "같은 아파트 반복만 있는 업체(재사용 아님)"), r6 = PT.get("재사용률", R60), d6 = PT.get("재사용률", R60D), x6 = PT.get("재사용률", "현장 연결 미확정으로 제외한 L3 업체");
+      if (ratioRow(r6)) {                                                                 /* 팀장 목표와 같은 정의(첫 L3 후 60일 · 다른 아파트) 값을 메인으로 */
+        var G2 = TG(), V2 = G2 && G2.verification && G2.verification.kpi2, ver2 = !!(V2 && V2.match === true);
+        if (ver2) { spec.state = "ok"; spec.value = api.pc(r6["분자"] / r6["분모"]); } else { spec.state = "review"; spec.vtext = api.pc(r6["분자"] / r6["분모"]); spec.pill = "검증 필요"; }
+        spec.def = "첫 L3 이후 60일 이내 같은 시공사가 다른 아파트에서 다시 L3를 이용한 비율 · 현재까지 확인된 값(첫 L3 후 60일이 지나지 않은 업체 포함) · 같은 아파트 반복 문의 제외";
+        spec.parts = [["60일 내 재사용 업체 / 대상", pFrac(api, r6)], ["60일 관측 완료 업체", ratioRow(d6) ? api.pc(d6["분자"] / d6["분모"]) + " (" + pFrac(api, d6) + ")" : "—"]];
+        spec.refs = r && isNum(r["값"]) ? [{ label: "기간 제한 없음 재사용률(이전 표시)", value: api.pc(r["값"]), calc: pFrac(api, r) + " · 60일 제한이 없어 팀장 목표(60일)와 정의가 달라 참고용" }] : null; spec.refHead = "참고(정의 다름)";
+        spec.note = "업체 확인 하한값입니다: 잔디 기술문의는 업체 미기재라 제외했고, 현장 연결이 확정되지 않은 L3 업체 " + (x6 ? api.num(x6["값"]) : "—") + "곳도 제외했습니다. 같은 아파트 반복 문의만 있는 업체 " + (sm ? api.num(sm["값"]) : "—") + "곳은 재사용으로 세지 않았습니다. 분석 시작일 이전 첫 이용은 알 수 없습니다(기간 내 관측). L3 원천은 통합 작업본 기준입니다.";
+        spec.trend = kpiTrend(api, id);
+        return spec;
+      }
       if (!r || !isNum(r["값"])) return spec;
       spec.vtext = api.pc(r["값"]); spec.parts = [["재사용 업체 / 대상", pFrac(api, r)], ["같은 아파트 반복만", sm ? api.num(sm["값"]) + "곳" : "—"]];
       spec.note = "기간 내 관측 재사용률: 분석 기간 내 첫 L3 이후 다른 아파트에서 다시 L3를 이용한 시공사 비율(같은 아파트 반복 문의 제외). 분석 시작일 이전 첫 이용은 알 수 없고, 잔디 기술문의는 업체 미기재라 하한값입니다. 작업본 계산 · 검증 필요.";
     }
-    spec.pill = "검증 필요"; spec.trend = '<span class="du-dash">추이 — 월별 집계 연결 후 표시</span>';
+    spec.pill = "검증 필요"; spec.trend = kpiTrend(api, id);
     return spec;
   }
   /* ---------- 팀장 목표 달성 현황: 목표(설정 B2B_KPI_TARGETS)와 실적(시트 집계)을 분리해 화면에서 비교한다 ---------- */
   function TG() { return typeof window !== "undefined" && window.B2B_KPI_TARGETS || null; }
   function p1(v) { return (Math.round(v * 1000) / 10).toFixed(1) + "%"; }                     /* 0.6 → 60.0% */
   function pt(v) { return String(Math.round(v * 1000) / 10) + "%"; }                          /* 0.85 → 85% (목표 표기) */
+  function ratioRow(r) { return !!(r && isNum(r["분자"]) && isNum(r["분모"]) && r["분모"] > 0 && isNum(r["값"]) && Math.abs(r["값"] - r["분자"] / r["분모"]) < 0.0005); }
+  var R60 = "첫 L3 후 60일 내 다른 아파트 재사용률(현재까지 확인)", R60D = "└ 첫 L3 후 60일 관측 완료 업체만", RNL = "기간 내 관측 재사용률(첫 L3 이후 다른 아파트에서 다시 L3)";
   function goalCurrent(id, api) {
     var PT = periodTab(api); if (!PT && id !== "kpi3") return null;
     if (id === "kpi1") {
       var g = "신규 업체 사용률", t = PT.get(g, "대상 신규 업체(협약일이 분석 시작일 이후)"), d = PT.get(g, "관측 완료(협약 후 1년 경과)"), okR = function (r) { return r && isNum(r["분자"]) && isNum(r["분모"]) && r["분모"] > 0 && isNum(r["값"]) && Math.abs(r["값"] - r["분자"] / r["분모"]) < 0.0005; };
+      var nn = PT.get(g, "관측 중(협약 후 1년 미만)");
+      if (okR(nn)) return { value: nn["분자"] / nn["분모"], num: nn["분자"], den: nn["분모"], label: "MOU 협약 후 1년 이내인 신규 업체 중 L3 이용 업체 비율", src: "20.기간KPI집계 · 신규 업체 사용률 · 협약 후 1년 미만", done: okR(d) ? { value: d["분자"] / d["분모"], num: d["분자"], den: d["분모"] } : null };
       if (!okR(t)) return null;
       return { value: t["분자"] / t["분모"], num: t["분자"], den: t["분모"], label: "현재까지 확인된 사용률(관측 진행 중 포함)", src: "20.기간KPI집계 · 신규 업체 사용률 · 대상 신규 업체", done: okR(d) ? { value: d["분자"] / d["분모"], num: d["분자"], den: d["분모"] } : null };
     }
     if (id === "kpi2") {
-      var r = PT.get("재사용률", "기간 내 관측 재사용률(첫 L3 이후 다른 아파트에서 다시 L3)");
-      return r && isNum(r["값"]) ? { value: r["값"], num: r["분자"], den: r["분모"], label: "기간 내 관측 재사용률(60일 제한 없음)", src: "20.기간KPI집계 · 재사용률" } : null;
+      var r6 = PT.get("재사용률", R60), d6 = PT.get("재사용률", R60D);
+      if (ratioRow(r6)) return { value: r6["분자"] / r6["분모"], num: r6["분자"], den: r6["분모"], label: "첫 L3 후 60일 내 다른 아파트 재사용률(현재까지 확인)", src: "20.기간KPI집계 · 재사용률 · 60일 기준", done: ratioRow(d6) ? { value: d6["분자"] / d6["분모"], num: d6["분자"], den: d6["분모"] } : null };
+      var r = PT.get("재사용률", RNL);
+      return r && isNum(r["값"]) ? { value: r["값"], num: r["분자"], den: r["분모"], label: "기간 내 관측 재사용률(60일 제한 없음)", src: "20.기간KPI집계 · 재사용률", mismatch: true } : null;
     }
     if (id === "kpi3") {
       var d3 = null; if (ADAPTERS.kpi3) { try { d3 = ADAPTERS.kpi3(api) || null; } catch (e) { d3 = null; } }
@@ -187,20 +237,22 @@
   function goalModel(id, api) {
     var G = TG(), C = G && G.kpis && G.kpis[id]; if (!C || !C.targets || !isNum(C.targets.official)) return null;
     var V = G.verification && G.verification[id] || {}, cur = null; try { cur = goalCurrent(id, api); } catch (e) { cur = null; }
-    var m = { id: id, name: C.name, T: C.targets, cur: cur, V: V, ok: !!(cur && isNum(cur.value) && V.match === true) }, T = C.targets, has = !!(cur && isNum(cur.value));
+    var m = { id: id, name: C.name, T: C.targets, cur: cur, V: V, ok: !!(cur && isNum(cur.value) && V.match === true && !cur.mismatch) }, T = C.targets, has = !!(cur && isNum(cur.value));
     m.curText = has ? (id === "kpi1" ? p1(cur.value) : api.pc(cur.value)) : null;
     if (m.ok) { m.rate = cur.value / T.official * 100; m.gap = (T.official - cur.value) * 100; m.reached = cur.value >= T.official - 1e-9; }
     if (has && isNum(T.challenge) && T.challenge > 0) {                                  /* 진행 막대: 도전 목표 = 막대 전체(100%), 초과해도 100%에서 멈춤 */
-      m.fillRaw = cur.value / T.challenge * 100; m.fill = Math.max(0, Math.min(100, m.fillRaw)); m.cGap = (T.challenge - cur.value) * 100; m.cReached = cur.value >= T.challenge - 1e-9;
-      m.mark = isNum(T.official) && T.official < T.challenge ? T.official / T.challenge * 100 : null;
+      var G3 = TG(), byChal = !!(G3 && G3.barScale === "challenge"); m.byChal = byChal;
+      m.fillRaw = byChal ? cur.value / T.challenge * 100 : cur.value * 100; m.fill = Math.max(0, Math.min(100, m.fillRaw)); m.cGap = (T.challenge - cur.value) * 100; m.cReached = cur.value >= T.challenge - 1e-9;
+      m.ticks = [["기준", T.base], ["상향", T.official], ["도전", T.challenge]].concat(isNum(T.long) ? [["장기", T.long]] : []).filter(function (x) { return isNum(x[1]); }).map(function (x) { return { k: x[0], v: x[1], pos: byChal ? x[1] / T.challenge * 100 : x[1] * 100 }; }).filter(function (x) { return x.pos <= 100.0001; });
     }
+    if (!m.ticks) { var bc = !!(TG() && TG().barScale === "challenge"); m.byChal = bc; m.ticks = [["기준", T.base], ["상향", T.official], ["도전", T.challenge]].concat(isNum(T.long) ? [["장기", T.long]] : []).filter(function (x) { return isNum(x[1]); }).map(function (x) { return { k: x[0], v: x[1], pos: bc && isNum(T.challenge) ? x[1] / T.challenge * 100 : x[1] * 100 }; }); }   /* 현재 실적이 없어도 목표 위치는 눈금으로 표시 */
     m.prov = has && !m.ok;                                                              /* 정의가 검증되지 않은 현재값 → 임시·검증 필요 */
     return m;
   }
   function rateT(x) { return (Math.round(x * 10) / 10).toFixed(1) + "%"; }
   function goalWhy(m) {
     if (!m.cur) return "현재 실적이 확인되지 않아 달성률을 계산하지 않았습니다.";
-    if (m.V.match === false) return "현재 값은 목표와 정의가 달라(예: 기간 조건) 달성률을 계산하지 않았습니다.";
+    if (m.V.match === false || m.cur.mismatch) return "현재 값은 목표와 정의가 달라(예: 기간 조건) 달성률을 계산하지 않았습니다.";
     return "정의 확인 전이라 달성률을 계산하지 않았습니다.";
   }
   function goalBlock(m) {
@@ -208,8 +260,9 @@
     var st = m.ok ? (m.reached ? "ok" : "gap") : "vf", fillOk = isNum(m.fill), f1 = function (x) { return (Math.round(x * 10) / 10).toFixed(1); };
     var h = '<div class="du-goal ' + st + (m.prov ? " prov" : "") + '"><div class="gn">목표 지표 · ' + esc(m.name) + '</div>' +
       '<div class="gt"><span class="gk">상향 공식 목표</span><b class="gv">' + esc(pt(T.official)) + '</b><span class="ga">공식 목표 달성률 <b>' + (m.ok ? esc(rateT(m.rate)) : "검증 필요") + "</b></span></div>" +
-      '<div class="gbar' + (m.prov ? " prov" : fillOk ? "" : " na") + '" role="progressbar" aria-label="도전 목표 ' + esc(pt(T.challenge)) + ' 대비 진행" aria-valuemin="0" aria-valuemax="100"' + (fillOk ? ' aria-valuenow="' + Math.round(m.fill) + '"' : "") + "><i" + (fillOk ? ' style="width:' + m.fill.toFixed(1) + '%"' : "") + "></i>" + (isNum(m.mark) && fillOk ? '<u class="mk" style="left:' + m.mark.toFixed(1) + '%" title="상향 공식 목표 ' + esc(pt(T.official)) + '"></u>' : "") + "</div>" +
-      '<div class="gx"><span>0%</span><span>도전 목표 ' + esc(pt(T.challenge)) + " = 막대 100%</span></div>" +
+      '<div class="gbar' + (m.prov ? " prov" : fillOk ? "" : " na") + '" role="progressbar" aria-label="현재 실적(0~100%)" aria-valuemin="0" aria-valuemax="100"' + (fillOk ? ' aria-valuenow="' + Math.round(m.fill) + '"' : "") + "><i" + (fillOk ? ' style="width:' + m.fill.toFixed(1) + '%"' : "") + "></i>" + (m.ticks || []).map(function (x) { return '<u class="mk' + (x.k === "상향" ? " of" : "") + '" style="left:' + x.pos.toFixed(1) + '%" title="' + esc(x.k + " 목표 " + pt(x.v)) + '"></u>'; }).join("") + "</div>" +
+      '<div class="gtk" aria-hidden="true">' + (m.ticks || []).map(function (x) { return '<span class="' + (x.k === "상향" ? "of" : "") + '" style="left:' + Math.min(96, Math.max(4, x.pos)).toFixed(1) + '%">' + esc(String(Math.round(x.v * 1000) / 10)) + "</span>"; }).join("") + "</div>" +
+      '<div class="gx"><span>0%</span><span>' + (m.byChal ? "도전 목표 " + esc(pt(T.challenge)) + " = 막대 100%" : "눈금: " + (m.ticks || []).map(function (x) { return esc(x.k); }).join("·") + " 목표") + "</span><span>" + (m.byChal ? "" : "100%") + "</span></div>" +
       '<dl class="gr"><div><dt>현재 실적</dt><dd>' + (m.curText ? esc(m.curText) + (m.prov ? '<em class="gtag">임시 · 검증 필요</em>' : "") : '<em class="gtag">검증 필요</em>') + "</dd></div>" +
       '<div><dt>상향 공식 목표 ' + esc(pt(T.official)) + '</dt><dd class="r-' + st + '">' + (m.ok ? (m.reached ? "달성" : "미달 · 목표까지 " + f1(m.gap) + "%p") : "검증 필요") + "</dd></div>" +
       '<div><dt>도전 목표 ' + esc(pt(T.challenge)) + (isNum(m.cGap) && m.cReached ? "" : "까지") + '</dt><dd>' + (isNum(m.cGap) ? (m.cReached ? "달성" : esc(f1(m.cGap)) + "%p") + (m.prov ? '<em class="gtag">임시</em>' : "") : "—") + "</dd></div></dl>" +
@@ -223,28 +276,30 @@
       var m = goalModel(id, api); if (!m) return; var T = m.T, V = m.V, cur = m.cur;
       var tiers = [["기준 목표", T.base], ["상향 공식 목표", T.official], ["도전 목표", T.challenge]]; if (isNum(T.long)) tiers.push(["장기 목표", T.long]);
       var rows = tiers.map(function (x) { var ach = m.ok ? cur.value / x[1] * 100 : null; return "<tr" + (x[0] === "상향 공식 목표" ? ' class="of"' : "") + '><th>' + esc(x[0]) + "</th><td>" + esc(pt(x[1])) + "</td><td>" + (m.ok ? esc(rateT(ach)) : "검증 필요") + "</td><td>" + (m.ok ? (cur.value >= x[1] - 1e-9 ? "달성" : "−" + (Math.round((x[1] - cur.value) * 1000) / 10).toFixed(1) + "%p") : "—") + "</td></tr>"; }).join("");
-      var calc = m.ok ? "공식 목표 달성률 = " + p1(cur.value) + " ÷ " + pt(T.official) + " × 100 = " + rateT(m.rate) + " · 목표까지 차이 = " + pt(T.official) + " − " + p1(cur.value) + " = " + (Math.round(m.gap * 10) / 10).toFixed(1) + "%p" + (m.reached ? "" : "") + " · 진행 막대 = 현재 실적 ÷ 도전 목표 × 100 = " + p1(cur.value) + " ÷ " + pt(T.challenge) + " × 100 = " + rateT(m.fillRaw) + (m.fillRaw > 100 ? " (막대는 100%에서 멈춤)" : "") + " · 도전 목표까지 " + (m.cReached ? "도달" : (Math.round(m.cGap * 10) / 10).toFixed(1) + "%p") : goalWhy(m);
+      var calc = m.ok ? "공식 목표 달성률 = " + p1(cur.value) + " ÷ " + pt(T.official) + " × 100 = " + rateT(m.rate) + " · " + (m.reached ? "공식 목표보다 " + (Math.round(-m.gap * 10) / 10).toFixed(1) + "%p 높음" : "목표까지 차이 = " + pt(T.official) + " − " + p1(cur.value) + " = " + (Math.round(m.gap * 10) / 10).toFixed(1) + "%p") + (m.reached ? "" : "") + " · " + (m.byChal ? "진행 막대 = 현재 실적 ÷ 도전 목표 × 100 = " + p1(cur.value) + " ÷ " + pt(T.challenge) + " × 100 = " + rateT(m.fillRaw) : "진행 막대 = 현재 실적을 0~100% 눈금에 그대로 표시(" + p1(cur.value) + "), 눈금은 기준·상향·도전 목표 위치") + (m.fillRaw > 100 ? " (막대는 100%에서 멈춤)" : "") + " · 도전 목표까지 " + (m.cReached ? "도달" : (Math.round(m.cGap * 10) / 10).toFixed(1) + "%p") : goalWhy(m);
       var dm = V.match === true ? "확인됨" : V.match === false ? "다름" : "미확정";
       h += '<section class="du-card du-gdet"><header><h3>목표 달성 계산 · ' + esc(m.name) + "</h3>" + pill(V.match === true ? "ok" : V.match === false ? "bad" : "wait", "정의 " + dm) + "</header>" +
         '<p class="gl">현재 실적: <b>' + (cur ? esc(p1(cur.value)) : "—") + "</b>" + (cur ? " · " + esc(cur.label) + (isNum(cur.num) && isNum(cur.den) ? " · " + api.num(cur.num) + " / " + api.num(cur.den) + "곳" : "") : " · 확인된 값 없음") + (cur && cur.src ? '<span class="src"> 출처 ' + esc(cur.src) + "</span>" : "") + "</p>" +
         '<div class="du-tw"><table class="du-tbl du-gt"><thead><tr><th>목표</th><th>목표값</th><th>달성률</th><th>차이</th></tr></thead><tbody>' + rows + "</tbody></table></div>" +
         '<p class="gc">' + esc(calc) + "</p>" +
-        (cur && cur.done ? '<p class="gc">참고 · 1년 관측 완료 업체 기준: ' + esc(p1(cur.done.value)) + " (" + api.num(cur.done.num) + " / " + api.num(cur.done.den) + "곳, 표본이 작음) — 같은 정의의 일부 모집단입니다. 상향 공식 목표 대비 " + esc(rateT(cur.done.value / T.official * 100)) + ".</p>" : "") +
+        (cur && cur.done ? (id === "kpi1" ? '<p class="gc">참고 · 협약 후 1년이 지난 업체(신규 업체 아님, 위 모집단에서 제외): ' + esc(p1(cur.done.value)) + " (" + api.num(cur.done.num) + " / " + api.num(cur.done.den) + "곳, 표본이 작음). 1년 동안 L3를 이용한 업체 비율로만 참고합니다.</p>" : '<p class="gc">참고 · 첫 L3 후 60일이 모두 지난 업체만: ' + esc(p1(cur.done.value)) + " (" + api.num(cur.done.num) + " / " + api.num(cur.done.den) + "곳, 표본이 작음) — 같은 정의의 일부 모집단입니다. 상향 공식 목표 대비 " + esc(rateT(cur.done.value / T.official * 100)) + ".</p>") : "") +
         '<p class="gd"><b>정의 확인</b> ' + esc(V.basis || "") + (V.caution ? " " + esc(V.caution) : "") + (V.checkedAt ? " (확인일 " + esc(V.checkedAt) + ")" : "") + "</p>" +
         '<p class="gd">업체별 목록은 공개 화면에 포함하지 않으며, 로그인 상세 보기의 시공사 추적에서 확인합니다. 목표 출처: ' + esc(G.source || "") + " · 설정 버전 " + esc(G.version || "") + ".</p></section>";
     });
     return h;
   }
   function withGoal(spec, id, api) { var m = goalModel(id, api); if (m) spec.goal = m; return spec; }
+  function yoyNA(msg) { return '<span class="du-dash">비교 데이터 부족</span><span class="s">' + esc(msg) + "</span>"; }
+  var YOY_WHY = { kpi1: "같은 정의의 전년 값이 없음 · L3 기록 채널이 2026년부터 늘어 전년과 측정 범위가 다름", kpi2: "같은 정의(60일·다른 아파트)의 전년 값이 없음 · 2026년부터 늘어난 L3 채널과 업체 확인 범위가 달라 비교 불가", kpi3: "분모 기준 미확정 · L2 영업보고 원천 없음" };
   function kpi12Spec(id, api) {
     var d = null; if (ADAPTERS[id]) { try { d = ADAPTERS[id](api) || null; } catch (e) { d = null; } }
     var verified = !!(d && d.status === "verified" && isNum(d.value)), one = id === "kpi1";
     var act = api.leading("신규 협력사 활성화율(별도)"), rf = null;
     if (one && act && isNum(act["값"])) rf = [{ label: "신규 협력사 활성화율(별도 지표)", value: api.pc(act["값"]), calc: String(act["비고"] || "") + " · 플랫폼 가입 기준·L2 이상 활동 — 신규 업체 사용률(협약일 1년·L3)과 정의가 달라 참고용" }];
     var spec = { cls: one ? "k1" : "k2", icon: one ? "user" : "repeat", label: one ? "신규 업체 사용률" : "재사용률", state: verified ? "ok" : "review", pill: "데이터 확인 필요", vtext: "데이터 확인 필요", value: verified ? api.pc(d.value) : "",
-      def: one ? "실제 MOU 협약일 기준 신규 업체 중 협약 후 1년 이내 L3를 이용한 비율 · 협약일 없는 업체는 미확인으로 분리, 관측 1년 미만은 '관측 중'" : "기존·신규 업체 전체 · 기간 내 관측된 첫 L3 이후 같은 시공사가 다른 아파트에서 다시 L3를 이용한 비율(기간 내 관측 재사용률) · 같은 아파트 반복 문의 제외",
+      def: one ? "MOU 협약 후 1년 이내인 신규 업체 중 L3를 이용한 업체 비율 · 협약일이 없는 업체는 별도 관리" : "기존·신규 업체 전체 · 기간 내 관측된 첫 L3 이후 같은 시공사가 다른 아파트에서 다시 L3를 이용한 비율(기간 내 관측 재사용률) · 같은 아파트 반복 문의 제외",
       dates: one ? ["협약일", "L3 활동일"] : ["L3 활동일"],
-      yoy: "—", trend: '<span class="du-dash">추이 — 확인 후 표시</span>', refs: rf, refHead: "참고(정의 다름)",
+      yoy: yoyNA(YOY_WHY[id]), trend: '<span class="du-dash">추이 — 확인 후 표시</span>', refs: rf, refHead: "참고(정의 다름)",
       note: verified ? esc(d.basis || "") : (one ? "분석 기간(2025.06.24~) 협약 업체와 업체별 L3 이력이 공개 집계에 아직 반영되지 않아 계산하지 않았습니다." : "분석 기간 내 업체·아파트 단위 L3 이력(현장 연결 확정 포함)이 공개 집계에 아직 반영되지 않아 계산하지 않았습니다."), to: one ? "mou" : "l3" };
     return kpi12Period(id, api, spec, verified);
   }
@@ -352,20 +407,20 @@
     var PD = null; if (ADAPTERS.paths) { try { PD = ADAPTERS.paths(api) || null; } catch (e) { PD = null; } }
     h += '<div class="du-t"><h2>L2 · L3 · L4 경로 분석</h2><span>실제 날짜 순서와 업체·현장 연결이 확인된 기록만 확정 집계 · 불명확한 연결은 검토 대상으로 분리</span></div>';
     h += '<div class="du-paths">' + PATHS.map(function (p) {
-      var x = PD && PD[p.id] || null, ok = !!(x && x.verify === "ok"), cell = function (v) { return ok && isNum(v) ? api.num(v) : "—"; };
+      var x = PD && PD[p.id] || null, ok = !!(x && x.verify === "ok"), cell = function (v) { return ok && isNum(v) ? api.num(v) : "—"; }, l4 = p.id === "p3" ? l4Ref(api) : "";
       var st = ok ? pill("ok", "확인 완료") : x ? pill("rev", "검증 필요") : p.needL2 ? pill("wait", "영업보고 원천 대기") : pill("rev", "데이터 확인 필요");
-      return '<button class="du-path' + (p.needL2 ? " l2" : "") + (p.id === "p2" ? " sep" : "") + '" data-kact="dgo" data-id="' + (p.needL2 ? "l2" : "l3") + '"><div class="ph"><b>' + esc(p.n) + "</b>" + st + '</div><span class="pd">' + esc(p.d) + '</span><div class="pn"><span><em>업체</em><b>' + cell(x && x.vendors) + "</b></span><span><em>현장</em><b>" + cell(x && x.sites) + "</b></span><span><em>활동</em><b>" + cell(x && x.acts) + "</b></span></div></button>";
+      return '<button class="du-path' + (p.needL2 ? " l2" : "") + (p.id === "p2" ? " sep" : "") + '" data-kact="dgo" data-id="' + (p.needL2 ? "l2" : "l3") + '"><div class="ph"><b>' + esc(p.n) + "</b>" + st + '</div><span class="pd">' + esc(p.d) + '</span><div class="pn"><span><em>업체</em><b>' + cell(x && x.vendors) + "</b></span><span><em>현장</em><b>" + cell(x && x.sites) + "</b></span><span><em>활동</em><b>" + cell(x && x.acts) + "</b></span></div>" + l4 + "</button>";
     }).join("") + "</div>";
     h += '<section class="du-card du-reach"><header><h3>L3 도달 경로 (L2 경유 + L3 직접 진입)</h3>' + pill("rev", "검증 필요") + '</header><div class="du-flow"><div class="n"><span>L2 경유 L3</span><b>—</b></div><i class="ar">+</i><div class="n"><span>L3 직접 진입</span><b>—</b></div></div><p class="s2">두 경로는 각각 구분해 보관하고 메인에는 합산만 표시합니다. 개별 건수와 비율은 L3 자료 화면에서 확인합니다. ' + (okL ? "참고: 기존 L2→L3 전환률 " + esc(api.pc(L["값"])) + " (" + esc(dv(lcv, api.num).t) + " ÷ " + esc(dv(l2v, api.num).t) + ", 구 정의)" : "") + "</p>" + go("l3", "L3 자료 화면") + "</section>";
 
     /* 5) 월별 활동 추이 */
     var PTm = periodTab(api), ml = PTm ? PTm.list("월별 L3") : [];
     if (ml.length) {
-      var mons = ml.map(function (r) { return pMonth(r["지표"]); }), cats = mons.map(function (m) { return { l: m, s: m.slice(2).replace("-", "/"), cur: false }; });
+      var mons = ml.map(function (r) { return pMonth(r["지표"]); }), cats = mons.map(function (m, i) { var mm = String(parseInt(m.slice(5), 10)); return { l: m, s: m === "2025-06" ? "6*" : (mm === "1" ? m.slice(2, 4) + "/1" : mm), cur: false, part: m === "2025-06" }; });
       var ser = function (g) { var mp = {}; PTm.list(g).forEach(function (r) { mp[pMonth(r["지표"])] = r["값"]; }); return mons.map(function (m) { return isNum(mp[m]) ? mp[m] : null; }); };
       h += '<div class="du-t"><h2>월별 활동 추이</h2><span>월 기준은 활동일·공고일 · ' + esc(mons[0]) + " ~ " + esc(mons[mons.length - 1]) + " · 작업본 집계(검증 필요) · 마지막 달은 진행 중</span></div><section class=\"du-card wide\"><header><h3>월별 활동 및 성과 추이</h3>" + pill("rev", "검증 필요") + "</header>" +
         '<div class="du-mser"><h4>L3 활동 (건)</h4>' + mini(ser("월별 L3"), cats, { fmt: api.num }) + '</div><div class="du-mser"><h4>자사 공고 (건)</h4>' + mini(ser("월별 공고"), cats, { fmt: api.num }) + '</div><div class="du-mser"><h4>낙찰 (건)</h4>' + mini(ser("월별 낙찰"), cats, { fmt: api.num }) + "</div>" +
-        '<p class="s2">L2 영업보고는 원천이 없어 표시하지 않습니다. 2025-06은 24일부터, 낙찰은 공고일 기준입니다. 같은 흐름의 컨설팅 요청·발행 등이 함께 세어져 L3 건수가 부풀 수 있습니다.</p></section>';
+        '<p class="s2"><b>* 2025-06은 6/24~30(7일)만 포함한 부분 기간입니다 — 전체 6월과 비교하지 마세요.</b> L2 영업보고는 원천이 없어 표시하지 않습니다. 낙찰은 공고일 기준입니다. 같은 흐름의 컨설팅 요청·발행 등이 함께 세어져 L3 건수가 부풀 수 있습니다.</p></section>' + monthlyKpi(api, PTm, mons, cats);
     } else {
       h += '<div class="du-t"><h2>월별 활동 추이</h2><span>월 기준은 각 지표의 날짜 필드(활동일·공고일·매출일)를 따릅니다</span></div><section class="du-card wide"><header><h3>월별 활동 및 성과 추이</h3>' + pending() + "</header>" + ghostMonths(3) + '<div class="du-lg"><span><i class="du-dot c1"></i>L2 영업보고</span><span><i class="du-dot c2"></i>L3 활동</span><span><i class="du-dot c3"></i>공고·낙찰</span></div><div class="du-empty"><b>월별 데이터가 아직 연결되지 않았습니다</b><span>연결되면 2025.06부터 월별 L2·L3·L4 추이가 이 자리에 표시됩니다. 임의 수치는 넣지 않습니다.</span></div></section>';
     }

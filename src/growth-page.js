@@ -391,11 +391,26 @@
     return h + '<p class="gw-note">운영 시트에 없는 원천(잔디 기술문의·잔디 PT·컨설팅 발행현황)은 포함되지 않았습니다. 현장 연결은 주소 일치 우선, 없으면 현장명 일치이며 불명확한 연결은 확정하지 않습니다.</p>';
   }
 
+  /* ---------- 업체 상세: 메인자재 구매 이력(업체 단위 — 현장 사용과 구분) ---------- */
+  function vendorBuyHtml(v) {
+    var b = v.mainBuy; if (!b) return "";
+    var h = '<div class="card-h" style="margin-top:12px"><h2>메인자재 구매</h2><span class="mini">업체가 구매한 사실이며, 특정 낙찰 현장에 사용했다는 증거는 아닙니다</span></div>';
+    var chip = b.state === "confirmed" ? '<span class="st ok">' + esc(b.label) + "</span>" : b.state === "unknown" ? '<span class="st na">' + esc(b.label) + "</span>" : '<span class="st na">' + esc(b.label) + "</span>";
+    h += '<div class="kv"><span>구매 여부</span><span>' + chip + " " + esc(b.note) + "</span>";
+    if (b.state === "confirmed") h += "<span>최초 · 최근 구매일</span><span>" + esc(b.first) + " · " + esc(b.last) + "</span><span>재구매</span><span>" + (b.repurchase ? '<span class="st ok">재구매 있음</span> 구매일 ' + b.days + "일" : '<span class="st na">구매일 1일</span>') + "</span><span>구매 건수</span><span>" + b.count + "건 (분석 시작일 이후 " + b.sinceStart + "건)</span>";
+    h += "</div>";
+    if (b.state === "confirmed") {
+      h += '<div class="card-h" style="margin-top:8px"><h2>구매 품목·공종</h2></div><ul class="gw-cov">' + b.items.map(function (x) { return "<li>" + esc(x.품목) + (x.공종 ? " · " + esc(GC.FAM_LABEL[x.공종] || x.공종) : "") + " — " + esc(won(x.금액)) + " (" + x.건수 + "건)</li>"; }).join("") + "</ul>";
+      h += '<div class="card-h" style="margin-top:8px"><h2>최근 구매 이력</h2><span class="mini">최근 ' + Math.min(30, b.history.length) + "건 · 판매 적요는 참고용(현장 확정 아님)</span></div>" + simpleTable(["일자", "품목", "수량", "금액", "판매 적요"], b.history.map(function (x) { return [esc(x.d), esc(x.item), x.qty == null ? "—" : esc(String(x.qty)), esc(won(x.amt)), x.memo ? esc(x.memo) : '<span class="op-mut">—</span>']; }));
+    }
+    return h;
+  }
   /* ---------- 업체 상세(모달) ---------- */
   function vendorModal(m) {
     if (!Gs.vendor) return ""; var v = m.vendorDetail(Gs.vendor); var ys = m.years;
     var h = '<div class="ks-modal" data-kact="gvclose-bg"><div class="box" role="dialog" aria-modal="true"><div class="hd"><h2>' + esc(v.이름) + '</h2><span class="mini">통합ID ' + esc(v.통합ID) + '</span><button class="x" data-kact="gvclose">닫기 ✕</button></div><div class="bd">';
     h += '<div class="kv"><span>구매 연결</span><span>' + stChip(v.link.code, v.link.label) + " " + esc(v.link.note) + "</span><span>고객관리카드(B2B 마스터)</span><span>" + (v.cardLinked ? '<span class="st ok">연결됨</span> B2B 고유번호 ' + esc(v.cardId) : '<span class="st na">카드 없음</span> B2B 마스터 미등록(신규 통합ID)') + "</span><span>사업자번호</span><span>" + esc(v.master && v.master["사업자등록번호"] || "없음") + "</span><span>마스터 연결상태</span><span>" + esc(v.master && v.master["연결상태"] || "—") + " · " + esc(v.master && v.master["연결근거"] || "") + "</span><span>최근 구매일</span><span>" + (v.lastBuy ? esc(v.lastBuy) : '<span class="mini">' + esc(v.lastBuyWhy || "구매 기록 없음") + "</span>") + "</span><span>최근 영업활동일</span><span>" + (v.lastActivity ? esc(v.lastActivity + " · " + v.lastActivityType) : '<span class="mini">활동 이력 없음(데이터 없음)</span>') + "</span></div>";
+    h += vendorBuyHtml(v);
     h += vendorTimeline(v.통합ID, v);
     h += '<div class="card-h" style="margin-top:12px"><h2>연도별 POUR 낙찰 · 자재 구매</h2></div>' + simpleTable(["연도", "낙찰(건)", "낙찰금액", "자재 구매(연간)", "메인 구매", "동일기간 구매", "품목별(페인트/우레탄/에폭시)"], ys.map(function (y, i) { var a = v.awards[i], p = v.purchases[i]; return [esc(y), esc(String(a.n)), a.n ? esc(won(a.amt) || "—") + (a.missing ? ' <span class="mini">(금액 미기재 ' + a.missing + ")</span>" : "") : '<span class="mini">—</span>', p.amt == null ? '<span class="mini">대기</span>' : esc(won(p.amt) || "0원"), p.main == null ? '<span class="mini">' + esc(p.mainWhy || "대기") + "</span>" : esc(won(p.main) || "0원"), p.ytdAmt == null ? '<span class="mini">대기</span>' : esc(won(p.ytdAmt) || "0원"), p.fam ? esc([p.fam["재도장"], p.fam["우레탄"], p.fam["에폭시"]].map(function (x) { return won(x) || "0"; }).join(" / ")) : '<span class="mini">—</span>']; }));
     h += '<div class="card-h" style="margin-top:12px"><h2>구매 품목(금액 상위)</h2></div>' + (v.items.length ? '<ul class="gw-cov">' + v.items.map(function (x) { return "<li>" + esc(x.품목) + " — " + esc(won(x.금액)) + "</li>"; }).join("") + "</ul>" : '<p class="gw-note">' + esc(v.itemsWhy || "구매 품목 기록 없음") + "</p>");
