@@ -10,9 +10,9 @@
   var GKEY = "netform.b2b.growthdef.v1", CALC_VER = "growth-core v1";
   var GC = window.B2BGrowth; var A = null;
   var Gs = { basis: null, year: null, open: {}, trade: "all", q: "", vfilter: "all", cfilter: "all", fam: "all", vendor: null, covOpen: false, recOpen: false, draft: null, msg: null, qres: null };
-  var DEF_LABELS = { notices: "POUR 반영 공고", awards: "POUR 낙찰", awardAmt: "POUR 낙찰금액", ratio: "공고 대비 낙찰 비율", sales: "전체 자재 매출", main: "메인자재 매출", buyRate: "낙찰 시공사 구매 연결률", mainRate: "메인자재 구매 연결률" };
+  var DEF_LABELS = { notices: "자사 반영 공고 합계(POUR+다특허+브랜드)", awards: "POUR 낙찰", awardAmt: "POUR 낙찰금액", ratio: "공고 대비 낙찰 비율", sales: "전체 자재 매출", main: "메인자재 매출", buyRate: "낙찰 시공사 구매 연결률", mainRate: "메인자재 구매 연결률" };
   var RULE_TEXT = {
-    notices: "5b.POUR반영공고 중 집계대상=Y 인 공고 건수(공고일 연도 기준). 동일기간은 공고일이 기준일(월-일) 이전인 건",
+    notices: "5b.POUR반영공고 중 집계대상=Y 인 공고 건수(공고일 연도 기준). 2025년부터 목록에 구분(POUR·다특허 PD·DO·CNC)이 표시되고 합계 = POUR 단독 + 다특허(PD) + DO·CNC(원본이 'POUR 공고문 현황'에 함께 넣어 관리하는 구분). 동일기간은 공고일이 기준일(월-일) 이전인 건",
     awards: "5.POUR공고낙찰 건수(공고일 연도 기준 · 낙찰일 자료 없음). 타공법 낙찰 제외, 재공고·반복공고 포함",
     awardAmt: "낙찰금액 합(VAT 포함 여부 미확인 · 금액 미기재는 합계에서 제외하고 건수만 집계)",
     ratio: "분모 = 공고 목록(5b, 집계대상=Y) 건수 · 분자 = 그중 낙찰 기록이 연결된 공고 수(현장명+공고일 일치). 같은 모집단",
@@ -137,7 +137,7 @@
     h += '<div class="gw-ctl"><div class="ks-chips"><button data-kact="gbasis" data-id="ytd"' + (Gs.basis === "ytd" ? ' aria-current="true"' : "") + ">동일기간 1/1~" + esc(m.endMD.replace("-", "/")) + '</button><button data-kact="gbasis" data-id="ann"' + (Gs.basis === "ann" ? ' aria-current="true"' : "") + ">연간(확정 연도)</button></div>";
     h += '<div class="ks-chips">' + m.years.map(function (y) { return '<button data-kact="gyearsel" data-id="' + y + '"' + (Gs.year === y ? ' aria-current="true"' : "") + ">" + y + "</button>"; }).join("") + "</div></div>";
     h += '<div class="ks-tools gw-search"><input id="gw-q" data-kact="gq" type="search" placeholder="' + (m.restricted ? "시공사 검색은 상세 보기(로그인)에서 이용" : "시공사 검색 (업체명·표기·통합ID·사업자번호)") + '" value="' + esc(Gs.q) + '" autocomplete="off"><button class="btn" data-kact="gqgo">검색</button>' + (Gs.q ? '<button class="btn ghost" data-kact="gqclear">지우기</button>' : "") + "</div>";
-    h += '<div class="gw-menu">' + [["gw-sum", "핵심 지표"], ["gw-flow", "종합 흐름"], ["gw-awards", "① 공고·낙찰"], ["gw-sales", "② 자재 매출"], ["gw-cohort", "③ 낙찰→구매 연결"], ["gw-q", "질문 답변"], ["gw-who", "기여·확인 필요 업체"], ["gw-cov", "데이터 신뢰도"], ["gw-def", "지표 정의"]].map(function (x) { return '<button data-kact="gjump" data-id="' + x[0] + '">' + x[1] + "</button>"; }).join("") + "</div>";
+    h += '<div class="gw-menu">' + [["gw-our", "우리 공법"], ["gw-sum", "핵심 지표"], ["gw-flow", "종합 흐름"], ["gw-awards", "① 공고·낙찰"], ["gw-sales", "② 자재 매출"], ["gw-cohort", "③ 낙찰→구매 연결"], ["gw-q", "질문 답변"], ["gw-who", "기여·확인 필요 업체"], ["gw-cov", "데이터 신뢰도"], ["gw-def", "지표 정의"]].map(function (x) { return '<button data-kact="gjump" data-id="' + x[0] + '">' + x[1] + "</button>"; }).join("") + "</div>";
     if (m.missing && m.missing.length) h += '<div class="ks-warn"><b>시트 구조 경고:</b> ' + esc(m.missing.join(", ")) + " 탭이 없거나 구조가 달라 해당 분석은 표시하지 않습니다(0으로 대체하지 않음).</div>";
     return h + "</div>";
   }
@@ -148,13 +148,85 @@
     return h + "</div>";
   }
 
+  /* ---------- 쉬운 근거: 제목 바로 아래에 "뜻 · 계산 · 출처 · 조심할 점"을 접어서 보여준다 ---------- */
+  var EZ_L = ["무슨 뜻이에요?", "어떻게 계산했어요?", "어디서 가져왔어요?", "조심할 점"];
+  function easyBlock(a) { return '<details class="ez"><summary>쉽게 보기 · 이 숫자의 근거</summary><dl>' + a.map(function (t, i) { return t ? "<dt>" + EZ_L[i] + "</dt><dd>" + esc(t) + "</dd>" : ""; }).join("") + "</dl></details>"; }
+  function withEasy(html, map) {
+    Object.keys(map).forEach(function (k) { var mk = "<h2>" + k + "</h2>", from = 0, i; while ((i = html.indexOf(mk, from)) >= 0) { var e = html.indexOf("</div>", i); if (e < 0) break; e += 6; var ins = easyBlock(map[k]); html = html.slice(0, e) + ins + html.slice(e); from = e + ins.length; } });
+    return html;
+  }
+  var EASY_GROW = {
+    "핵심 성장 지표": ["고른 연도(같은 기간끼리)의 공고·낙찰·낙찰금액·자재 매출·메인자재·구매 연결, 6가지가 작년보다 늘었는지 줄었는지 한눈에 보여줘요.", "증감 = (올해 − 작년) ÷ 작년. 예: 작년 100건, 올해 120건이면 +20%.", "5b.POUR반영공고(공고), 5.POUR공고낙찰(낙찰), 이카운트 판매 원문(매출), 4.메인자재구매현황.", "올해는 10월 20일까지라서 작년 '전체 연간'과 비교하지 않고, 작년 같은 기간(1/1~10/20)끼리 비교해요. 비교할 수 없으면 '비교 불가'로 적어요."],
+    "종합 성장 흐름": ["공고 → 낙찰 → 자재 구매로 이어지는 흐름을 연도별로 나란히 놓고 보는 그림이에요.", "각 막대는 그 해(같은 기간)의 건수나 금액이에요. 아래 줄은 작년 대비 증감이에요.", "공고·낙찰·판매 원문 집계.", "공고는 해마다 담긴 범위가 달라요(아래 ① 설명 참고)."],
+    "① POUR 공고·낙찰 성장 분석": ["'공고'는 아파트 공사 입찰 공고문 한 건이에요. 이 중 우리 POUR 특허가 들어간 공고가 몇 건이고, 그중 몇 건이 POUR 낙찰로 이어졌는지 보는 곳이에요.","자사 반영 공고 합계 = POUR 단독 + 다특허(PD) + DO·CNC. 낙찰/공고 = 낙찰 기록이 연결된 공고 ÷ 자사 반영 공고. 전년 대비 = (올해−작년)÷작년이고, 모든 해 같은 기간(1/1~10/20)끼리 비교해요.","시트 5b.POUR반영공고(집계대상=Y), 5.POUR공고낙찰. 원본: 2022~2024 'POUR공법 공고문 LIST', 2025·2026 '전체 및 POUR 공법 공고문 현황'.","2025년부터 구분(POUR 단독·다특허·DO·CNC)이 생겨서 POUR 단독과 다특허·브랜드의 2025년 증감은 '비교 불가'예요. 2025년에 공고 관리 방식이 '전체 공고문 확대 관리'로 바뀌었다고 원본에 적혀 있어, 증가의 일부는 수집 범위가 넓어진 효과일 수 있어요(원본만으로는 확인할 수 없어요)."],
+    "연도별 실적 비교표": ["해마다 우리 공법의 공고·낙찰·낙찰금액이 어땠는지 표로 비교해요. 앞쪽 열일수록 우리 공법 성과예요.","각 '전년 대비'는 (올해−작년)÷작년이에요. 모든 해 같은 기간(1/1~10/20)끼리 비교해요.","시트 5b.POUR반영공고(집계대상 Y), 5.POUR공고낙찰.","'다특허(PD)'는 경쟁사 공고가 아니라 우리 특허가 함께 들어 있는 다특허 공고예요. 구분이 없던 해와는 비교할 수 없어 '비교 불가'예요."],
+    "② 자재 매출 성장 분석": ["우리 자재(이카운트 판매)가 얼마나 팔렸는지, 그중 '메인자재'가 얼마인지 비교해요.", "그 해(같은 기간)의 판매 공급가액 합계. 증감 = (올해 − 작년) ÷ 작년.", "이카운트 판매 원문(시트 3), 1.통합KPI.", "메인자재는 품목 이름을 검증한 해만 보여줘요. 검증 전 해는 0이 아니라 '미확인'이에요. 금액은 VAT 제외예요."],
+    "연도별 매출 비교표": ["해마다 전체 자재 매출과 메인자재 매출을 표로 비교해요.", "같은 기간의 판매 합계와 작년 대비 증감 %.", "이카운트 판매 원문, 1.통합KPI.", "비자재·용역도 전체 매출에 들어 있어요(기존 KPI 정의)."],
+    "③ POUR 낙찰 시공사 → 자재 구매 연결 분석": ["POUR로 낙찰받은 시공사가 우리 자재를 실제로 샀는지 보는 곳이에요.", "자재를 산 기록이 있는 낙찰 시공사 수 ÷ 낙찰 시공사 수.", "5.POUR공고낙찰의 낙찰 시공사, 이카운트 판매 원문(거래처).", "사업자번호가 없어서 이름으로 '연결 후보'만 잡았어요. 산 것이 그 현장에 쓰였다는 증거는 아니에요."],
+    "연도별 연결 비교표": ["낙찰 시공사 중 자재를 산 시공사가 해마다 얼마나 되는지 비교해요.", "연결 후보 시공사 ÷ 낙찰 시공사.", "낙찰 기록과 판매 원문.", "'후보'라서 확정 숫자가 아니에요."],
+    "질문 답변": ["팀장님이 자주 묻는 질문에 대한 답을 숫자로 요약해요.", "위 표와 카드의 같은 숫자를 문장으로 풀었어요.", "위 분석과 같은 시트.", "비교할 수 없는 항목은 '비교 불가'라고 적어요."],
+    "어떤 시공사가 매출 성장에 기여했는가?": ["올해 우리 자재를 가장 많이 늘려 산 시공사가 어디인지 보여줘요.", "시공사별 올해 구매액 − 작년 같은 기간 구매액.", "이카운트 판매 원문.", "시공사 이름이 다르게 적힌 경우를 묶었지만, 사업자번호가 없어 일부는 '후보'예요."],
+    "낙찰 이력은 있지만 구매 확인이 필요한 업체는?": ["POUR 낙찰은 받았는데 우리 자재를 산 기록이 안 보이는 시공사 목록이에요.", "낙찰 기록은 있고 판매 원문에서 구매가 확인되지 않는 시공사.", "낙찰 기록, 판매 원문.", "'구매 없음'이 아니라 '구매 미확인'이에요. 이름이 다르게 적혀 못 찾았을 수도 있어요."],
+    "데이터 신뢰도 · 기간별 누락·비교 불가": ["숫자를 얼마나 믿어도 되는지 상태별로 알려줘요(확인 완료·연결 후보·데이터 부족·확인 불가).", "각 숫자에 상태 표시를 붙였어요.", "각 지표의 원천 시트.", "데이터가 없으면 0으로 채우지 않고 이유를 적어요."]
+  };
+  /* ---------- 시장 전체 공고(26.시장전체공고 탭, 원본 「전체 공고문」 집계) · 우리 특허가 들어간 공고의 시장 점유 ---------- */
+  var MK_TAB = "26.시장전체공고";
+  /* 공개 집계(20.기간KPI집계)의 "[시장] " 행 — 동일기간 값만 있다. 시트 26탭이 없는 공개 보기에서 쓴다 */
+  function marketFrom20(y, basis) {
+    if (basis !== "ytd" || !A || !A.has || !A.has("20.기간KPI집계")) return null;
+    var tot = null, own = null;
+    A.objs("20.기간KPI집계").forEach(function (r) { var m = String(r["지표"] || "").match(/^\[시장\] (시장 전체 공고문|우리 특허 포함 공고) · (\d{4}) 동일기간/); if (!m || m[2] !== String(y)) return; var v = Number(r["값"]); if (!isFinite(v)) return; if (m[1] === "시장 전체 공고문") tot = v; else own = v; });
+    return tot != null && own != null ? { total: tot, own: own, kinds: {}, share: tot ? own / tot : null } : null;
+  }
+  function marketOf(y, basis) {
+    if (!A || !A.has || !A.has(MK_TAB)) return marketFrom20(y, basis);
+    var per = basis === "ytd" ? "동일기간" : "연간", tot = 0, own = 0, any = false, kinds = {};
+    A.objs(MK_TAB).forEach(function (r) { if (String(r["연도"]) !== String(y) || String(r["기간구분"]) !== per) return; var n = Number(r["건수"]); if (!isFinite(n)) return; any = true; tot += n; kinds[r["구분"]] = n; if (String(r["자사 반영 공고(시트 5b 기준)"]) === "Y") own += n; });
+    return any ? { total: tot, own: own, kinds: kinds, share: tot ? own / tot : null } : marketFrom20(y, basis);
+  }
+  function marketBlock(m, Y, P, c) {
+    var B = Gs.basis, mk = marketOf(Y, B), mp = P ? marketOf(P, B) : null, h = "";
+    if (!mk) {
+      return '<p class="gw-note">' + (B !== "ytd" ? "시장 점유율은 '동일기간' 보기에서만 제공합니다(시장 전체 공고 자료는 각 해 1/1~10/20 값만 있습니다)." : m.restricted ? "이 연도의 시장 점유율 값이 공개 집계에 없습니다(시장 전체 공고 자료는 2025년부터 있습니다)." : "시장 전체 공고 탭(" + MK_TAB + ")이 없거나 이 연도 값이 없어 시장 점유율을 계산하지 않았습니다.") + " 경쟁사·일반 공고는 자사 반영 공고 합계에 들어 있지 않습니다.</p>";
+    }
+    var gTot = mp && mp.total ? { state: "ok", pct: mk.total / mp.total - 1 } : { state: "na", why: P ? P + "년 시장 전체 공고 자료가 없습니다(2022~2024 원본은 POUR 공고만 모은 목록)" : "비교할 전년 자료 없음" };
+    var gSh = mp && mp.share != null && mk.share != null ? { state: "ok", pp: (mk.share - mp.share) * 100 } : { state: "na", why: gTot.why };
+    var same = isNum(c.notices) && c.notices === mk.own;
+    h += '<div class="gw-mkt"><div class="mh">⑥ 시장 변화 · 우리 점유 <span class="mini">원본 「전체 공고문」(경쟁사·일반 포함) 기준 · ' + esc(ymLabel(m)) + "</span></div><div class=\"gw-ours\">" +
+      '<div class="gw-our"><span class="rk">⑥</span><div class="b"><div class="t">시장 전체 공고문</div><div class="n">' + esc(cnt(mk.total)) + '건</div><div class="d">' + (P ? esc(P) + "년 " + (mp ? esc(cnt(mp.total)) + "건 " : "— ") : "") + chip(gTot) + "</div>" + (gTot.state !== "ok" ? '<div class="w">' + esc(gTot.why || "") + "</div>" : "") + "</div></div>" +
+      '<div class="gw-our"><span class="rk">⑦</span><div class="b"><div class="t">우리 특허가 들어간 공고의 비중 (점유)</div><div class="n">' + esc(p1(mk.share)) + '</div><div class="d">' + esc(cnt(mk.own)) + " ÷ " + esc(cnt(mk.total)) + (P ? " · " + esc(P) + "년 " + (mp ? esc(p1(mp.share)) : "—") + " " : " ") + chip(gSh, "pp") + "</div>" + (same ? "" : '<div class="w">시트 5b 의 자사 반영 공고 ' + esc(cnt(c.notices)) + "건과 " + esc(cnt(mk.own)) + "건이 달라 확인이 필요합니다</div>") + "</div></div></div></div>";
+    return h;
+  }
+  /* ---------- 우리 POUR 공법 성과 우선 표시: 팀장 질문 "우리 공법 공고가 실제 얼마나 늘었나?" ---------- */
+  function ourCard(m) {
+    var B = Gs.basis, Y = Gs.year, P = m.prevOf(Y), c = m.metrics(B, Y), p = P ? m.metrics(B, P) : null;
+    if (!c) return "";
+    var span = ymLabel(m), oth = function (x) { return x && isNum(x.notices) && isNum(x.noticesPour) ? x.notices - x.noticesPour : null; }, sy = m.splitYear && m.splitYear(), undiv = function (yy) { return !!(sy && yy < sy); };
+    var gT = m.growth(B, Y, "notices"), gP = m.growth(B, Y, "noticesPour"), gW = m.growth(B, Y, "awards"), gA = m.growth(B, Y, "awardAmt"), gO = m.growth(B, Y, "noticesOther");
+    var row = function (rank, label, big, prev, g, note, kind) { return '<div class="gw-our"><span class="rk">' + rank + '</span><div class="b"><div class="t">' + esc(label) + '</div><div class="n">' + esc(big) + '</div><div class="d">' + (P ? esc(P) + "년 " + esc(prev) + " " : "") + chip(g, kind) + '</div>' + (note ? '<div class="w">' + note + "</div>" : "") + "</div></div>"; };
+    var whyT = function (g) { return g && g.state !== "ok" && g.why ? esc(g.why) : ""; };
+    var h = '<div class="card gw-ourcard" id="gw-our"><div class="card-h"><h2>우리 POUR 공법 성과 — 공고는 얼마나 늘었나요?</h2><span class="badge">' + esc(Y) + "년 " + esc(span) + (P ? " vs " + esc(P) + "년 같은 기간" : "") + '</span></div>';
+    h += '<p class="gw-oneline">' + (p && isNum(c.notices) && isNum(p.notices) && gT.state === "ok" ? "<b>우리 특허가 들어간 공고(자사 반영 공고)</b>는 " + esc(P) + "년 " + cnt(p.notices) + "건 → " + esc(Y) + "년 " + cnt(c.notices) + "건, <b>" + (gT.pct >= 0 ? "+" : "−") + (Math.abs(gT.pct) * 100).toFixed(1) + "%</b> 입니다(같은 기준 · 같은 기간)." : "전년과 같은 기준으로 비교할 수 있는 값이 없어 증감을 계산하지 않았습니다.") + "</p>";
+    h += '<div class="gw-ours">' +
+      row("①", "POUR 단독 공고", c.noticesPour == null ? "—" : cnt(c.noticesPour) + "건", p ? (undiv(P) ? "구분 없음(합계에 포함)" : p.noticesPour == null ? "—" : cnt(p.noticesPour) + "건") : "", gP, whyT(gP)) +
+      row("②", "POUR 낙찰", c.awards == null ? "—" : cnt(c.awards) + "건", p ? (p.awards == null ? "—" : cnt(p.awards) + "건") : "", gW, "") +
+      row("③", "POUR 낙찰금액", won(c.awardAmt) || "—", p ? (won(p.awardAmt) || "—") : "", gA, "VAT 미확인 · 금액 미기재 " + (c.awardAmtMissing || 0) + "건은 합계에서 제외") +
+      row("④", "자사 반영 공고 합계 (전체 공고·시장 변화의 기준)", c.notices == null ? "—" : cnt(c.notices) + "건", p ? (p.notices == null ? "—" : cnt(p.notices) + "건") : "", gT, "POUR 단독 + 다특허(PD) + DO·CNC · 2022~2024 목록과 같은 기준이라 전년과 비교할 수 있어요") +
+      row("⑤", "다특허·브랜드 공고 (PD·DO·CNC)", oth(c) == null ? "—" : cnt(oth(c)) + "건", p ? (undiv(P) ? "구분 없음(합계에 포함)" : oth(p) == null ? "—" : cnt(oth(p)) + "건") : "", gO, whyT(gO) || "경쟁사 공고가 아니라, 우리 특허가 함께 들어 있는 다특허 공고와 브랜드(DO·CNC) 공고예요") + "</div>";
+    h += easyBlock(["공고문 목록에서 우리 POUR 특허가 들어간 공고(자사 반영 공고)가 전년 같은 기간보다 얼마나 늘었는지 보여줘요.",
+      p && isNum(c.notices) && isNum(p.notices) ? "자사 반영 공고 전년 대비 = (" + cnt(c.notices) + " − " + cnt(p.notices) + ") ÷ " + cnt(p.notices) + (gT.state === "ok" ? " = " + (gT.pct >= 0 ? "+" : "−") + (Math.abs(gT.pct) * 100).toFixed(1) + "%" : "") + ". 기간: " + Y + "년 " + span + " vs " + P + "년 같은 기간(공고일 기준). POUR 단독 " + cnt(c.noticesPour) + "건 + 다특허·브랜드 " + (oth(c) == null ? "—" : cnt(oth(c))) + "건 = " + cnt(c.notices) + "건." : "전년 값이 없어 증감을 계산하지 않았어요.",
+      "시트 5b.POUR반영공고(집계대상=Y) ← 원본 연도별 공고 목록 엑셀(2022~2024 'POUR공법 공고문 LIST', 2025·2026 '전체 및 POUR 공법 공고문 현황'). 낙찰은 시트 5.POUR공고낙찰.",
+      "시장 점유 = 우리 특허가 들어간 공고 ÷ 시장 전체 공고문(경쟁사·일반 포함, 시트 26.시장전체공고 ← 원본 「전체 공고문」). 시장 자료는 2025년부터라 2024년 이전과는 비교할 수 없어요. POUR 단독과 다특허·브랜드는 구분이 생긴 2025년과 그 전 해를 비교할 수 없어 '비교 불가'예요. '다특허(PD)'는 경쟁사 공고가 아니라 우리 특허가 함께 들어 있는 공고예요. 원본에 2025년부터 공고 관리가 '전체 공고문 확대 관리'로 바뀌었다고 적혀 있어, 증가의 일부는 수집 범위가 넓어진 효과일 수 있어요(원본만으로는 확인할 수 없어요)."]);
+    h += marketBlock(m, Y, P, c);
+    return h + "</div>";
+  }
   /* ---------- 핵심 성장 지표 ---------- */
   function tile(label, val, d, sub, trust, jumpId) { return '<div class="tile gw-tile" data-kact="gjump" data-id="' + jumpId + '" tabindex="0" role="button"><div class="l">' + esc(label) + '</div><div class="v' + (val == null ? " na" : "") + '">' + (val == null ? "확인 불가" : esc(val)) + '</div><div class="gw-dl">' + d + "</div>" + (sub ? '<div class="s">' + sub + "</div>" : "") + '<div class="gw-tt">' + trust + "</div></div>"; }
   function summary(m) {
     var B = Gs.basis, Y = Gs.year, P = m.prevOf(Y), c = m.metrics(B, Y), p = P ? m.metrics(B, P) : null;
     var gS = m.growth(B, Y, "sales"), gM = m.growth(B, Y, "main"), gN = m.growth(B, Y, "notices"), gW = m.growth(B, Y, "awards"), gA = m.growth(B, Y, "awardAmt"), gP = m.growth(B, Y, "noticesPour");
     var h = '<div class="card core6" id="gw-sum"><div class="card-h"><h2>핵심 성장 지표</h2><span class="badge">' + esc(Y) + "년 " + esc(ymLabel(m)) + (P ? " vs " + esc(P) + "년" : "") + '</span><span class="mini">카드를 누르면 해당 분석으로 이동 · 비교할 수 없는 지표는 임의로 계산하지 않고 \'비교 불가\'로 표시</span></div><div class="tiles six">';
-    h += tile(L("notices"), cnt(c.notices) == null ? null : cnt(c.notices) + "건", chip(gN), (p ? esc(P) + "년 " + cnt(p.notices) + "건" : "") + " · POUR 공고만 기준 " + chip(gP), tr("ok", "5b.POUR반영공고 집계대상=Y · 기존 KPI 카드와 일치"), "gw-awards");
+    h += tile(L("notices"), cnt(c.notices) == null ? null : cnt(c.notices) + "건", chip(gN), (p ? esc(P) + "년 " + cnt(p.notices) + "건" : "") + " · POUR 단독 " + cnt(c.noticesPour) + "건 + 다특허·브랜드 " + (isNum(c.notices) && isNum(c.noticesPour) ? cnt(c.notices - c.noticesPour) : "—") + "건 · POUR 단독 전년 대비 " + chip(gP), tr("ok", "5b.POUR반영공고 집계대상=Y · 기존 KPI 카드와 일치"), "gw-awards");
     h += tile(L("awards"), cnt(c.awards) == null ? null : cnt(c.awards) + "건", chip(gW), (p ? esc(P) + "년 " + cnt(p.awards) + "건 · " : "") + L("ratio") + " " + (p1(c.awardRatio) || "—") + " " + chip(m.growth(B, Y, "ratio"), "pp"), c.unmatchedAwards ? tr("short", "낙찰 " + c.unmatchedAwards + "건은 공고 목록과 연결되지 않아 비율 분자에서 제외") : tr("ok"), "gw-awards");
     h += tile(L("awardAmt"), won(c.awardAmt), chip(gA), "VAT 미확인 · 금액 미기재 " + (c.awardAmtMissing || 0) + "건 제외", tr("ok", "금액이 기재된 건만 합산"), "gw-awards");
     h += tile(L("sales"), won(c.sales), chip(gS), (isNum(gS.abs) ? "증감 " + (gS.abs >= 0 ? "+" : "−") + won(Math.abs(gS.abs)) : "") + " · 비자재·용역 포함(기존 KPI 정의)", tr(c.salesCheck === false ? "short" : "ok", c.salesCheck === false ? "원문 합계와 다름" : "1.통합KPI 값 · 원문 합계 대조 " + (c.salesCheck ? "일치" : "대기")), "gw-sales");
@@ -169,13 +241,13 @@
     function stage(n, title, val, sub, ratioHtml) { return '<div class="gw-st"><div class="n">' + n + '</div><div class="tt">' + esc(title) + '</div><div class="vv">' + (val == null ? '<span class="na">확인 불가</span>' : esc(val)) + '</div><div class="ss">' + sub + "</div>" + (ratioHtml ? '<div class="rr">' + ratioHtml + "</div>" : "") + "</div>"; }
     var h = '<div class="card" id="gw-flow"><div class="card-h"><h2>종합 성장 흐름</h2><span class="badge">' + esc(Y) + "년 " + esc(ymLabel(m)) + '</span><span class="mini">POUR 공고 → 낙찰 → 낙찰 시공사의 자재 구매 → 자사 매출</span></div>';
     h += '<div class="gw-flowrow">' +
-      stage(1, "POUR 공고", c.notices == null ? null : cnt(c.notices) + "건", (P ? "전년 " + cnt(p.notices) + "건 " : "") + chip(m.growth(B, Y, "notices"))) + '<div class="ar">→</div>' +
+      stage(1, "자사 반영 공고", c.notices == null ? null : cnt(c.notices) + "건", "POUR 단독 " + cnt(c.noticesPour) + " + 다특허·브랜드 " + (isNum(c.notices) && isNum(c.noticesPour) ? cnt(c.notices - c.noticesPour) : "—") + "건 · " + (P ? "전년 " + cnt(p.notices) + "건 " : "") + chip(m.growth(B, Y, "notices"))) + '<div class="ar">→</div>' +
       stage(2, "낙찰", c.awards == null ? null : cnt(c.awards) + "건", (P ? "전년 " + cnt(p.awards) + "건 " : "") + chip(m.growth(B, Y, "awards")), "공고 대비 " + (p1(c.awardRatio) || "—") + " " + chip(m.growth(B, Y, "ratio"), "pp")) + '<div class="ar">→</div>' +
       stage(3, "낙찰 시공사", c.awardVendors == null ? null : cnt(c.awardVendors) + "곳", "통합ID 기준 중복 제거 · 표기 기준 " + cnt(c.awardNames) + "곳", "") + '<div class="ar">→</div>' +
       stage(4, "자재 구매 확인 업체", co ? co.buyN + "곳" : null, co ? "메인 구매 " + (co.mainBuyN == null ? "미확인" : co.mainBuyN + "곳") : "원문 읽는 중", co ? "낙찰 시공사 대비 " + (p1(co.buyRate) || "—") + " " + chip(m.growth(B, Y, "buyRate"), "pp") + " " + tr("cand") : "") + '<div class="ar">→</div>' +
       stage(5, "자사 자재 매출", c.sales == null ? null : won(c.sales), "낙찰 시공사 구매액 " + (co ? won(co.buyAmt) + " (자재 매출의 " + (p1(co.amtShare) || "—") + ")" : "원문 읽는 중"), chip(m.growth(B, Y, "sales"))) + "</div>";
     h += '<p class="gw-note">단계 사이의 비율은 같은 연도·기간 안에서 관측한 연결입니다. 낙찰 1건과 자재 구매 금액이 건 단위로 연결된 것은 아니므로 실제 \'전환\'으로 간주하지 않습니다. 사업자번호가 확정되지 않아 구매 연결은 \'후보\'입니다.</p>';
-    var rows = [["POUR 공고(건)", function (x) { return cnt(x.notices); }], ["낙찰(건)", function (x) { return cnt(x.awards); }], ["낙찰/공고", function (x) { return p1(x.awardRatio); }], ["낙찰 시공사(곳)", function (x) { return cnt(x.awardVendors); }], ["구매 확인 업체(곳)", function (x) { return x.cohort ? cnt(x.cohort.buyN) : null; }], ["구매 확인/낙찰 시공사", function (x) { return x.cohort ? p1(x.cohort.buyRate) : null; }], ["메인 구매 업체(곳)", function (x) { return x.cohort ? (x.cohort.mainBuyN == null ? "미확인" : cnt(x.cohort.mainBuyN)) : null; }], ["메인 구매/낙찰 시공사", function (x) { return x.cohort ? (x.cohort.mainRate == null ? "미확인" : p1(x.cohort.mainRate)) : null; }], ["낙찰 시공사 자재 구매액", function (x) { return x.cohort ? won(x.cohort.buyAmt) : null; }], ["그 구매액/자재 매출", function (x) { return x.cohort ? p1(x.cohort.amtShare) : null; }]];
+    var rows = [["자사 반영 공고 합계(건)", function (x) { return cnt(x.notices); }], ["└ POUR 단독(건)", function (x) { return m.splitYear() && String(x.year) < m.splitYear() ? "구분 없음" : cnt(x.noticesPour); }], ["└ 다특허·브랜드(건)", function (x) { return m.splitYear() && String(x.year) < m.splitYear() ? "구분 없음" : isNum(x.notices) && isNum(x.noticesPour) ? cnt(x.notices - x.noticesPour) : null; }], ["낙찰(건)", function (x) { return cnt(x.awards); }], ["낙찰/공고", function (x) { return p1(x.awardRatio); }], ["낙찰 시공사(곳)", function (x) { return cnt(x.awardVendors); }], ["구매 확인 업체(곳)", function (x) { return x.cohort ? cnt(x.cohort.buyN) : null; }], ["구매 확인/낙찰 시공사", function (x) { return x.cohort ? p1(x.cohort.buyRate) : null; }], ["메인 구매 업체(곳)", function (x) { return x.cohort ? (x.cohort.mainBuyN == null ? "미확인" : cnt(x.cohort.mainBuyN)) : null; }], ["메인 구매/낙찰 시공사", function (x) { return x.cohort ? (x.cohort.mainRate == null ? "미확인" : p1(x.cohort.mainRate)) : null; }], ["낙찰 시공사 자재 구매액", function (x) { return x.cohort ? won(x.cohort.buyAmt) : null; }], ["그 구매액/자재 매출", function (x) { return x.cohort ? p1(x.cohort.amtShare) : null; }]];
     h += simpleTable(["연도별 흐름 · " + ymLabel(m)].concat(m.years.map(function (y) { return yl(m, y); })), rows.map(function (r) { return [esc(r[0])].concat(m.years.map(function (y) { var v = r[1](m.metrics(B, y)); return v == null ? '<span class="mini">대기</span>' : esc(v); })); }), true);
     return h + "</div>";
   }
@@ -191,9 +263,9 @@
     h += '<div class="gw-grid">' + chartBox("공고·낙찰 추이", "건수", ch1, legend([["c1", L("notices")], ["c2", L("awards")]]) + '<div class="gw-yl">공고 전년 대비</div>' + yoyRow(m, "notices") + '<div class="gw-yl">낙찰 전년 대비</div>' + yoyRow(m, "awards")) +
       chartBox("낙찰금액", "VAT 미확인", ch2, '<div class="gw-yl">전년 대비</div>' + yoyRow(m, "awardAmt")) +
       chartBox(L("ratio"), "같은 모집단", ch3, '<div class="gw-yl">전년 대비 증감(%p)</div>' + yoyRow(m, "ratio", "pp")) + "</div>";
-    var rows = ys.map(function (y) { var c = M[y]; return [esc(yl(m, y)), esc(cnt(c.notices) || "—"), chip(m.growth(B, y, "notices")), chip(m.growth(B, y, "noticesPour")), esc(cnt(c.awards) || "—"), chip(m.growth(B, y, "awards")), esc(won(c.awardAmt) || "—"), chip(m.growth(B, y, "awardAmt")), esc(p1(c.awardRatio) || "—"), esc(cnt(c.awardVendors) || "—")]; });
-    h += '<div class="card-h" style="margin-top:6px"><h2>연도별 실적 비교표</h2></div>' + simpleTable(["연도", "공고", "공고 증감", "POUR 공고만 증감", "낙찰", "낙찰 증감", "낙찰금액", "금액 증감", "낙찰/공고", "낙찰 시공사"], rows);
-    h += '<p class="gw-note">2025년부터 원천이 \'전체 공고\' 목록이라 다특허(PD)·DO·CNC 공고가 포함됩니다(2022~2024는 POUR 공고만). 같은 모집단 비교가 필요하면 \'POUR 공고만 증감\'을 보세요.</p>';
+    var rows = ys.map(function (y) { var c = M[y], un = !!(m.splitYear && m.splitYear() && y < m.splitYear()), oth = isNum(c.notices) && isNum(c.noticesPour) ? c.notices - c.noticesPour : null; return [esc(yl(m, y)), esc(un ? "구분 없음" : cnt(c.noticesPour) || "—"), chip(m.growth(B, y, "noticesPour")), esc(cnt(c.awards) || "—"), chip(m.growth(B, y, "awards")), esc(won(c.awardAmt) || "—"), chip(m.growth(B, y, "awardAmt")), esc(cnt(c.notices) || "—"), chip(m.growth(B, y, "notices")), esc(un ? "구분 없음" : oth == null ? "—" : cnt(oth)), chip(m.growth(B, y, "noticesOther")), esc(p1(c.awardRatio) || "—"), esc(cnt(c.awardVendors) || "—")]; });
+    h += '<div class="card-h" style="margin-top:6px"><h2>연도별 실적 비교표</h2></div>' + simpleTable(["연도", "POUR 단독 공고", "전년 대비", "POUR 낙찰", "전년 대비", "POUR 낙찰금액", "전년 대비", "자사 반영 공고 합계", "합계 전년 대비", "다특허·브랜드(PD·DO·CNC)", "전년 대비", "낙찰/공고", "낙찰 시공사"], rows);
+    h += '<p class="gw-note"><b>공고 숫자, 이렇게 읽으세요.</b> \'자사 반영 공고 합계\' = 공고문 목록에서 우리 POUR 특허(또는 원본이 \'POUR 공고문 현황\'에 함께 넣어 관리하는 다특허·DO·CNC)가 들어간 공고예요. 2022~2024년 목록은 이 합계를 한 목록으로 모았고, 2025년부터 구분(POUR 단독 · 다특허(PD) · DO · CNC)이 생겼어요. <b>\'다특허(PD)\'는 경쟁사 공고가 아니에요</b> — 한 공고에 특허가 여러 개 적힌 공고 중 우리 특허가 들어 있는 것이에요. 그래서 <b>합계끼리의 전년 대비</b>는 같은 기준이지만, <b>POUR 단독·다특허/브랜드</b>는 구분이 생긴 2025년과 그 전 해를 비교할 수 없어 \'비교 불가\'로 표시해요. 경쟁사 공고(타사·일반·자사 미포함 다특허)는 이 시트에 담기지 않았어요.</p>';
     h += '<div class="ks-tools"><span class="mini">상세: ' + esc(Y) + "년 " + esc(ymLabel(m)) + "</span>" + (m.restricted ? '<span class="gw-tr na">시공사·현장 목록 비공개</span>' : toggleBtn("awards", "상세 목록 접기", "시공사·현장 상세 목록 펼치기")) + "</div>";
     if (m.restricted) h += pubTradeBlock(m); else if (Gs.open.awards) h += '<div id="gw-det-awards">' + awardDetail(m) + "</div>";
     return h + "</div>";
@@ -370,8 +442,8 @@
     return { over: over, changes: changes, errs: errs, why: (g("gd-why") || "").trim() };
   }
 
-  /* ---------- 시공사별 활동 타임라인 (분석 시작일 2025-06-24 이후) ---------- */
-  var ANALYSIS_START = "2025-06-24";
+  /* ---------- 시공사별 활동 타임라인 (공식 분석 시작일 2026-06-01 이후) ---------- */
+  var ANALYSIS_START = "2026-06-01";
   var TL_SRC = [["7.기술자문문의", "접수일자", "협력사명", "L3", "기술자문 문의", "현장명", "주소"], ["8.컨설팅요청", "등록일자", "업체", "L3", "컨설팅내역서 요청", "현장명", "주소"], ["10.공법설명회이력", "등록일", "시공사", "L3", "공법설명회(PT)", "현장명", "주소"], ["11.기타문의답변", "등록일", "업체명", "L3", "기타 문의", null, null], ["9.샘플카탈로그요청", "접수일시", "업체", "참고", "샘플·카탈로그 요청(L3 분류 미확정)", null, "주소"]];
   function tlNorm(x) { return String(x == null ? "" : x).replace(/[\s·.,()\[\]]/g, "").toLowerCase(); }
   function vendorTimeline(id, v) {
@@ -391,11 +463,35 @@
     return h + '<p class="gw-note">운영 시트에 없는 원천(잔디 기술문의·잔디 PT·컨설팅 발행현황)은 포함되지 않았습니다. 현장 연결은 주소 일치 우선, 없으면 현장명 일치이며 불명확한 연결은 확정하지 않습니다.</p>';
   }
 
+  /* ---------- 업체 상세: L2·L3·L4 경로(업체×현장×공종 조합, 24탭) — 영업보고 원천이 없으면 'L2 기록 없음'(직접 진입 확정 아님) ---------- */
+  function vendorPathHtml(v) {
+    if (!A || !A.has || !A.has("24.경로전환_조합")) return "";
+    var rows = A.objs("24.경로전환_조합").filter(function (r) { return r["통합ID"] === v.통합ID; }); if (!rows.length) return '<div class="card-h" style="margin-top:12px"><h2>L2·L3·L4 경로</h2></div><p class="gw-note">이 시공사는 업체·현장·공종이 확정된 L3 조합이 없습니다(업체 미기재·현장 미확정 기록은 제외).</p>';
+    var yes = function (x) { return x === "Y" || x === "Y(같은 업체)" ? '<span class="st ok">' + esc(x) + "</span>" : '<span class="st na">—</span>'; };
+    var h = '<div class="card-h" style="margin-top:12px"><h2>L2·L3·L4 경로</h2><span class="mini">업체×현장×공종 조합 ' + rows.length + "개 · L3 이후 365일 이내 자사 공고·POUR 낙찰 · L2 보고는 업체를 적지 않아 현장×공종 단위로 연결 · L2 기록 없음 = 직접 진입 확정 아님</span></div>";
+    return h + simpleTable(["현장", "공종", "경로 구분", "현장 첫 L2", "첫 L3", "공고 도달", "낙찰 도달"], rows.slice(0, 60).map(function (r) { return [esc(r["현장명"] || r["현장ID"]), esc(r["공종그룹"]), esc(r["경로 구분(L2 반영)"] || r["경로 구분"]), esc(r["현장 첫 L2일(업체 미기재 보고)"] || r["첫 L2일"] || "—"), esc(r["첫 L3일"] || "—"), yes(r["L4 공고 도달(365일)"]), yes(r["L4 낙찰 도달(누구든)"])]; })) + (rows.length > 60 ? '<p class="gw-note">최대 60개만 표시 (전체 ' + rows.length + "개 — 24.경로전환_조합 탭)</p>" : "");
+  }
+  /* ---------- 업체 상세: 메인자재 구매 이력(업체 단위 — 현장 사용과 구분) ---------- */
+  function vendorBuyHtml(v) {
+    var b = v.mainBuy; if (!b) return "";
+    var h = '<div class="card-h" style="margin-top:12px"><h2>메인자재 구매</h2><span class="mini">업체가 구매한 사실이며, 특정 낙찰 현장에 사용했다는 증거는 아닙니다</span></div>';
+    var chip = b.state === "confirmed" ? '<span class="st ok">' + esc(b.label) + "</span>" : b.state === "unknown" ? '<span class="st na">' + esc(b.label) + "</span>" : '<span class="st na">' + esc(b.label) + "</span>";
+    h += '<div class="kv"><span>구매 여부</span><span>' + chip + " " + esc(b.note) + "</span>";
+    if (b.state === "confirmed") h += "<span>최초 · 최근 구매일</span><span>" + esc(b.first) + " · " + esc(b.last) + "</span><span>재구매</span><span>" + (b.repurchase ? '<span class="st ok">재구매 있음</span> 구매일 ' + b.days + "일" : '<span class="st na">구매일 1일</span>') + "</span><span>구매 건수</span><span>" + b.count + "건 (분석 시작일 이후 " + b.sinceStart + "건)</span>";
+    h += "</div>";
+    if (b.state === "confirmed") {
+      h += '<div class="card-h" style="margin-top:8px"><h2>구매 품목·공종</h2></div><ul class="gw-cov">' + b.items.map(function (x) { return "<li>" + esc(x.품목) + (x.공종 ? " · " + esc(GC.FAM_LABEL[x.공종] || x.공종) : "") + " — " + esc(won(x.금액)) + " (" + x.건수 + "건)</li>"; }).join("") + "</ul>";
+      h += '<div class="card-h" style="margin-top:8px"><h2>최근 구매 이력</h2><span class="mini">최근 ' + Math.min(30, b.history.length) + "건 · 판매 적요는 참고용(현장 확정 아님)</span></div>" + simpleTable(["일자", "품목", "수량", "금액", "판매 적요"], b.history.map(function (x) { return [esc(x.d), esc(x.item), x.qty == null ? "—" : esc(String(x.qty)), esc(won(x.amt)), x.memo ? esc(x.memo) : '<span class="op-mut">—</span>']; }));
+    }
+    return h;
+  }
   /* ---------- 업체 상세(모달) ---------- */
   function vendorModal(m) {
     if (!Gs.vendor) return ""; var v = m.vendorDetail(Gs.vendor); var ys = m.years;
     var h = '<div class="ks-modal" data-kact="gvclose-bg"><div class="box" role="dialog" aria-modal="true"><div class="hd"><h2>' + esc(v.이름) + '</h2><span class="mini">통합ID ' + esc(v.통합ID) + '</span><button class="x" data-kact="gvclose">닫기 ✕</button></div><div class="bd">';
     h += '<div class="kv"><span>구매 연결</span><span>' + stChip(v.link.code, v.link.label) + " " + esc(v.link.note) + "</span><span>고객관리카드(B2B 마스터)</span><span>" + (v.cardLinked ? '<span class="st ok">연결됨</span> B2B 고유번호 ' + esc(v.cardId) : '<span class="st na">카드 없음</span> B2B 마스터 미등록(신규 통합ID)') + "</span><span>사업자번호</span><span>" + esc(v.master && v.master["사업자등록번호"] || "없음") + "</span><span>마스터 연결상태</span><span>" + esc(v.master && v.master["연결상태"] || "—") + " · " + esc(v.master && v.master["연결근거"] || "") + "</span><span>최근 구매일</span><span>" + (v.lastBuy ? esc(v.lastBuy) : '<span class="mini">' + esc(v.lastBuyWhy || "구매 기록 없음") + "</span>") + "</span><span>최근 영업활동일</span><span>" + (v.lastActivity ? esc(v.lastActivity + " · " + v.lastActivityType) : '<span class="mini">활동 이력 없음(데이터 없음)</span>') + "</span></div>";
+    h += vendorBuyHtml(v);
+    h += vendorPathHtml(v);
     h += vendorTimeline(v.통합ID, v);
     h += '<div class="card-h" style="margin-top:12px"><h2>연도별 POUR 낙찰 · 자재 구매</h2></div>' + simpleTable(["연도", "낙찰(건)", "낙찰금액", "자재 구매(연간)", "메인 구매", "동일기간 구매", "품목별(페인트/우레탄/에폭시)"], ys.map(function (y, i) { var a = v.awards[i], p = v.purchases[i]; return [esc(y), esc(String(a.n)), a.n ? esc(won(a.amt) || "—") + (a.missing ? ' <span class="mini">(금액 미기재 ' + a.missing + ")</span>" : "") : '<span class="mini">—</span>', p.amt == null ? '<span class="mini">대기</span>' : esc(won(p.amt) || "0원"), p.main == null ? '<span class="mini">' + esc(p.mainWhy || "대기") + "</span>" : esc(won(p.main) || "0원"), p.ytdAmt == null ? '<span class="mini">대기</span>' : esc(won(p.ytdAmt) || "0원"), p.fam ? esc([p.fam["재도장"], p.fam["우레탄"], p.fam["에폭시"]].map(function (x) { return won(x) || "0"; }).join(" / ")) : '<span class="mini">—</span>']; }));
     h += '<div class="card-h" style="margin-top:12px"><h2>구매 품목(금액 상위)</h2></div>' + (v.items.length ? '<ul class="gw-cov">' + v.items.map(function (x) { return "<li>" + esc(x.품목) + " — " + esc(won(x.금액)) + "</li>"; }).join("") + "</ul>" : '<p class="gw-note">' + esc(v.itemsWhy || "구매 품목 기록 없음") + "</p>");
@@ -406,12 +502,13 @@
   }
 
   /* ---------- 렌더 ---------- */
-  function render(a) {
+  function render(a) { return withEasy(render0(a), EASY_GROW); }
+  function render0(a) {
     A = a; if (!Gs.basis) Gs.basis = defs().basis; var m = getModel();
     if (m.error || !m.years || !m.years.length) return '<div class="card"><div class="ks-warn"><b>성장 분석을 계산할 수 없습니다.</b> ' + esc((m.missing || []).join(", ")) + " — 시트 구조를 확인하세요(0으로 대체하지 않음).</div></div>";
     if (!Gs.year || m.years.indexOf(Gs.year) < 0) Gs.year = m.lastY;
     if (!m.restricted && !A.ledger() && A.V.ledgerState === "idle") A.needLedger();
-    var h = '<div class="gw">' + header(m) + searchCard(m) + summary(m) + flow(m) + secAwards(m) + secSales(m) + secCohort(m) + questions(m) + who(m) + coverage(m) + defsCard(m) + "</div>" + vendorModal(m);
+    var h = '<div class="gw">' + header(m) + ourCard(m) + searchCard(m) + summary(m) + flow(m) + secAwards(m) + secSales(m) + secCohort(m) + questions(m) + who(m) + coverage(m) + defsCard(m) + "</div>" + vendorModal(m);
     return h;
   }
   /* ---------- 상호작용 ---------- */
