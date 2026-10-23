@@ -328,7 +328,7 @@
     var d = null; if (ADAPTERS[id]) { try { d = ADAPTERS[id](api) || null; } catch (e) { d = null; } }
     var verified = !!(d && d.status === "verified" && isNum(d.value)), one = id === "kpi1";
     var act = api.leading("신규 협력사 활성화율(별도)"), rf = null;
-    if (one && act && isNum(act["값"])) rf = [{ label: "신규 협력사 활성화율(별도 지표)", value: api.pc(act["값"]), calc: "플랫폼에 가입한 업체 중 문의·컨설팅·설명회를 한 번이라도 한 업체 비율(" + String(act["비고"] || "") + "). 세는 대상이 '플랫폼 가입 업체'라서, '협약(MOU)한 업체'를 세는 목표 60%와는 다른 숫자예요. 참고만 하세요." }];
+    if (one && act && isNum(act["값"])) var jn = String(act["비고"] || "").match(/가입\s*([\d,]+)\D+활동\s*([\d,]+)/); rf = [{ label: "참고 · 신규 협력사 활성화율 (플랫폼 가입 기준)", value: api.pc(act["값"]), calc: (jn ? "플랫폼 가입 업체 " + jn[1] + "곳 중 " + jn[2] + "곳이 문의·컨설팅·설명회를 한 번 이상 이용(" + jn[2] + " ÷ " + jn[1] + ")" : String(act["비고"] || "")) + " · 분모가 '협약(MOU) 업체'가 아니라 '플랫폼 가입 업체'라서 위 신규 업체 사용률·목표 60%와 비교하지 않아요(참고 지표)." }];
     var spec = { cls: one ? "k1" : "k2", icon: one ? "user" : "repeat", label: one ? "신규 업체 사용률" : "재사용률", state: verified ? "ok" : "review", pill: "데이터 확인 필요", vtext: "데이터 확인 필요", value: verified ? api.pc(d.value) : "",
       def: one ? "MOU 협약 후 1년 이내인 신규 업체 중 L3를 이용한 업체 비율 · 협약일이 없는 업체는 별도 관리" : "기존·신규 업체 전체 · 기간 내 관측된 첫 L3 이후 같은 시공사가 다른 아파트에서 다시 L3를 이용한 비율(기간 내 관측 재사용률) · 같은 아파트 반복 문의 제외",
       dates: one ? ["협약일", "L3 활동일"] : ["L3 활동일"],

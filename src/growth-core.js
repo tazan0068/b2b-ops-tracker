@@ -37,6 +37,11 @@
   /* 비교 가능 여부 · 증감 — 원문 집계(build)와 공개 집계값(buildPublic)이 같은 규칙을 쓰도록 분리 */
   function attachCompare(G, c) {
     var prevOf = c.prevOf, lastY = c.lastY, endMD = c.endMD, mainOK = c.mainOK, firstSale = c.firstSale, metrics = c.metrics, led = c.led;
+    /* 2022~2024 목록은 POUR 단독과 다특허(자사 특허 포함)를 나누지 않고 한 목록('POUR 공고')으로 모았고, 2025년부터 구분(POUR · 다특허(PD) · DO · CNC)이 생겼다.
+       그래서 구분이 나뉘기 전 해(전년)와 나뉜 해를 POUR 단독·다특허/브랜드로 비교하면 같은 기준이 아니다 → '비교 불가'. 합계(자사 반영 공고)는 두 시기 모두 같은 기준이라 비교한다. */
+    function splitYear() { var ys = G.years || []; for (var i = 0; i < ys.length; i++) { var m = metrics("ann", ys[i]); if (m && isNum(m.notices) && isNum(m.noticesPour) && m.notices > m.noticesPour) return ys[i]; } return null; }
+    function splitBlock(y) { var sy = splitYear(), p = prevOf(y); if (!sy || !p) return null; return (y >= sy && p < sy) ? p + "년 이전 목록은 POUR 단독과 다특허(자사 특허 포함)를 나누지 않고 한 목록으로 모아서, " + y + "년 구분값과 같은 기준으로 비교할 수 없습니다 — 자사 반영 공고 합계로 비교하세요" : null; }
+    G.splitYear = splitYear; G.splitBlock = splitBlock;
     function blockFor(basis, y, key) {
       var p = prevOf(y); if (!p) return "비교할 전년 자료 없음";
       if (basis === "ann" && y === lastY) return "연중 누계(" + endMD.replace("-", "/") + "까지)라 전년 연간과 직접 비교할 수 없음 — '동일기간' 보기를 사용하세요";
@@ -47,6 +52,7 @@
     G.blockFor = blockFor;
     G.growth = function (basis, y, key) {
       var p = prevOf(y), c = metrics(basis, y), b = p ? metrics(basis, p) : null, blk = blockFor(basis, y, key);
+      if (!blk && (key === "noticesPour" || key === "noticesOther")) blk = splitBlock(y);
       var map = { notices: "notices", noticesPour: "noticesPour", awards: "awards", awardAmt: "awardAmt", awardVendors: "awardVendors", sales: "sales", main: "main" };
       if (key === "ratio") return rateDiff(c.awardRatio, b && b.awardRatio, blk);
       if (key === "buyRate") return rateDiff(c.cohort && c.cohort.buyRate, b && b.cohort && b.cohort.buyRate, blk);
