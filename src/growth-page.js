@@ -169,6 +169,27 @@
     "낙찰 이력은 있지만 구매 확인이 필요한 업체는?": ["POUR 낙찰은 받았는데 우리 자재를 산 기록이 안 보이는 시공사 목록이에요.", "낙찰 기록은 있고 판매 원문에서 구매가 확인되지 않는 시공사.", "낙찰 기록, 판매 원문.", "'구매 없음'이 아니라 '구매 미확인'이에요. 이름이 다르게 적혀 못 찾았을 수도 있어요."],
     "데이터 신뢰도 · 기간별 누락·비교 불가": ["숫자를 얼마나 믿어도 되는지 상태별로 알려줘요(확인 완료·연결 후보·데이터 부족·확인 불가).", "각 숫자에 상태 표시를 붙였어요.", "각 지표의 원천 시트.", "데이터가 없으면 0으로 채우지 않고 이유를 적어요."]
   };
+  /* ---------- 시장 전체 공고(26.시장전체공고 탭, 원본 「전체 공고문」 집계) · 우리 특허가 들어간 공고의 시장 점유 ---------- */
+  var MK_TAB = "26.시장전체공고";
+  function marketOf(y, basis) {
+    if (!A || !A.has || !A.has(MK_TAB)) return null;
+    var per = basis === "ytd" ? "동일기간" : "연간", tot = 0, own = 0, any = false, kinds = {};
+    A.objs(MK_TAB).forEach(function (r) { if (String(r["연도"]) !== String(y) || String(r["기간구분"]) !== per) return; var n = Number(r["건수"]); if (!isFinite(n)) return; any = true; tot += n; kinds[r["구분"]] = n; if (String(r["자사 반영 공고(시트 5b 기준)"]) === "Y") own += n; });
+    return any ? { total: tot, own: own, kinds: kinds, share: tot ? own / tot : null } : null;
+  }
+  function marketBlock(m, Y, P, c) {
+    var B = Gs.basis, mk = marketOf(Y, B), mp = P ? marketOf(P, B) : null, h = "";
+    if (!mk) {
+      return '<p class="gw-note">' + (m.restricted ? "시장 점유율(전체 공고문 대비 우리 특허가 들어간 공고 비중)은 상세 보기(로그인)에서 확인합니다 — 공개 집계에는 시장 전체 공고 탭이 아직 연결되지 않았습니다." : "시장 전체 공고 탭(" + MK_TAB + ")이 없거나 이 연도 값이 없어 시장 점유율을 계산하지 않았습니다.") + " 경쟁사·일반 공고는 자사 반영 공고 합계에 들어 있지 않습니다.</p>";
+    }
+    var gTot = mp && mp.total ? { state: "ok", pct: mk.total / mp.total - 1 } : { state: "na", why: P ? P + "년 시장 전체 공고 자료가 없습니다(2022~2024 원본은 POUR 공고만 모은 목록)" : "비교할 전년 자료 없음" };
+    var gSh = mp && mp.share != null && mk.share != null ? { state: "ok", pp: (mk.share - mp.share) * 100 } : { state: "na", why: gTot.why };
+    var same = isNum(c.notices) && c.notices === mk.own;
+    h += '<div class="gw-mkt"><div class="mh">⑥ 시장 변화 · 우리 점유 <span class="mini">원본 「전체 공고문」(경쟁사·일반 포함) 기준 · ' + esc(ymLabel(m)) + "</span></div><div class=\"gw-ours\">" +
+      '<div class="gw-our"><span class="rk">⑥</span><div class="b"><div class="t">시장 전체 공고문</div><div class="n">' + esc(cnt(mk.total)) + '건</div><div class="d">' + (P ? esc(P) + "년 " + (mp ? esc(cnt(mp.total)) + "건 " : "— ") : "") + chip(gTot) + "</div>" + (gTot.state !== "ok" ? '<div class="w">' + esc(gTot.why || "") + "</div>" : "") + "</div></div>" +
+      '<div class="gw-our"><span class="rk">⑦</span><div class="b"><div class="t">우리 특허가 들어간 공고의 비중 (점유)</div><div class="n">' + esc(p1(mk.share)) + '</div><div class="d">' + esc(cnt(mk.own)) + " ÷ " + esc(cnt(mk.total)) + (P ? " · " + esc(P) + "년 " + (mp ? esc(p1(mp.share)) : "—") + " " : " ") + chip(gSh, "pp") + "</div>" + (same ? "" : '<div class="w">시트 5b 의 자사 반영 공고 ' + esc(cnt(c.notices)) + "건과 " + esc(cnt(mk.own)) + "건이 달라 확인이 필요합니다</div>") + "</div></div></div></div>";
+    return h;
+  }
   /* ---------- 우리 POUR 공법 성과 우선 표시: 팀장 질문 "우리 공법 공고가 실제 얼마나 늘었나?" ---------- */
   function ourCard(m) {
     var B = Gs.basis, Y = Gs.year, P = m.prevOf(Y), c = m.metrics(B, Y), p = P ? m.metrics(B, P) : null;
@@ -188,8 +209,8 @@
     h += easyBlock(["공고문 목록에서 우리 POUR 특허가 들어간 공고(자사 반영 공고)가 전년 같은 기간보다 얼마나 늘었는지 보여줘요.",
       p && isNum(c.notices) && isNum(p.notices) ? "자사 반영 공고 전년 대비 = (" + cnt(c.notices) + " − " + cnt(p.notices) + ") ÷ " + cnt(p.notices) + (gT.state === "ok" ? " = " + (gT.pct >= 0 ? "+" : "−") + (Math.abs(gT.pct) * 100).toFixed(1) + "%" : "") + ". 기간: " + Y + "년 " + span + " vs " + P + "년 같은 기간(공고일 기준). POUR 단독 " + cnt(c.noticesPour) + "건 + 다특허·브랜드 " + (oth(c) == null ? "—" : cnt(oth(c))) + "건 = " + cnt(c.notices) + "건." : "전년 값이 없어 증감을 계산하지 않았어요.",
       "시트 5b.POUR반영공고(집계대상=Y) ← 원본 연도별 공고 목록 엑셀(2022~2024 'POUR공법 공고문 LIST', 2025·2026 '전체 및 POUR 공법 공고문 현황'). 낙찰은 시트 5.POUR공고낙찰.",
-      "POUR 단독과 다특허·브랜드는 구분이 생긴 2025년과 그 전 해를 비교할 수 없어 '비교 불가'예요. '다특허(PD)'는 경쟁사 공고가 아니라 우리 특허가 함께 들어 있는 공고예요. 원본에 2025년부터 공고 관리가 '전체 공고문 확대 관리'로 바뀌었다고 적혀 있어, 증가의 일부는 수집 범위가 넓어진 효과일 수 있어요(원본만으로는 확인할 수 없어요)."]);
-    h += '<p class="gw-note">경쟁사·일반 공고를 포함한 시장 전체 공고 수는 이 시트에 담기지 않았습니다(원본 \'전체 공고문\' 시트에는 있음). 시트에 담기 전에는 시장 점유율을 계산하지 않습니다.</p>';
+      "시장 점유 = 우리 특허가 들어간 공고 ÷ 시장 전체 공고문(경쟁사·일반 포함, 시트 26.시장전체공고 ← 원본 「전체 공고문」). 시장 자료는 2025년부터라 2024년 이전과는 비교할 수 없어요. POUR 단독과 다특허·브랜드는 구분이 생긴 2025년과 그 전 해를 비교할 수 없어 '비교 불가'예요. '다특허(PD)'는 경쟁사 공고가 아니라 우리 특허가 함께 들어 있는 공고예요. 원본에 2025년부터 공고 관리가 '전체 공고문 확대 관리'로 바뀌었다고 적혀 있어, 증가의 일부는 수집 범위가 넓어진 효과일 수 있어요(원본만으로는 확인할 수 없어요)."]);
+    h += marketBlock(m, Y, P, c);
     return h + "</div>";
   }
   /* ---------- 핵심 성장 지표 ---------- */
