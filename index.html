@@ -1158,6 +1158,18 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
 .du-kpi .trend .s{display:block;font-size:10.5px;color:var(--du-sub);margin-top:2px}.du-kpi .trend .du-spark{width:100%;max-width:170px;height:34px;display:block}.du-kpi .trend .du-spark circle{fill:var(--acc,var(--du-blue))}
 .du-path .pl4{margin-top:8px;padding:8px 10px;border-radius:10px;background:#F4F7FB;display:flex;flex-direction:column;gap:3px;text-align:left;font-size:11.5px;color:var(--du-ink)}.du-path .pl4 b{font-size:11px;color:var(--du-sub)}.du-path .pl4 span{display:flex;justify-content:space-between;gap:8px;font-weight:700;font-variant-numeric:tabular-nums}.du-path .pl4 em{font-style:normal;color:var(--du-sub);font-weight:600}.du-path .pl4 small{font-size:10.5px;line-height:1.5;color:#7A5A0B;font-weight:600;word-break:keep-all}
 
+/* 쉬운 근거(접이식) — 모든 화면 공통 */
+.ez{margin:8px 0 10px;border:1px dashed #BFD2F2;border-radius:10px;background:#F6F9FF}
+.ez summary{cursor:pointer;padding:10px 12px;min-height:44px;display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:800;color:#1F4DA0;list-style:none}
+.ez summary::-webkit-details-marker{display:none}
+.ez summary::before{content:"💡"}
+.ez summary::after{content:"펼치기";margin-left:auto;font-size:11px;font-weight:700;color:#5B6B85}
+.ez[open] summary::after{content:"접기"}
+.ez[open] summary{border-bottom:1px dashed #BFD2F2}
+.ez dl{margin:0;padding:8px 12px 10px;display:grid;gap:2px}
+.ez dt{margin-top:6px;font-size:11.5px;font-weight:900;color:#1F4DA0}
+.ez dd{margin:0;font-size:12.5px;line-height:1.7;color:#2B3A55}
+
 /* ===== 시공사 추적 · 추천 관리 대상 (ops-view.js) — 모바일 우선 ===== */
 .op,.op-reco{--op-ink:#17233B;--op-sub:#5B6B85;--op-line:#E3E9F2;--op-bg:#F6F8FC;--op-acc:#1F5FD1;color:var(--op-ink);font-size:13px}
 .op-head h2{font-size:18px;font-weight:900;margin:2px 0 4px;letter-spacing:-.3px}.op-head p{margin:0 0 10px;color:var(--op-sub);font-size:12.5px;line-height:1.5}
@@ -1702,6 +1714,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
       if (key === "mainRate") return rateDiff(c.cohort && c.cohort.mainRate, b && b.cohort && b.cohort.mainRate, blockFor(basis, y, "mainRate"));
       if (key === "mainShare") return rateDiff(c.mainShare, b && b.mainShare, blockFor(basis, y, "main"));
       if (key === "cohortBuyAmt") return growth(c.cohort && c.cohort.buyAmt, b && b.cohort && b.cohort.buyAmt, blk);
+      if (key === "noticesOther") return growth(isNum(c.notices) && isNum(c.noticesPour) ? c.notices - c.noticesPour : null, b && isNum(b.notices) && isNum(b.noticesPour) ? b.notices - b.noticesPour : null, blk);   /* 타 공법(다특허 PD·DO·CNC) 공고 = 전체 공고 − POUR 공고 */
       if (!map[key]) return growth(null, null, "알 수 없는 지표");
       return growth(c[map[key]], b && b[map[key]], key === "main" ? blockFor(basis, y, "main") : blk);
     };
@@ -2151,7 +2164,32 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     return '<div class="du-mini big" style="--n:' + rows.length + '">' + rows.map(function (r) { return '<div class="c"><i style="height:' + Math.max(6, Math.round(r.v / max * 100)) + '%" title="' + esc(r.m + " · " + (fmt ? fmt(r.v) : r.v)) + '"></i><span>' + esc(String(r.m).slice(5) + "월") + "</span></div>"; }).join("") + "</div>";
   }
 
-  /* ---------- 메인 대시보드 ---------- */
+  /* ---------- 쉬운 근거: 제목 바로 아래에 "뜻 · 계산 · 출처 · 조심할 점"을 접어서 보여준다 ---------- */
+  var EZ_L = ["무슨 뜻이에요?", "어떻게 계산했어요?", "어디서 가져왔어요?", "조심할 점"];
+  function easyBlock(a) { return '<details class="ez"><summary>쉽게 보기 · 이 숫자의 근거</summary><dl>' + a.map(function (t, i) { return t ? "<dt>" + EZ_L[i] + "</dt><dd>" + esc(t) + "</dd>" : ""; }).join("") + "</dl></details>"; }
+  function withEasy(html, map) {
+    Object.keys(map).forEach(function (k) { var mk = "<h2>" + k + "</h2>", from = 0, i; while ((i = html.indexOf(mk, from)) >= 0) { var e = html.indexOf("</div>", i); if (e < 0) break; e += 6; var ins = easyBlock(map[k]); html = html.slice(0, e) + ins + html.slice(e); from = e + ins.length; } });
+    return html;
+  }
+  var EASY_DASH = {
+    "통합 KPI 모니터링": ["우리 팀이 가장 중요하게 보는 숫자 3개(신규 업체 사용률·재사용률·L3 도달률)를 한 번에 보여줘요.", "카드마다 '분자 ÷ 분모'를 카드 안에 적었어요. 목표 눈금(기준·상향·도전·장기)은 목표까지 얼마 남았는지 보여줘요.", "구글시트 20.기간KPI집계(공개 집계)와 1.통합KPI.", "'검증 필요'는 정의나 대상 업체가 아직 확정되지 않은 임시 숫자라서 달성률을 계산하지 않아요."],
+    "시공사 전환 퍼널": ["시공사가 우리와 얼마나 가까워졌는지를 계단처럼 보여줘요: 접점 → 관심·문의 → 기술지원 직접 이용 → 결과.", "각 계단에 해당하는 서로 다른 시공사 수를 세요. 같은 시공사가 여러 번 해도 1곳이에요.", "18.선행지표요약, 2.시공사마스터 등 시트 집계.", "윗 계단이 아랫 계단을 꼭 거쳤다는 뜻은 아니에요(기록이 없던 시기가 있어요)."],
+    "핵심 선행지표": ["낙찰이나 매출이 나오기 전에 먼저 움직이는 '신호'예요(활동하는 시공사 수, 오래 쉬는 시공사 등).", "카드 아래의 '근거' 줄에 어떤 기준으로 셌는지 적었어요(예: 마지막 영업활동 후 90일 이상이면 '장기 무활동').", "17.장기무활동, 18.선행지표요약, 2.시공사마스터.", "판단할 수 없을 때는 0으로 채우지 않고 이유를 적어요."],
+    "결과 KPI": ["공고·낙찰·낙찰금액·자재 구매 같은 '결과' 숫자예요.", "'기준일 이후'(2026.06.01~)는 로그인한 상세 보기에서 시트 기록으로 세고, '연도별 집계'는 공개 집계로 세요. 기간이 달라서 더하거나 섞지 않아요.", "5.POUR공고낙찰, 5b.POUR반영공고, 이카운트 판매 원문.", "낙찰은 '공고일' 기준으로 셌어요(낙찰일 자료가 없어요)."],
+    "시공사별 영업·기술지원·성과 요약": ["올해 우리가 시공사들과 한 영업·기술지원이 몇 건이고, 그 결과가 어땠는지 한 줄 요약이에요.", "연도별 집계에서 올해 1/1부터 기준일까지 누계예요.", "1.통합KPI(연도별 집계).", "2026.06.01부터의 합산은 아직 집계가 연결되지 않아 표시하지 않아요."],
+    "L2 · L3 · L4 경로 분석": ["시공사가 '영업보고(L2) → 기술지원(L3) → 공고·낙찰(L4)'로 어떤 길로 갔는지 7가지 길로 나눠 봐요.", "업체·현장·공종이 같은 기록끼리 묶고, 날짜 순서가 맞고 연결이 확실한 것만 세요. L3 뒤 365일 안에 우리 공고나 낙찰이 있으면 L4에 도달한 거예요.", "시트 24.경로전환_조합, 03 영업활동 기록.", "영업보고(L2) 기록이 아직 없어서 L2가 들어간 길은 계산하지 않았고, 'L3 → L4'만 참고로 보여줘요. L2 기록이 없다고 'L3로 바로 왔다'고 단정하지 않아요."],
+    "월별 활동 추이": ["달마다 기술지원(L3) 요청, 우리 공고, 낙찰이 몇 건이었는지 막대로 보여줘요.", "활동일(공고일) 기준으로 그 달의 건수를 셌어요. 같은 요청의 요청·발행·초안은 한 번만 세요(공식 기간).", "20.기간KPI집계의 월별 행.", "마지막 달은 아직 진행 중이에요. '검증 필요'가 붙은 값은 임시 집계예요."],
+    "팀 행동 이력 · 관리 대상": ["팀이 실제로 한 행동(요청 처리 등)과, 지금 챙겨야 할 시공사가 몇 곳인지 보여줘요.", "행동은 유형별 건수예요. 챙길 시공사는 조건(90일 넘게 활동 없음, 협약일 없음, 낙찰 뒤 구매 확인 안 됨 등)에 걸린 곳을 중복 없이 세요.", "03 영업활동 기록, 17.장기무활동, 시공사 마스터.", "조건 기준은 기본값이라 팀에서 확정하면 숫자가 바뀔 수 있어요."],
+    "업체별 상세 분석 · 관리 대상": ["시공사 한 곳씩 이력을 날짜 순서로 보는 곳이에요.", "시공사를 고르면 협약일·요청·낙찰·구매를 시간 순서로 보여줘요.", "시트의 업체별 기록.", "구매는 '업체가 샀다'는 사실이지 '그 현장에 썼다'는 증거는 아니에요."],
+    "추가 데이터": ["영업보고·협약일·L3·매출·행동 이력, 5가지 자료를 바로 열어 보는 곳이에요.", "각 상자의 숫자는 그 자료의 건수예요.", "각 자료의 원천 시트.", "연결되지 않은 자료는 0이 아니라 '데이터 연결 예정'으로 보여줘요."]
+  };
+  function kpiEasy(o, id) {
+    var p0 = o.parts && o.parts[0] ? o.parts[0][0] + " = " + o.parts[0][1] : "";
+    if (id === "kpi1") return ["새로 우리와 협약(MOU)한 시공사 중에서, 협약하고 1년 안에 우리에게 기술 도움(L3: 기술자문·컨설팅·설명회 요청)을 한 번이라도 요청한 곳이 몇 %인지 보는 숫자예요.", "요청한 업체 수 ÷ 새로 협약한 업체 수." + (p0 ? " 지금은 " + p0 + "." : "") + " 협약일이 공식 분석 시작일(2026.06.01) 이후인 업체만 '새 업체'로 세요.", "협약일은 고객관리카드, 요청 기록은 플랫폼·잔디 기록(시트 20.기간KPI집계).", "협약한 지 1년이 안 된 업체는 아직 지켜보는 중('관측 중')이라 나중에 오를 수 있어요. 협약일이 없는 업체는 계산에서 빼고 따로 관리해요. 아래 '참고' 숫자는 세는 대상이 달라서 목표 60%와 바로 비교하면 안 돼요."];
+    if (id === "kpi2") return ["처음 기술 도움을 요청한 시공사가, 그 뒤 60일 안에 '다른 아파트 현장'으로 또 요청한 비율이에요. 한 번 써 보고 다시 쓰는지(재사용) 보는 숫자예요.", "다시 요청한 업체 수 ÷ 첫 요청을 한 업체 수." + (p0 ? " 지금은 " + p0 + "." : "") + " 같은 아파트에서 반복한 문의는 재사용으로 세지 않아요.", "플랫폼·잔디 기록(시트 20.기간KPI집계). 업체의 '첫 요청' 날짜는 2026.06.01 이전 기록까지 모두 보고 정해요.", "첫 요청 뒤 60일이 아직 안 지난 업체도 섞여 있어서 나중에 오를 수 있어요. 목표 달성률은 정의가 확정되기 전이라 계산하지 않았어요('검증 필요')."];
+    return ["영업보고(L2)로 알게 된 곳과 바로 기술 도움을 요청한 곳을 합쳐서, 얼마나 기술 도움(L3)까지 오는지 보는 숫자예요.", "비율 = L3에 온 곳 ÷ 전체 대상. 그런데 '전체 대상'을 어떤 기준으로 셀지 아직 확정되지 않아서 비율을 만들지 않았어요.", "플랫폼·잔디의 L3 기록, 영업보고(L2) 기록(아직 없음).", "영업보고(L2) 기록이 아직 없어서 '영업보고를 거친 곳'과 '바로 온 곳'을 나눌 수 없어요. 기록이 없다고 '바로 왔다'고 단정하지 않아요."];
+  }
+  function withKpiEasy(o, id) { o.easy = kpiEasy(o, id); return o; }
   function kpiCard(o) {
     var st = o.state || (o.ok ? "ok" : "wait"), okv = st === "ok", rv = st === "review";
     var pillT = okv ? "연결됨" : rv ? (o.pill || "검증 필요") : "데이터 연결 예정", pillC = okv ? "ok" : rv ? "rev" : "wait";
@@ -2162,7 +2200,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
       '<div class="yoy"><span class="l">전년 대비</span><span class="v">' + o.yoy + "</span></div>" +
       '<div class="trend"><span class="l">추이</span>' + o.trend + "</div>" +
       (o.refs ? '<div class="refs"><span class="rh">' + esc(o.refHead || "참고값(보존)") + '</span>' + o.refs.map(function (r) { return '<div class="r"><span>' + esc(r.label) + "</span><b>" + esc(r.value) + "</b>" + (r.calc ? "<small>" + esc(r.calc) + "</small>" : "") + "</div>"; }).join("") + "</div>" : "") +
-      (o.note ? '<p class="kn">' + o.note + "</p>" : "") +
+      (o.note ? '<p class="kn">' + o.note + "</p>" : "") + (o.easy ? easyBlock(o.easy) : "") +
       '<div class="foot">' + go(o.to, "상세 보기") + "</div></article>";
   }
   function trendSpark(vals, labels) {
@@ -2369,7 +2407,7 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     var d = null; if (ADAPTERS[id]) { try { d = ADAPTERS[id](api) || null; } catch (e) { d = null; } }
     var verified = !!(d && d.status === "verified" && isNum(d.value)), one = id === "kpi1";
     var act = api.leading("신규 협력사 활성화율(별도)"), rf = null;
-    if (one && act && isNum(act["값"])) rf = [{ label: "신규 협력사 활성화율(별도 지표)", value: api.pc(act["값"]), calc: String(act["비고"] || "") + " · 플랫폼 가입 기준·L2 이상 활동 — 신규 업체 사용률(협약일 1년·L3)과 정의가 달라 참고용" }];
+    if (one && act && isNum(act["값"])) rf = [{ label: "신규 협력사 활성화율(별도 지표)", value: api.pc(act["값"]), calc: "플랫폼에 가입한 업체 중 문의·컨설팅·설명회를 한 번이라도 한 업체 비율(" + String(act["비고"] || "") + "). 세는 대상이 '플랫폼 가입 업체'라서, '협약(MOU)한 업체'를 세는 목표 60%와는 다른 숫자예요. 참고만 하세요." }];
     var spec = { cls: one ? "k1" : "k2", icon: one ? "user" : "repeat", label: one ? "신규 업체 사용률" : "재사용률", state: verified ? "ok" : "review", pill: "데이터 확인 필요", vtext: "데이터 확인 필요", value: verified ? api.pc(d.value) : "",
       def: one ? "MOU 협약 후 1년 이내인 신규 업체 중 L3를 이용한 업체 비율 · 협약일이 없는 업체는 별도 관리" : "기존·신규 업체 전체 · 기간 내 관측된 첫 L3 이후 같은 시공사가 다른 아파트에서 다시 L3를 이용한 비율(기간 내 관측 재사용률) · 같은 아파트 반복 문의 제외",
       dates: one ? ["협약일", "L3 활동일"] : ["L3 활동일"],
@@ -2442,7 +2480,8 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     var uq = S ? S.mgmtUnique : v("추천 대상 시공사(중복 제거)"), mt = S ? S.mgmtMulti : null;
     return '<div class="du-mg"><span><em>전환 미완(구 정의)</em>' + api.num(cnt.A) + '</span><span><em>낙찰 후 구매 미확인</em>' + api.num(cnt.B) + '</span><span><em>컨설팅 후속</em>' + api.num(cnt.D) + '</span><span><em>협약일 미확인</em>' + api.num(cnt.E) + '</span><span><em>활동 감소(핵심)</em>' + (cnt.F ? api.num(cnt.F) : "비교 불가") + '</span></div><p class="s2 mut">추천 대상 시공사 ' + (uq == null ? "—" : api.num(uq)) + "곳(중복 제거" + (mt != null ? " · 복수 사유 " + api.num(mt) + "곳" : "") + ") · 기준·관찰 기간은 기본값이며 검증 필요. 후속 조치 미완료는 #팀 업무의 추천 업무 등록 후 추적합니다.</p>";
   }
-  function render(api) {
+  function render(api) { return withEasy(render0(api), EASY_DASH); }
+  function render0(api) {
     A = api; var ys = api.years(); if (!ys.length) return "";
     var last = ys[ys.length - 1], prev = ys[ys.length - 2], kL = api.kpiRow(last) || {}, asOf = String(kL["기준"] || "").replace(/^~/, "");
     var cats = ys.map(function (y) { return { l: y + "년" + (y === last ? " (" + asOf + "까지)" : ""), s: y.slice(2) + (y === last ? "*" : ""), cur: y === last }; });
@@ -2457,9 +2496,9 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     h += '<section class="du-period" aria-label="분석 기간"><div class="pm"><span class="pi">' + ic("doc") + '</span><b>공식 분석 시작일: 2026.06.01</b><span class="pt">조회 기간 2026.06.01 ~ 현재 · 이전 기록은 과거 참고</span></div><p>' + esc(PERIOD_NOTE) + '</p><div class="pf"><span class="pl">기간 필터</span><button class="on" aria-pressed="true">전체</button><button disabled title="월·연도 단위 집계가 공개 집계에 추가되면 제공합니다">연도</button><button disabled title="월·연도 단위 집계가 공개 집계에 추가되면 제공합니다">월</button><button disabled title="월·연도 단위 집계가 공개 집계에 추가되면 제공합니다">최근 3개월</button><span class="ph">연도·월 필터는 월 단위 집계가 연결되면 제공됩니다 · 마지막 동기화와 정합성 점검은 위 상태줄에서 확인</span></div></section>';
     h += '<header class="du-head"><div><h1>B2B 업무 성과 대시보드</h1><p>' + esc(ys[0]) + "~" + esc(last) + "년 · " + esc(last) + "년은 " + esc(asOf || "기준일") + "까지 누계(*) · 값이 없는 항목은 0 이 아니라 '—' 로 표시</p></div></header>";
     h += '<div class="du-kpis">' +
-            kpiCard(withGoal(kpi12Spec("kpi1", api), "kpi1", api)) +
-            kpiCard(withGoal(kpi12Spec("kpi2", api), "kpi2", api)) +
-      kpiCard(withGoal(kpi3Spec(api, L, Lc, L2n, okL), "kpi3", api)) + "</div>";
+            kpiCard(withKpiEasy(withGoal(kpi12Spec("kpi1", api), "kpi1", api), "kpi1")) +
+            kpiCard(withKpiEasy(withGoal(kpi12Spec("kpi2", api), "kpi2", api), "kpi2")) +
+      kpiCard(withKpiEasy(withGoal(kpi3Spec(api, L, Lc, L2n, okL), "kpi3", api), "kpi3")) + "</div>";
 
     /* 2-0) 통합 KPI 모니터링: 운영 6지표 · 시공사 전환 퍼널 · 선행지표 3 · 결과 KPI — 근거가 없는 값은 만들지 않는다 */
     h += opsBlock(api, L, Lc, L2n, okL, last, asOf);
@@ -2895,7 +2934,19 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   }
   function sel(id, opts, cur) { return '<select class="op-sel" data-kact="osel" data-id="' + id + '">' + opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(cur) === String(o[0]) ? " selected" : "") + ">" + esc(o[1]) + "</option>"; }).join("") + "</select>"; }
 
-  function render(api) {
+  /* ---------- 쉬운 근거: 제목 바로 아래에 "뜻 · 계산 · 출처 · 조심할 점"을 접어서 보여준다 ---------- */
+  var EZ_L = ["무슨 뜻이에요?", "어떻게 계산했어요?", "어디서 가져왔어요?", "조심할 점"];
+  function easyBlock(a) { return '<details class="ez"><summary>쉽게 보기 · 이 숫자의 근거</summary><dl>' + a.map(function (t, i) { return t ? "<dt>" + EZ_L[i] + "</dt><dd>" + esc(t) + "</dd>" : ""; }).join("") + "</dl></details>"; }
+  function withEasy(html, map) {
+    Object.keys(map).forEach(function (k) { var mk = "<h2>" + k + "</h2>", from = 0, i; while ((i = html.indexOf(mk, from)) >= 0) { var e = html.indexOf("</div>", i); if (e < 0) break; e += 6; var ins = easyBlock(map[k]); html = html.slice(0, e) + ins + html.slice(e); from = e + ins.length; } });
+    return html;
+  }
+  var EASY_OPS = {
+    "시공사별 활동·성과 추적": ["시공사 한 곳씩 '우리가 한 활동 → 시공사 반응 → 공법 경험 → 낙찰·구매 → 다음에 할 일'을 한 줄로 보는 표예요.", "표의 각 칸은 그 시공사의 기록을 센 값이에요(L3 = 기술지원 요청 건수, 낙찰 = 기간 내 POUR 낙찰 건수). 위의 숫자 상자는 시공사 수예요.", "시트 시공사 마스터와 활동·낙찰·구매 기록(로그인 상세 보기에서만 보여요).", "L3·진입 유형은 기록이 있는 만큼만 센 하한값이에요. '경로 확인 필요'는 영업보고(L2) 기록이 없어 어떻게 왔는지 모른다는 뜻이지, 바로 왔다는 뜻이 아니에요. '구매 미확인'은 안 샀다는 뜻이 아니라 기록을 못 찾았다는 뜻이에요."],
+    "L2 → L3 → L4 전환 현황": ["영업보고(L2) 뒤에 기술지원(L3), 공고·낙찰(L4)로 이어진 현장이 얼마나 되는지 월별·현장별·시공사별로 봐요.", "현장×공종 단위로, 365일 관측이 끝난 건만 분모에 넣어 비율을 계산해요.", "시트 22·25탭.", "관측이 덜 끝난 건은 '관측 중'으로 두고 비율에서 빼요."]
+  };
+  function render(api) { return withEasy(render0(api), EASY_OPS); }
+  function render0(api) {
     A = api; var g = get(api);
     var head = '<div class="op"><div class="op-head"><div><h2>시공사별 활동·성과 추적</h2><p>우리 팀의 활동 → 시공사 반응 → 공법 경험 → 낙찰·구매 → 성과 → 다음 관리 업무를 시공사 단위로 봅니다.</p></div></div>' +
       '<div class="op-period"><b>공식 분석 시작일 2026.06.01</b><span>기준일 이후 유효 활동만 집계하고, 이전 기록은 삭제하지 않고 이력으로 보존합니다. 협약일 없는 업체는 신규·기존을 판정하지 않습니다.</span></div>';
@@ -3562,9 +3613,9 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   var GKEY = "netform.b2b.growthdef.v1", CALC_VER = "growth-core v1";
   var GC = window.B2BGrowth; var A = null;
   var Gs = { basis: null, year: null, open: {}, trade: "all", q: "", vfilter: "all", cfilter: "all", fam: "all", vendor: null, covOpen: false, recOpen: false, draft: null, msg: null, qres: null };
-  var DEF_LABELS = { notices: "POUR 반영 공고", awards: "POUR 낙찰", awardAmt: "POUR 낙찰금액", ratio: "공고 대비 낙찰 비율", sales: "전체 자재 매출", main: "메인자재 매출", buyRate: "낙찰 시공사 구매 연결률", mainRate: "메인자재 구매 연결률" };
+  var DEF_LABELS = { notices: "공고 합계(POUR+타 공법)", awards: "POUR 낙찰", awardAmt: "POUR 낙찰금액", ratio: "공고 대비 낙찰 비율", sales: "전체 자재 매출", main: "메인자재 매출", buyRate: "낙찰 시공사 구매 연결률", mainRate: "메인자재 구매 연결률" };
   var RULE_TEXT = {
-    notices: "5b.POUR반영공고 중 집계대상=Y 인 공고 건수(공고일 연도 기준). 동일기간은 공고일이 기준일(월-일) 이전인 건",
+    notices: "5b.POUR반영공고 중 집계대상=Y 인 공고 건수(공고일 연도 기준). 2025년부터 목록에 타 공법(다특허 PD·DO·CNC) 공고가 함께 들어 있어 합계 = POUR 공고 + 타 공법 공고. 동일기간은 공고일이 기준일(월-일) 이전인 건",
     awards: "5.POUR공고낙찰 건수(공고일 연도 기준 · 낙찰일 자료 없음). 타공법 낙찰 제외, 재공고·반복공고 포함",
     awardAmt: "낙찰금액 합(VAT 포함 여부 미확인 · 금액 미기재는 합계에서 제외하고 건수만 집계)",
     ratio: "분모 = 공고 목록(5b, 집계대상=Y) 건수 · 분자 = 그중 낙찰 기록이 연결된 공고 수(현장명+공고일 일치). 같은 모집단",
@@ -3700,13 +3751,34 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     return h + "</div>";
   }
 
+  /* ---------- 쉬운 근거: 제목 바로 아래에 "뜻 · 계산 · 출처 · 조심할 점"을 접어서 보여준다 ---------- */
+  var EZ_L = ["무슨 뜻이에요?", "어떻게 계산했어요?", "어디서 가져왔어요?", "조심할 점"];
+  function easyBlock(a) { return '<details class="ez"><summary>쉽게 보기 · 이 숫자의 근거</summary><dl>' + a.map(function (t, i) { return t ? "<dt>" + EZ_L[i] + "</dt><dd>" + esc(t) + "</dd>" : ""; }).join("") + "</dl></details>"; }
+  function withEasy(html, map) {
+    Object.keys(map).forEach(function (k) { var mk = "<h2>" + k + "</h2>", from = 0, i; while ((i = html.indexOf(mk, from)) >= 0) { var e = html.indexOf("</div>", i); if (e < 0) break; e += 6; var ins = easyBlock(map[k]); html = html.slice(0, e) + ins + html.slice(e); from = e + ins.length; } });
+    return html;
+  }
+  var EASY_GROW = {
+    "핵심 성장 지표": ["고른 연도(같은 기간끼리)의 공고·낙찰·낙찰금액·자재 매출·메인자재·구매 연결, 6가지가 작년보다 늘었는지 줄었는지 한눈에 보여줘요.", "증감 = (올해 − 작년) ÷ 작년. 예: 작년 100건, 올해 120건이면 +20%.", "5b.POUR반영공고(공고), 5.POUR공고낙찰(낙찰), 이카운트 판매 원문(매출), 4.메인자재구매현황.", "올해는 10월 20일까지라서 작년 '전체 연간'과 비교하지 않고, 작년 같은 기간(1/1~10/20)끼리 비교해요. 비교할 수 없으면 '비교 불가'로 적어요."],
+    "종합 성장 흐름": ["공고 → 낙찰 → 자재 구매로 이어지는 흐름을 연도별로 나란히 놓고 보는 그림이에요.", "각 막대는 그 해(같은 기간)의 건수나 금액이에요. 아래 줄은 작년 대비 증감이에요.", "공고·낙찰·판매 원문 집계.", "공고는 해마다 담긴 범위가 달라요(아래 ① 설명 참고)."],
+    "① POUR 공고·낙찰 성장 분석": ["'공고'는 아파트 공사 입찰 공고문 한 건이에요. 이 중 '우리 POUR 공법이 들어간 공고'가 몇 건이고, 그중 몇 건이 낙찰됐는지 보는 곳이에요.", "공고 합계 = 우리 POUR 공고 + 다른 공법 공고(다특허 PD·DO·CNC). 낙찰/공고 = 낙찰 기록이 있는 공고 ÷ 공고.", "시트 5b.POUR반영공고(공고 목록), 5.POUR공고낙찰(낙찰 기록).", "2022~2024년 목록에는 POUR 공고만 있어요. 2025년부터 목록이 '전체 공고'라서 다른 공법 공고가 함께 들어와요. 그래서 '공고 합계'의 증가는 일부가 목록 범위가 넓어진 효과예요. 우리 실력 변화를 보려면 'POUR 공고' 열을 보세요."],
+    "연도별 실적 비교표": ["해마다 공고·낙찰이 어땠는지 표로 비교해요.", "'공고 합계'는 POUR 공고와 타 공법 공고를 더한 값이고, 'POUR 공고'는 우리 공법이 들어간 것만이에요. '타 공법 공고' = 합계 − POUR. 증감은 작년 같은 기간 대비 %예요.", "시트 5b.POUR반영공고(집계대상 Y), 5.POUR공고낙찰.", "타 공법 공고는 2025년부터 목록에 들어와서, 그 전 해와는 비교할 수 없어요('비교 불가')."],
+    "② 자재 매출 성장 분석": ["우리 자재(이카운트 판매)가 얼마나 팔렸는지, 그중 '메인자재'가 얼마인지 비교해요.", "그 해(같은 기간)의 판매 공급가액 합계. 증감 = (올해 − 작년) ÷ 작년.", "이카운트 판매 원문(시트 3), 1.통합KPI.", "메인자재는 품목 이름을 검증한 해만 보여줘요. 검증 전 해는 0이 아니라 '미확인'이에요. 금액은 VAT 제외예요."],
+    "연도별 매출 비교표": ["해마다 전체 자재 매출과 메인자재 매출을 표로 비교해요.", "같은 기간의 판매 합계와 작년 대비 증감 %.", "이카운트 판매 원문, 1.통합KPI.", "비자재·용역도 전체 매출에 들어 있어요(기존 KPI 정의)."],
+    "③ POUR 낙찰 시공사 → 자재 구매 연결 분석": ["POUR로 낙찰받은 시공사가 우리 자재를 실제로 샀는지 보는 곳이에요.", "자재를 산 기록이 있는 낙찰 시공사 수 ÷ 낙찰 시공사 수.", "5.POUR공고낙찰의 낙찰 시공사, 이카운트 판매 원문(거래처).", "사업자번호가 없어서 이름으로 '연결 후보'만 잡았어요. 산 것이 그 현장에 쓰였다는 증거는 아니에요."],
+    "연도별 연결 비교표": ["낙찰 시공사 중 자재를 산 시공사가 해마다 얼마나 되는지 비교해요.", "연결 후보 시공사 ÷ 낙찰 시공사.", "낙찰 기록과 판매 원문.", "'후보'라서 확정 숫자가 아니에요."],
+    "질문 답변": ["팀장님이 자주 묻는 질문에 대한 답을 숫자로 요약해요.", "위 표와 카드의 같은 숫자를 문장으로 풀었어요.", "위 분석과 같은 시트.", "비교할 수 없는 항목은 '비교 불가'라고 적어요."],
+    "어떤 시공사가 매출 성장에 기여했는가?": ["올해 우리 자재를 가장 많이 늘려 산 시공사가 어디인지 보여줘요.", "시공사별 올해 구매액 − 작년 같은 기간 구매액.", "이카운트 판매 원문.", "시공사 이름이 다르게 적힌 경우를 묶었지만, 사업자번호가 없어 일부는 '후보'예요."],
+    "낙찰 이력은 있지만 구매 확인이 필요한 업체는?": ["POUR 낙찰은 받았는데 우리 자재를 산 기록이 안 보이는 시공사 목록이에요.", "낙찰 기록은 있고 판매 원문에서 구매가 확인되지 않는 시공사.", "낙찰 기록, 판매 원문.", "'구매 없음'이 아니라 '구매 미확인'이에요. 이름이 다르게 적혀 못 찾았을 수도 있어요."],
+    "데이터 신뢰도 · 기간별 누락·비교 불가": ["숫자를 얼마나 믿어도 되는지 상태별로 알려줘요(확인 완료·연결 후보·데이터 부족·확인 불가).", "각 숫자에 상태 표시를 붙였어요.", "각 지표의 원천 시트.", "데이터가 없으면 0으로 채우지 않고 이유를 적어요."]
+  };
   /* ---------- 핵심 성장 지표 ---------- */
   function tile(label, val, d, sub, trust, jumpId) { return '<div class="tile gw-tile" data-kact="gjump" data-id="' + jumpId + '" tabindex="0" role="button"><div class="l">' + esc(label) + '</div><div class="v' + (val == null ? " na" : "") + '">' + (val == null ? "확인 불가" : esc(val)) + '</div><div class="gw-dl">' + d + "</div>" + (sub ? '<div class="s">' + sub + "</div>" : "") + '<div class="gw-tt">' + trust + "</div></div>"; }
   function summary(m) {
     var B = Gs.basis, Y = Gs.year, P = m.prevOf(Y), c = m.metrics(B, Y), p = P ? m.metrics(B, P) : null;
     var gS = m.growth(B, Y, "sales"), gM = m.growth(B, Y, "main"), gN = m.growth(B, Y, "notices"), gW = m.growth(B, Y, "awards"), gA = m.growth(B, Y, "awardAmt"), gP = m.growth(B, Y, "noticesPour");
     var h = '<div class="card core6" id="gw-sum"><div class="card-h"><h2>핵심 성장 지표</h2><span class="badge">' + esc(Y) + "년 " + esc(ymLabel(m)) + (P ? " vs " + esc(P) + "년" : "") + '</span><span class="mini">카드를 누르면 해당 분석으로 이동 · 비교할 수 없는 지표는 임의로 계산하지 않고 \'비교 불가\'로 표시</span></div><div class="tiles six">';
-    h += tile(L("notices"), cnt(c.notices) == null ? null : cnt(c.notices) + "건", chip(gN), (p ? esc(P) + "년 " + cnt(p.notices) + "건" : "") + " · POUR 공고만 기준 " + chip(gP), tr("ok", "5b.POUR반영공고 집계대상=Y · 기존 KPI 카드와 일치"), "gw-awards");
+    h += tile(L("notices"), cnt(c.notices) == null ? null : cnt(c.notices) + "건", chip(gN), (p ? esc(P) + "년 " + cnt(p.notices) + "건" : "") + " · POUR " + cnt(c.noticesPour) + "건 + 타 공법 " + (isNum(c.notices) && isNum(c.noticesPour) ? cnt(c.notices - c.noticesPour) : "—") + "건 · POUR 공고만 기준 " + chip(gP), tr("ok", "5b.POUR반영공고 집계대상=Y · 기존 KPI 카드와 일치"), "gw-awards");
     h += tile(L("awards"), cnt(c.awards) == null ? null : cnt(c.awards) + "건", chip(gW), (p ? esc(P) + "년 " + cnt(p.awards) + "건 · " : "") + L("ratio") + " " + (p1(c.awardRatio) || "—") + " " + chip(m.growth(B, Y, "ratio"), "pp"), c.unmatchedAwards ? tr("short", "낙찰 " + c.unmatchedAwards + "건은 공고 목록과 연결되지 않아 비율 분자에서 제외") : tr("ok"), "gw-awards");
     h += tile(L("awardAmt"), won(c.awardAmt), chip(gA), "VAT 미확인 · 금액 미기재 " + (c.awardAmtMissing || 0) + "건 제외", tr("ok", "금액이 기재된 건만 합산"), "gw-awards");
     h += tile(L("sales"), won(c.sales), chip(gS), (isNum(gS.abs) ? "증감 " + (gS.abs >= 0 ? "+" : "−") + won(Math.abs(gS.abs)) : "") + " · 비자재·용역 포함(기존 KPI 정의)", tr(c.salesCheck === false ? "short" : "ok", c.salesCheck === false ? "원문 합계와 다름" : "1.통합KPI 값 · 원문 합계 대조 " + (c.salesCheck ? "일치" : "대기")), "gw-sales");
@@ -3721,13 +3793,13 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     function stage(n, title, val, sub, ratioHtml) { return '<div class="gw-st"><div class="n">' + n + '</div><div class="tt">' + esc(title) + '</div><div class="vv">' + (val == null ? '<span class="na">확인 불가</span>' : esc(val)) + '</div><div class="ss">' + sub + "</div>" + (ratioHtml ? '<div class="rr">' + ratioHtml + "</div>" : "") + "</div>"; }
     var h = '<div class="card" id="gw-flow"><div class="card-h"><h2>종합 성장 흐름</h2><span class="badge">' + esc(Y) + "년 " + esc(ymLabel(m)) + '</span><span class="mini">POUR 공고 → 낙찰 → 낙찰 시공사의 자재 구매 → 자사 매출</span></div>';
     h += '<div class="gw-flowrow">' +
-      stage(1, "POUR 공고", c.notices == null ? null : cnt(c.notices) + "건", (P ? "전년 " + cnt(p.notices) + "건 " : "") + chip(m.growth(B, Y, "notices"))) + '<div class="ar">→</div>' +
+      stage(1, "공고 합계", c.notices == null ? null : cnt(c.notices) + "건", "POUR " + cnt(c.noticesPour) + " + 타 공법 " + (isNum(c.notices) && isNum(c.noticesPour) ? cnt(c.notices - c.noticesPour) : "—") + "건 · " + (P ? "전년 " + cnt(p.notices) + "건 " : "") + chip(m.growth(B, Y, "notices"))) + '<div class="ar">→</div>' +
       stage(2, "낙찰", c.awards == null ? null : cnt(c.awards) + "건", (P ? "전년 " + cnt(p.awards) + "건 " : "") + chip(m.growth(B, Y, "awards")), "공고 대비 " + (p1(c.awardRatio) || "—") + " " + chip(m.growth(B, Y, "ratio"), "pp")) + '<div class="ar">→</div>' +
       stage(3, "낙찰 시공사", c.awardVendors == null ? null : cnt(c.awardVendors) + "곳", "통합ID 기준 중복 제거 · 표기 기준 " + cnt(c.awardNames) + "곳", "") + '<div class="ar">→</div>' +
       stage(4, "자재 구매 확인 업체", co ? co.buyN + "곳" : null, co ? "메인 구매 " + (co.mainBuyN == null ? "미확인" : co.mainBuyN + "곳") : "원문 읽는 중", co ? "낙찰 시공사 대비 " + (p1(co.buyRate) || "—") + " " + chip(m.growth(B, Y, "buyRate"), "pp") + " " + tr("cand") : "") + '<div class="ar">→</div>' +
       stage(5, "자사 자재 매출", c.sales == null ? null : won(c.sales), "낙찰 시공사 구매액 " + (co ? won(co.buyAmt) + " (자재 매출의 " + (p1(co.amtShare) || "—") + ")" : "원문 읽는 중"), chip(m.growth(B, Y, "sales"))) + "</div>";
     h += '<p class="gw-note">단계 사이의 비율은 같은 연도·기간 안에서 관측한 연결입니다. 낙찰 1건과 자재 구매 금액이 건 단위로 연결된 것은 아니므로 실제 \'전환\'으로 간주하지 않습니다. 사업자번호가 확정되지 않아 구매 연결은 \'후보\'입니다.</p>';
-    var rows = [["POUR 공고(건)", function (x) { return cnt(x.notices); }], ["낙찰(건)", function (x) { return cnt(x.awards); }], ["낙찰/공고", function (x) { return p1(x.awardRatio); }], ["낙찰 시공사(곳)", function (x) { return cnt(x.awardVendors); }], ["구매 확인 업체(곳)", function (x) { return x.cohort ? cnt(x.cohort.buyN) : null; }], ["구매 확인/낙찰 시공사", function (x) { return x.cohort ? p1(x.cohort.buyRate) : null; }], ["메인 구매 업체(곳)", function (x) { return x.cohort ? (x.cohort.mainBuyN == null ? "미확인" : cnt(x.cohort.mainBuyN)) : null; }], ["메인 구매/낙찰 시공사", function (x) { return x.cohort ? (x.cohort.mainRate == null ? "미확인" : p1(x.cohort.mainRate)) : null; }], ["낙찰 시공사 자재 구매액", function (x) { return x.cohort ? won(x.cohort.buyAmt) : null; }], ["그 구매액/자재 매출", function (x) { return x.cohort ? p1(x.cohort.amtShare) : null; }]];
+    var rows = [["공고 합계(건) · POUR+타 공법", function (x) { return cnt(x.notices); }], ["└ POUR 공고(건)", function (x) { return cnt(x.noticesPour); }], ["└ 타 공법 공고(건)", function (x) { return isNum(x.notices) && isNum(x.noticesPour) ? cnt(x.notices - x.noticesPour) : null; }], ["낙찰(건)", function (x) { return cnt(x.awards); }], ["낙찰/공고", function (x) { return p1(x.awardRatio); }], ["낙찰 시공사(곳)", function (x) { return cnt(x.awardVendors); }], ["구매 확인 업체(곳)", function (x) { return x.cohort ? cnt(x.cohort.buyN) : null; }], ["구매 확인/낙찰 시공사", function (x) { return x.cohort ? p1(x.cohort.buyRate) : null; }], ["메인 구매 업체(곳)", function (x) { return x.cohort ? (x.cohort.mainBuyN == null ? "미확인" : cnt(x.cohort.mainBuyN)) : null; }], ["메인 구매/낙찰 시공사", function (x) { return x.cohort ? (x.cohort.mainRate == null ? "미확인" : p1(x.cohort.mainRate)) : null; }], ["낙찰 시공사 자재 구매액", function (x) { return x.cohort ? won(x.cohort.buyAmt) : null; }], ["그 구매액/자재 매출", function (x) { return x.cohort ? p1(x.cohort.amtShare) : null; }]];
     h += simpleTable(["연도별 흐름 · " + ymLabel(m)].concat(m.years.map(function (y) { return yl(m, y); })), rows.map(function (r) { return [esc(r[0])].concat(m.years.map(function (y) { var v = r[1](m.metrics(B, y)); return v == null ? '<span class="mini">대기</span>' : esc(v); })); }), true);
     return h + "</div>";
   }
@@ -3743,9 +3815,9 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
     h += '<div class="gw-grid">' + chartBox("공고·낙찰 추이", "건수", ch1, legend([["c1", L("notices")], ["c2", L("awards")]]) + '<div class="gw-yl">공고 전년 대비</div>' + yoyRow(m, "notices") + '<div class="gw-yl">낙찰 전년 대비</div>' + yoyRow(m, "awards")) +
       chartBox("낙찰금액", "VAT 미확인", ch2, '<div class="gw-yl">전년 대비</div>' + yoyRow(m, "awardAmt")) +
       chartBox(L("ratio"), "같은 모집단", ch3, '<div class="gw-yl">전년 대비 증감(%p)</div>' + yoyRow(m, "ratio", "pp")) + "</div>";
-    var rows = ys.map(function (y) { var c = M[y]; return [esc(yl(m, y)), esc(cnt(c.notices) || "—"), chip(m.growth(B, y, "notices")), chip(m.growth(B, y, "noticesPour")), esc(cnt(c.awards) || "—"), chip(m.growth(B, y, "awards")), esc(won(c.awardAmt) || "—"), chip(m.growth(B, y, "awardAmt")), esc(p1(c.awardRatio) || "—"), esc(cnt(c.awardVendors) || "—")]; });
-    h += '<div class="card-h" style="margin-top:6px"><h2>연도별 실적 비교표</h2></div>' + simpleTable(["연도", "공고", "공고 증감", "POUR 공고만 증감", "낙찰", "낙찰 증감", "낙찰금액", "금액 증감", "낙찰/공고", "낙찰 시공사"], rows);
-    h += '<p class="gw-note">2025년부터 원천이 \'전체 공고\' 목록이라 다특허(PD)·DO·CNC 공고가 포함됩니다(2022~2024는 POUR 공고만). 같은 모집단 비교가 필요하면 \'POUR 공고만 증감\'을 보세요.</p>';
+    var rows = ys.map(function (y) { var c = M[y], oth = isNum(c.notices) && isNum(c.noticesPour) ? c.notices - c.noticesPour : null; return [esc(yl(m, y)), esc(cnt(c.notices) || "—"), chip(m.growth(B, y, "notices")), esc(cnt(c.noticesPour) || "—"), chip(m.growth(B, y, "noticesPour")), esc(oth == null ? "—" : oth === 0 ? "0 (목록에 없음)" : cnt(oth)), chip(m.growth(B, y, "noticesOther")), esc(cnt(c.awards) || "—"), chip(m.growth(B, y, "awards")), esc(won(c.awardAmt) || "—"), chip(m.growth(B, y, "awardAmt")), esc(p1(c.awardRatio) || "—"), esc(cnt(c.awardVendors) || "—")]; });
+    h += '<div class="card-h" style="margin-top:6px"><h2>연도별 실적 비교표</h2></div>' + simpleTable(["연도", "공고 합계(POUR+타 공법)", "합계 증감", "POUR 공고", "POUR 증감", "타 공법 공고(PD·DO·CNC)", "타 공법 증감", "낙찰", "낙찰 증감", "낙찰금액", "금액 증감", "낙찰/공고", "낙찰 시공사"], rows);
+    h += '<p class="gw-note"><b>공고 증감, 무엇이 늘었나요?</b> \'공고 합계\' = 우리 POUR 공법이 들어간 공고 + 다른 공법(다특허 PD·DO·CNC) 공고예요. 2022~2024년 목록에는 POUR 공고만 있고, 2025년부터는 \'전체 공고\' 목록이라 타 공법 공고가 함께 들어와요. 그래서 <b>합계 증감</b>에는 \'목록 범위가 넓어진 효과\'가 섞여 있어요. 우리 공법이 들어간 공고만의 변화는 <b>POUR 증감</b>을 보세요. 타 공법 공고는 2025년 처음 들어와서 전년과 비교할 수 없어요.</p>';
     h += '<div class="ks-tools"><span class="mini">상세: ' + esc(Y) + "년 " + esc(ymLabel(m)) + "</span>" + (m.restricted ? '<span class="gw-tr na">시공사·현장 목록 비공개</span>' : toggleBtn("awards", "상세 목록 접기", "시공사·현장 상세 목록 펼치기")) + "</div>";
     if (m.restricted) h += pubTradeBlock(m); else if (Gs.open.awards) h += '<div id="gw-det-awards">' + awardDetail(m) + "</div>";
     return h + "</div>";
@@ -3982,7 +4054,8 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   }
 
   /* ---------- 렌더 ---------- */
-  function render(a) {
+  function render(a) { return withEasy(render0(a), EASY_GROW); }
+  function render0(a) {
     A = a; if (!Gs.basis) Gs.basis = defs().basis; var m = getModel();
     if (m.error || !m.years || !m.years.length) return '<div class="card"><div class="ks-warn"><b>성장 분석을 계산할 수 없습니다.</b> ' + esc((m.missing || []).join(", ")) + " — 시트 구조를 확인하세요(0으로 대체하지 않음).</div></div>";
     if (!Gs.year || m.years.indexOf(Gs.year) < 0) Gs.year = m.lastY;

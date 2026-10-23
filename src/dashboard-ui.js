@@ -85,7 +85,32 @@
     return '<div class="du-mini big" style="--n:' + rows.length + '">' + rows.map(function (r) { return '<div class="c"><i style="height:' + Math.max(6, Math.round(r.v / max * 100)) + '%" title="' + esc(r.m + " · " + (fmt ? fmt(r.v) : r.v)) + '"></i><span>' + esc(String(r.m).slice(5) + "월") + "</span></div>"; }).join("") + "</div>";
   }
 
-  /* ---------- 메인 대시보드 ---------- */
+  /* ---------- 쉬운 근거: 제목 바로 아래에 "뜻 · 계산 · 출처 · 조심할 점"을 접어서 보여준다 ---------- */
+  var EZ_L = ["무슨 뜻이에요?", "어떻게 계산했어요?", "어디서 가져왔어요?", "조심할 점"];
+  function easyBlock(a) { return '<details class="ez"><summary>쉽게 보기 · 이 숫자의 근거</summary><dl>' + a.map(function (t, i) { return t ? "<dt>" + EZ_L[i] + "</dt><dd>" + esc(t) + "</dd>" : ""; }).join("") + "</dl></details>"; }
+  function withEasy(html, map) {
+    Object.keys(map).forEach(function (k) { var mk = "<h2>" + k + "</h2>", from = 0, i; while ((i = html.indexOf(mk, from)) >= 0) { var e = html.indexOf("</div>", i); if (e < 0) break; e += 6; var ins = easyBlock(map[k]); html = html.slice(0, e) + ins + html.slice(e); from = e + ins.length; } });
+    return html;
+  }
+  var EASY_DASH = {
+    "통합 KPI 모니터링": ["우리 팀이 가장 중요하게 보는 숫자 3개(신규 업체 사용률·재사용률·L3 도달률)를 한 번에 보여줘요.", "카드마다 '분자 ÷ 분모'를 카드 안에 적었어요. 목표 눈금(기준·상향·도전·장기)은 목표까지 얼마 남았는지 보여줘요.", "구글시트 20.기간KPI집계(공개 집계)와 1.통합KPI.", "'검증 필요'는 정의나 대상 업체가 아직 확정되지 않은 임시 숫자라서 달성률을 계산하지 않아요."],
+    "시공사 전환 퍼널": ["시공사가 우리와 얼마나 가까워졌는지를 계단처럼 보여줘요: 접점 → 관심·문의 → 기술지원 직접 이용 → 결과.", "각 계단에 해당하는 서로 다른 시공사 수를 세요. 같은 시공사가 여러 번 해도 1곳이에요.", "18.선행지표요약, 2.시공사마스터 등 시트 집계.", "윗 계단이 아랫 계단을 꼭 거쳤다는 뜻은 아니에요(기록이 없던 시기가 있어요)."],
+    "핵심 선행지표": ["낙찰이나 매출이 나오기 전에 먼저 움직이는 '신호'예요(활동하는 시공사 수, 오래 쉬는 시공사 등).", "카드 아래의 '근거' 줄에 어떤 기준으로 셌는지 적었어요(예: 마지막 영업활동 후 90일 이상이면 '장기 무활동').", "17.장기무활동, 18.선행지표요약, 2.시공사마스터.", "판단할 수 없을 때는 0으로 채우지 않고 이유를 적어요."],
+    "결과 KPI": ["공고·낙찰·낙찰금액·자재 구매 같은 '결과' 숫자예요.", "'기준일 이후'(2026.06.01~)는 로그인한 상세 보기에서 시트 기록으로 세고, '연도별 집계'는 공개 집계로 세요. 기간이 달라서 더하거나 섞지 않아요.", "5.POUR공고낙찰, 5b.POUR반영공고, 이카운트 판매 원문.", "낙찰은 '공고일' 기준으로 셌어요(낙찰일 자료가 없어요)."],
+    "시공사별 영업·기술지원·성과 요약": ["올해 우리가 시공사들과 한 영업·기술지원이 몇 건이고, 그 결과가 어땠는지 한 줄 요약이에요.", "연도별 집계에서 올해 1/1부터 기준일까지 누계예요.", "1.통합KPI(연도별 집계).", "2026.06.01부터의 합산은 아직 집계가 연결되지 않아 표시하지 않아요."],
+    "L2 · L3 · L4 경로 분석": ["시공사가 '영업보고(L2) → 기술지원(L3) → 공고·낙찰(L4)'로 어떤 길로 갔는지 7가지 길로 나눠 봐요.", "업체·현장·공종이 같은 기록끼리 묶고, 날짜 순서가 맞고 연결이 확실한 것만 세요. L3 뒤 365일 안에 우리 공고나 낙찰이 있으면 L4에 도달한 거예요.", "시트 24.경로전환_조합, 03 영업활동 기록.", "영업보고(L2) 기록이 아직 없어서 L2가 들어간 길은 계산하지 않았고, 'L3 → L4'만 참고로 보여줘요. L2 기록이 없다고 'L3로 바로 왔다'고 단정하지 않아요."],
+    "월별 활동 추이": ["달마다 기술지원(L3) 요청, 우리 공고, 낙찰이 몇 건이었는지 막대로 보여줘요.", "활동일(공고일) 기준으로 그 달의 건수를 셌어요. 같은 요청의 요청·발행·초안은 한 번만 세요(공식 기간).", "20.기간KPI집계의 월별 행.", "마지막 달은 아직 진행 중이에요. '검증 필요'가 붙은 값은 임시 집계예요."],
+    "팀 행동 이력 · 관리 대상": ["팀이 실제로 한 행동(요청 처리 등)과, 지금 챙겨야 할 시공사가 몇 곳인지 보여줘요.", "행동은 유형별 건수예요. 챙길 시공사는 조건(90일 넘게 활동 없음, 협약일 없음, 낙찰 뒤 구매 확인 안 됨 등)에 걸린 곳을 중복 없이 세요.", "03 영업활동 기록, 17.장기무활동, 시공사 마스터.", "조건 기준은 기본값이라 팀에서 확정하면 숫자가 바뀔 수 있어요."],
+    "업체별 상세 분석 · 관리 대상": ["시공사 한 곳씩 이력을 날짜 순서로 보는 곳이에요.", "시공사를 고르면 협약일·요청·낙찰·구매를 시간 순서로 보여줘요.", "시트의 업체별 기록.", "구매는 '업체가 샀다'는 사실이지 '그 현장에 썼다'는 증거는 아니에요."],
+    "추가 데이터": ["영업보고·협약일·L3·매출·행동 이력, 5가지 자료를 바로 열어 보는 곳이에요.", "각 상자의 숫자는 그 자료의 건수예요.", "각 자료의 원천 시트.", "연결되지 않은 자료는 0이 아니라 '데이터 연결 예정'으로 보여줘요."]
+  };
+  function kpiEasy(o, id) {
+    var p0 = o.parts && o.parts[0] ? o.parts[0][0] + " = " + o.parts[0][1] : "";
+    if (id === "kpi1") return ["새로 우리와 협약(MOU)한 시공사 중에서, 협약하고 1년 안에 우리에게 기술 도움(L3: 기술자문·컨설팅·설명회 요청)을 한 번이라도 요청한 곳이 몇 %인지 보는 숫자예요.", "요청한 업체 수 ÷ 새로 협약한 업체 수." + (p0 ? " 지금은 " + p0 + "." : "") + " 협약일이 공식 분석 시작일(2026.06.01) 이후인 업체만 '새 업체'로 세요.", "협약일은 고객관리카드, 요청 기록은 플랫폼·잔디 기록(시트 20.기간KPI집계).", "협약한 지 1년이 안 된 업체는 아직 지켜보는 중('관측 중')이라 나중에 오를 수 있어요. 협약일이 없는 업체는 계산에서 빼고 따로 관리해요. 아래 '참고' 숫자는 세는 대상이 달라서 목표 60%와 바로 비교하면 안 돼요."];
+    if (id === "kpi2") return ["처음 기술 도움을 요청한 시공사가, 그 뒤 60일 안에 '다른 아파트 현장'으로 또 요청한 비율이에요. 한 번 써 보고 다시 쓰는지(재사용) 보는 숫자예요.", "다시 요청한 업체 수 ÷ 첫 요청을 한 업체 수." + (p0 ? " 지금은 " + p0 + "." : "") + " 같은 아파트에서 반복한 문의는 재사용으로 세지 않아요.", "플랫폼·잔디 기록(시트 20.기간KPI집계). 업체의 '첫 요청' 날짜는 2026.06.01 이전 기록까지 모두 보고 정해요.", "첫 요청 뒤 60일이 아직 안 지난 업체도 섞여 있어서 나중에 오를 수 있어요. 목표 달성률은 정의가 확정되기 전이라 계산하지 않았어요('검증 필요')."];
+    return ["영업보고(L2)로 알게 된 곳과 바로 기술 도움을 요청한 곳을 합쳐서, 얼마나 기술 도움(L3)까지 오는지 보는 숫자예요.", "비율 = L3에 온 곳 ÷ 전체 대상. 그런데 '전체 대상'을 어떤 기준으로 셀지 아직 확정되지 않아서 비율을 만들지 않았어요.", "플랫폼·잔디의 L3 기록, 영업보고(L2) 기록(아직 없음).", "영업보고(L2) 기록이 아직 없어서 '영업보고를 거친 곳'과 '바로 온 곳'을 나눌 수 없어요. 기록이 없다고 '바로 왔다'고 단정하지 않아요."];
+  }
+  function withKpiEasy(o, id) { o.easy = kpiEasy(o, id); return o; }
   function kpiCard(o) {
     var st = o.state || (o.ok ? "ok" : "wait"), okv = st === "ok", rv = st === "review";
     var pillT = okv ? "연결됨" : rv ? (o.pill || "검증 필요") : "데이터 연결 예정", pillC = okv ? "ok" : rv ? "rev" : "wait";
@@ -96,7 +121,7 @@
       '<div class="yoy"><span class="l">전년 대비</span><span class="v">' + o.yoy + "</span></div>" +
       '<div class="trend"><span class="l">추이</span>' + o.trend + "</div>" +
       (o.refs ? '<div class="refs"><span class="rh">' + esc(o.refHead || "참고값(보존)") + '</span>' + o.refs.map(function (r) { return '<div class="r"><span>' + esc(r.label) + "</span><b>" + esc(r.value) + "</b>" + (r.calc ? "<small>" + esc(r.calc) + "</small>" : "") + "</div>"; }).join("") + "</div>" : "") +
-      (o.note ? '<p class="kn">' + o.note + "</p>" : "") +
+      (o.note ? '<p class="kn">' + o.note + "</p>" : "") + (o.easy ? easyBlock(o.easy) : "") +
       '<div class="foot">' + go(o.to, "상세 보기") + "</div></article>";
   }
   function trendSpark(vals, labels) {
@@ -303,7 +328,7 @@
     var d = null; if (ADAPTERS[id]) { try { d = ADAPTERS[id](api) || null; } catch (e) { d = null; } }
     var verified = !!(d && d.status === "verified" && isNum(d.value)), one = id === "kpi1";
     var act = api.leading("신규 협력사 활성화율(별도)"), rf = null;
-    if (one && act && isNum(act["값"])) rf = [{ label: "신규 협력사 활성화율(별도 지표)", value: api.pc(act["값"]), calc: String(act["비고"] || "") + " · 플랫폼 가입 기준·L2 이상 활동 — 신규 업체 사용률(협약일 1년·L3)과 정의가 달라 참고용" }];
+    if (one && act && isNum(act["값"])) rf = [{ label: "신규 협력사 활성화율(별도 지표)", value: api.pc(act["값"]), calc: "플랫폼에 가입한 업체 중 문의·컨설팅·설명회를 한 번이라도 한 업체 비율(" + String(act["비고"] || "") + "). 세는 대상이 '플랫폼 가입 업체'라서, '협약(MOU)한 업체'를 세는 목표 60%와는 다른 숫자예요. 참고만 하세요." }];
     var spec = { cls: one ? "k1" : "k2", icon: one ? "user" : "repeat", label: one ? "신규 업체 사용률" : "재사용률", state: verified ? "ok" : "review", pill: "데이터 확인 필요", vtext: "데이터 확인 필요", value: verified ? api.pc(d.value) : "",
       def: one ? "MOU 협약 후 1년 이내인 신규 업체 중 L3를 이용한 업체 비율 · 협약일이 없는 업체는 별도 관리" : "기존·신규 업체 전체 · 기간 내 관측된 첫 L3 이후 같은 시공사가 다른 아파트에서 다시 L3를 이용한 비율(기간 내 관측 재사용률) · 같은 아파트 반복 문의 제외",
       dates: one ? ["협약일", "L3 활동일"] : ["L3 활동일"],
@@ -376,7 +401,8 @@
     var uq = S ? S.mgmtUnique : v("추천 대상 시공사(중복 제거)"), mt = S ? S.mgmtMulti : null;
     return '<div class="du-mg"><span><em>전환 미완(구 정의)</em>' + api.num(cnt.A) + '</span><span><em>낙찰 후 구매 미확인</em>' + api.num(cnt.B) + '</span><span><em>컨설팅 후속</em>' + api.num(cnt.D) + '</span><span><em>협약일 미확인</em>' + api.num(cnt.E) + '</span><span><em>활동 감소(핵심)</em>' + (cnt.F ? api.num(cnt.F) : "비교 불가") + '</span></div><p class="s2 mut">추천 대상 시공사 ' + (uq == null ? "—" : api.num(uq)) + "곳(중복 제거" + (mt != null ? " · 복수 사유 " + api.num(mt) + "곳" : "") + ") · 기준·관찰 기간은 기본값이며 검증 필요. 후속 조치 미완료는 #팀 업무의 추천 업무 등록 후 추적합니다.</p>";
   }
-  function render(api) {
+  function render(api) { return withEasy(render0(api), EASY_DASH); }
+  function render0(api) {
     A = api; var ys = api.years(); if (!ys.length) return "";
     var last = ys[ys.length - 1], prev = ys[ys.length - 2], kL = api.kpiRow(last) || {}, asOf = String(kL["기준"] || "").replace(/^~/, "");
     var cats = ys.map(function (y) { return { l: y + "년" + (y === last ? " (" + asOf + "까지)" : ""), s: y.slice(2) + (y === last ? "*" : ""), cur: y === last }; });
@@ -391,9 +417,9 @@
     h += '<section class="du-period" aria-label="분석 기간"><div class="pm"><span class="pi">' + ic("doc") + '</span><b>공식 분석 시작일: 2026.06.01</b><span class="pt">조회 기간 2026.06.01 ~ 현재 · 이전 기록은 과거 참고</span></div><p>' + esc(PERIOD_NOTE) + '</p><div class="pf"><span class="pl">기간 필터</span><button class="on" aria-pressed="true">전체</button><button disabled title="월·연도 단위 집계가 공개 집계에 추가되면 제공합니다">연도</button><button disabled title="월·연도 단위 집계가 공개 집계에 추가되면 제공합니다">월</button><button disabled title="월·연도 단위 집계가 공개 집계에 추가되면 제공합니다">최근 3개월</button><span class="ph">연도·월 필터는 월 단위 집계가 연결되면 제공됩니다 · 마지막 동기화와 정합성 점검은 위 상태줄에서 확인</span></div></section>';
     h += '<header class="du-head"><div><h1>B2B 업무 성과 대시보드</h1><p>' + esc(ys[0]) + "~" + esc(last) + "년 · " + esc(last) + "년은 " + esc(asOf || "기준일") + "까지 누계(*) · 값이 없는 항목은 0 이 아니라 '—' 로 표시</p></div></header>";
     h += '<div class="du-kpis">' +
-            kpiCard(withGoal(kpi12Spec("kpi1", api), "kpi1", api)) +
-            kpiCard(withGoal(kpi12Spec("kpi2", api), "kpi2", api)) +
-      kpiCard(withGoal(kpi3Spec(api, L, Lc, L2n, okL), "kpi3", api)) + "</div>";
+            kpiCard(withKpiEasy(withGoal(kpi12Spec("kpi1", api), "kpi1", api), "kpi1")) +
+            kpiCard(withKpiEasy(withGoal(kpi12Spec("kpi2", api), "kpi2", api), "kpi2")) +
+      kpiCard(withKpiEasy(withGoal(kpi3Spec(api, L, Lc, L2n, okL), "kpi3", api), "kpi3")) + "</div>";
 
     /* 2-0) 통합 KPI 모니터링: 운영 6지표 · 시공사 전환 퍼널 · 선행지표 3 · 결과 KPI — 근거가 없는 값은 만들지 않는다 */
     h += opsBlock(api, L, Lc, L2n, okL, last, asOf);

@@ -116,7 +116,19 @@
   }
   function sel(id, opts, cur) { return '<select class="op-sel" data-kact="osel" data-id="' + id + '">' + opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(cur) === String(o[0]) ? " selected" : "") + ">" + esc(o[1]) + "</option>"; }).join("") + "</select>"; }
 
-  function render(api) {
+  /* ---------- 쉬운 근거: 제목 바로 아래에 "뜻 · 계산 · 출처 · 조심할 점"을 접어서 보여준다 ---------- */
+  var EZ_L = ["무슨 뜻이에요?", "어떻게 계산했어요?", "어디서 가져왔어요?", "조심할 점"];
+  function easyBlock(a) { return '<details class="ez"><summary>쉽게 보기 · 이 숫자의 근거</summary><dl>' + a.map(function (t, i) { return t ? "<dt>" + EZ_L[i] + "</dt><dd>" + esc(t) + "</dd>" : ""; }).join("") + "</dl></details>"; }
+  function withEasy(html, map) {
+    Object.keys(map).forEach(function (k) { var mk = "<h2>" + k + "</h2>", from = 0, i; while ((i = html.indexOf(mk, from)) >= 0) { var e = html.indexOf("</div>", i); if (e < 0) break; e += 6; var ins = easyBlock(map[k]); html = html.slice(0, e) + ins + html.slice(e); from = e + ins.length; } });
+    return html;
+  }
+  var EASY_OPS = {
+    "시공사별 활동·성과 추적": ["시공사 한 곳씩 '우리가 한 활동 → 시공사 반응 → 공법 경험 → 낙찰·구매 → 다음에 할 일'을 한 줄로 보는 표예요.", "표의 각 칸은 그 시공사의 기록을 센 값이에요(L3 = 기술지원 요청 건수, 낙찰 = 기간 내 POUR 낙찰 건수). 위의 숫자 상자는 시공사 수예요.", "시트 시공사 마스터와 활동·낙찰·구매 기록(로그인 상세 보기에서만 보여요).", "L3·진입 유형은 기록이 있는 만큼만 센 하한값이에요. '경로 확인 필요'는 영업보고(L2) 기록이 없어 어떻게 왔는지 모른다는 뜻이지, 바로 왔다는 뜻이 아니에요. '구매 미확인'은 안 샀다는 뜻이 아니라 기록을 못 찾았다는 뜻이에요."],
+    "L2 → L3 → L4 전환 현황": ["영업보고(L2) 뒤에 기술지원(L3), 공고·낙찰(L4)로 이어진 현장이 얼마나 되는지 월별·현장별·시공사별로 봐요.", "현장×공종 단위로, 365일 관측이 끝난 건만 분모에 넣어 비율을 계산해요.", "시트 22·25탭.", "관측이 덜 끝난 건은 '관측 중'으로 두고 비율에서 빼요."]
+  };
+  function render(api) { return withEasy(render0(api), EASY_OPS); }
+  function render0(api) {
     A = api; var g = get(api);
     var head = '<div class="op"><div class="op-head"><div><h2>시공사별 활동·성과 추적</h2><p>우리 팀의 활동 → 시공사 반응 → 공법 경험 → 낙찰·구매 → 성과 → 다음 관리 업무를 시공사 단위로 봅니다.</p></div></div>' +
       '<div class="op-period"><b>공식 분석 시작일 2026.06.01</b><span>기준일 이후 유효 활동만 집계하고, 이전 기록은 삭제하지 않고 이력으로 보존합니다. 협약일 없는 업체는 신규·기존을 판정하지 않습니다.</span></div>';

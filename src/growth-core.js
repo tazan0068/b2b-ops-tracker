@@ -53,6 +53,7 @@
       if (key === "mainRate") return rateDiff(c.cohort && c.cohort.mainRate, b && b.cohort && b.cohort.mainRate, blockFor(basis, y, "mainRate"));
       if (key === "mainShare") return rateDiff(c.mainShare, b && b.mainShare, blockFor(basis, y, "main"));
       if (key === "cohortBuyAmt") return growth(c.cohort && c.cohort.buyAmt, b && b.cohort && b.cohort.buyAmt, blk);
+      if (key === "noticesOther") return growth(isNum(c.notices) && isNum(c.noticesPour) ? c.notices - c.noticesPour : null, b && isNum(b.notices) && isNum(b.noticesPour) ? b.notices - b.noticesPour : null, blk);   /* 타 공법(다특허 PD·DO·CNC) 공고 = 전체 공고 − POUR 공고 */
       if (!map[key]) return growth(null, null, "알 수 없는 지표");
       return growth(c[map[key]], b && b[map[key]], key === "main" ? blockFor(basis, y, "main") : blk);
     };
