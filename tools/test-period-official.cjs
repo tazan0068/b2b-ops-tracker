@@ -31,4 +31,16 @@ ok(run(tmp('ok3', bad3)).status === 0, '"[공식] └ 유형:" 접두 행은 운
   ok2(run(tmp('mk-b4', b4)).status === 1, '2022~2024 시장 전체 값을 만들어 넣으면 실패(추정 금지)');
   if (f2) fails += f2;
 }
+/* ───── L3 경험·도달률 · L2 후보→L3 행 ───── */
+{
+  let f3 = 0; const ok3 = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) f3++; };
+  const ex = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'period-l3exp-sample.json'), 'utf8'));
+  ok3(run(tmp('ex-ok', ex)).status === 0, '경험·도달률·L2 후보 행 11개가 모든 점검을 통과');
+  const e1 = JSON.parse(JSON.stringify(ex)); e1.rows.find(r => r[1] === 'L3 경험·도달률(협약 체결 업체 기준)')[2] = 0.99;
+  ok3(run(tmp('ex-b1', e1)).status === 1, '경험률 값이 분자 ÷ 분모와 다르면 실패');
+  ok3(ex.rows.find(r => r[1] === '[공식] L2 후보→L3 전환율')[2] === null, '공식 기간 L2 후보 행은 원천이 없어 값이 비어 있음(0이 아님)');
+  ok3(ex.rows.every(r => !(/^L3 경험/.test(String(r[1]).replace('[공식] ', '')) && r[3] > r[4])), '경험률 분자는 분모를 넘지 않음');
+  ok3(String(ex.rows.find(r => r[1] === 'L2 확정(영업보고) 건수')[7]).indexOf('원천 미확보') === 0, 'L2 확정 건수 행은 원천 미확보로 표시');
+  if (f3) fails += f3;
+}
 console.log(fails ? '\n실패 ' + fails : '\n모두 통과'); process.exit(fails ? 1 : 0);
