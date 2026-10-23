@@ -3794,16 +3794,23 @@ input.dirty,select.dirty{background:var(--peach);border-color:var(--brand)}
   };
   /* ---------- 시장 전체 공고(26.시장전체공고 탭, 원본 「전체 공고문」 집계) · 우리 특허가 들어간 공고의 시장 점유 ---------- */
   var MK_TAB = "26.시장전체공고";
+  /* 공개 집계(20.기간KPI집계)의 "[시장] " 행 — 동일기간 값만 있다. 시트 26탭이 없는 공개 보기에서 쓴다 */
+  function marketFrom20(y, basis) {
+    if (basis !== "ytd" || !A || !A.has || !A.has("20.기간KPI집계")) return null;
+    var tot = null, own = null;
+    A.objs("20.기간KPI집계").forEach(function (r) { var m = String(r["지표"] || "").match(/^\[시장\] (시장 전체 공고문|우리 특허 포함 공고) · (\d{4}) 동일기간/); if (!m || m[2] !== String(y)) return; var v = Number(r["값"]); if (!isFinite(v)) return; if (m[1] === "시장 전체 공고문") tot = v; else own = v; });
+    return tot != null && own != null ? { total: tot, own: own, kinds: {}, share: tot ? own / tot : null } : null;
+  }
   function marketOf(y, basis) {
-    if (!A || !A.has || !A.has(MK_TAB)) return null;
+    if (!A || !A.has || !A.has(MK_TAB)) return marketFrom20(y, basis);
     var per = basis === "ytd" ? "동일기간" : "연간", tot = 0, own = 0, any = false, kinds = {};
     A.objs(MK_TAB).forEach(function (r) { if (String(r["연도"]) !== String(y) || String(r["기간구분"]) !== per) return; var n = Number(r["건수"]); if (!isFinite(n)) return; any = true; tot += n; kinds[r["구분"]] = n; if (String(r["자사 반영 공고(시트 5b 기준)"]) === "Y") own += n; });
-    return any ? { total: tot, own: own, kinds: kinds, share: tot ? own / tot : null } : null;
+    return any ? { total: tot, own: own, kinds: kinds, share: tot ? own / tot : null } : marketFrom20(y, basis);
   }
   function marketBlock(m, Y, P, c) {
     var B = Gs.basis, mk = marketOf(Y, B), mp = P ? marketOf(P, B) : null, h = "";
     if (!mk) {
-      return '<p class="gw-note">' + (m.restricted ? "시장 점유율(전체 공고문 대비 우리 특허가 들어간 공고 비중)은 상세 보기(로그인)에서 확인합니다 — 공개 집계에는 시장 전체 공고 탭이 아직 연결되지 않았습니다." : "시장 전체 공고 탭(" + MK_TAB + ")이 없거나 이 연도 값이 없어 시장 점유율을 계산하지 않았습니다.") + " 경쟁사·일반 공고는 자사 반영 공고 합계에 들어 있지 않습니다.</p>";
+      return '<p class="gw-note">' + (B !== "ytd" ? "시장 점유율은 '동일기간' 보기에서만 제공합니다(시장 전체 공고 자료는 각 해 1/1~10/20 값만 있습니다)." : m.restricted ? "이 연도의 시장 점유율 값이 공개 집계에 없습니다(시장 전체 공고 자료는 2025년부터 있습니다)." : "시장 전체 공고 탭(" + MK_TAB + ")이 없거나 이 연도 값이 없어 시장 점유율을 계산하지 않았습니다.") + " 경쟁사·일반 공고는 자사 반영 공고 합계에 들어 있지 않습니다.</p>";
     }
     var gTot = mp && mp.total ? { state: "ok", pct: mk.total / mp.total - 1 } : { state: "na", why: P ? P + "년 시장 전체 공고 자료가 없습니다(2022~2024 원본은 POUR 공고만 모은 목록)" : "비교할 전년 자료 없음" };
     var gSh = mp && mp.share != null && mk.share != null ? { state: "ok", pp: (mk.share - mp.share) * 100 } : { state: "na", why: gTot.why };

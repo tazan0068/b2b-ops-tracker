@@ -16,4 +16,19 @@ const bad2 = JSON.parse(JSON.stringify(fx)); bad2.rows.find(r => r[1] === '[공�
 ok(run(tmp('bad2', bad2)).status === 1, '공식 월별 L3 합계가 유효 L3 건수와 다르면 실패');
 const bad3 = JSON.parse(JSON.stringify(fx)); bad3.rows.push(['팀 행동', '[공식] └ 유형: 시험', 1, null, null, '건', '2026.06.01~2026.10.20', '시험', '시험']);
 ok(run(tmp('ok3', bad3)).status === 0, '"[공식] └ 유형:" 접두 행은 운영 화면의 유형 합산과 겹치지 않아 통과');
+/* ───── 시장 점유 행([시장]) ───── */
+{
+  let f2 = 0; const ok2 = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) f2++; };
+  const mk = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'period-market-sample.json'), 'utf8'));
+  ok2(run(tmp('mk-ok', mk)).status === 0, '시장 행 10개가 모든 점검을 통과(건수·비중·증감·2022~2024 원천 없음)');
+  const b1 = JSON.parse(JSON.stringify(mk)); b1.rows.find(r => /비중\(시장 점유\) · 2026/.test(r[1]))[3] = 577;
+  ok2(run(tmp('mk-b1', b1)).status === 1, '점유 분자가 건수 행과 다르면 실패');
+  const b2 = JSON.parse(JSON.stringify(mk)); b2.rows.find(r => /우리 특허 포함 공고 · 2025/.test(r[1]))[8] = '우리 특허 포함 공고 합계';
+  ok2(run(tmp('mk-b2', b2)).status === 1, '"POUR 단독이 아님" 표시가 없으면 실패(467·576을 POUR 단독으로 오해하지 않게)');
+  const b3 = JSON.parse(JSON.stringify(mk)); b3.rows.push(JSON.parse(JSON.stringify(mk.rows[1])));
+  ok2(run(tmp('mk-b3', b3)).status === 1, '같은 (구분, 지표) 키가 중복되면 실패(기존 지표와 키 충돌 방지)');
+  const b4 = JSON.parse(JSON.stringify(mk)); b4.rows.find(r => /2022~2024/.test(r[1]))[2] = 1234;
+  ok2(run(tmp('mk-b4', b4)).status === 1, '2022~2024 시장 전체 값을 만들어 넣으면 실패(추정 금지)');
+  if (f2) fails += f2;
+}
 console.log(fails ? '\n실패 ' + fails : '\n모두 통과'); process.exit(fails ? 1 : 0);

@@ -52,6 +52,23 @@ async function loadTab(arg) {
     if (off60 && offM2.length) ok(offM2[offM2.length - 1].분자 === off60.분자 && offM2[offM2.length - 1].분모 === off60.분모, '공식 재사용률 월별 마지막 값 = 60일 기준 메인 값');
     const L4 = OFF.filter(r => r.구분 === 'L3 도달률' && /^\[공식\] L3 → L4/.test(r.지표)); if (L4.length) ok(L4.every(r => /L2 원천 없음|경로 미확정/.test(String(r.검증상태))), '공식 L3→L4 행도 "경로 미확정"으로 표시(직접 진입 확정 아님)');
   }
+  /* 시장 전체 공고·점유 행('[시장] '): 기존 행과 키가 겹치지 않고, 건수·비중·증감이 서로 맞고, 시장 자료가 없는 연도는 값을 만들지 않음 */
+  const MK = R.filter(r => String(r.지표 || '').indexOf('[시장] ') === 0);
+  if (MK.length) {
+    const keys = R.map(r => r.구분 + '|' + r.지표); ok(new Set(keys).size === keys.length, '(구분, 지표) 키 중복 없음 — 기존 행과 충돌하지 않음(' + keys.length + '개)');
+    ok(MK.every(r => r.구분 === '결과 성과'), '시장 행 ' + MK.length + '개는 모두 허용된 "결과 성과" 그룹');
+    const g = (label, y) => MK.find(r => r.지표.indexOf('[시장] ' + label) === 0 && (y ? r.지표.indexOf(' ' + y + ' ') > 0 : true));
+    for (const y of ['2025', '2026']) {
+      const tot = g('시장 전체 공고문 · ', y), own = g('우리 특허 포함 공고 · ', y), sh = g('우리 특허 포함 공고 비중', y);
+      if (tot && own && sh) { ok(own.값 <= tot.값, y + ' 우리 특허 포함 공고 ' + own.값 + ' ≤ 시장 전체 ' + tot.값); ok(sh.분자 === own.값 && sh.분모 === tot.값, y + ' 점유 분자·분모 = 건수 행(' + own.값 + '/' + tot.값 + ')'); ok(/POUR 단독이 아니라/.test(String(own.근거)), y + ' 우리 특허 포함 공고 행에 "POUR 단독이 아님" 표시'); ok(/1\/1~10\/20/.test(tot.지표) && /\.01\.01~\d{4}\.10\.20$/.test(String(tot.기간)), y + ' 비교 기간(1/1~10/20) 명시'); }
+    }
+    const t25 = g('시장 전체 공고문 · ', '2025'), t26 = g('시장 전체 공고문 · ', '2026'), o25 = g('우리 특허 포함 공고 · ', '2025'), o26 = g('우리 특허 포함 공고 · ', '2026');
+    const gt = MK.find(r => /^\[시장\] 시장 전체 공고문 전년 대비/.test(r.지표)), go = MK.find(r => /^\[시장\] 우리 특허 포함 공고 전년 대비/.test(r.지표)), gp = MK.find(r => /^\[시장\] 점유 변화/.test(r.지표));
+    if (gt && t25 && t26) ok(gt.분자 === t26.값 && gt.분모 === t25.값 && Math.abs(gt.값 - (gt.분자 / gt.분모 - 1)) < 0.0005, '시장 전체 전년 대비 = (' + gt.분자 + '−' + gt.분모 + ')÷' + gt.분모);
+    if (go && o25 && o26) ok(go.분자 === o26.값 && go.분모 === o25.값 && Math.abs(go.값 - (go.분자 / go.분모 - 1)) < 0.0005, '우리 특허 포함 공고 전년 대비 = (' + go.분자 + '−' + go.분모 + ')÷' + go.분모);
+    const s25 = g('우리 특허 포함 공고 비중', '2025'), s26 = g('우리 특허 포함 공고 비중', '2026'); if (gp && s25 && s26) ok(Math.abs(gp.값 - (s26.값 - s25.값) * 100) < 0.06, '점유 변화 ' + gp.값 + '%p = 2026 비중 − 2025 비중');
+    const nod = MK.find(r => /2022~2024/.test(r.지표)); if (nod) ok(nod.값 === null && /원천 없음/.test(String(nod.검증상태)), '2022~2024 시장 전체 자료는 값을 만들지 않고 "원천 없음"으로 표시(추정하지 않음)');
+  }
   console.log('\n' + (fails ? '실패 ' + fails + '건' : '모두 통과') + (warns ? ' · 경고 ' + warns + '건' : ''));
   process.exit(fails ? 1 : 0);
 })().catch(e => { console.error('점검 실패:', e.message); process.exit(2); });
